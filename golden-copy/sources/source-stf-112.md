@@ -1,0 +1,40 @@
+# SOURCE TEXT — NY State Finance Law § 112 (Accounting systems; approval of contracts)
+
+- **Name:** State Finance Law § 112 — Accounting systems; approval of contracts
+- **Date:** Current revision as of 2023-03-10 (the version shown by NY Open Legislation on the date copied)
+- **Issued by:** New York State Legislature; published via NY State Senate Open Legislation (STF Chapter 56, Article 7)
+- **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/112
+- **Copied exactly on:** 2026-06-29
+
+> Everything below the line is the statute text, copied word-for-word from NY Open Legislation.
+> Nothing here is reworded. NY Open Legislation shows prior revisions (2023-01-06, 2021-07-30,
+> 2016-04-22, 2014-09-22); the text below is the most recent (2023-03-10). Before relying on this in
+> production, re-open the link above and confirm the revision date still matches.
+
+---
+
+## STATE TEXT (verbatim)
+
+§ 112. Accounting systems; approval of contracts. 1. The comptroller shall prepare and prescribe a system of accounting and a form of accounts to be installed and observed in every state department and in every state institution, which shall be accepted and followed by them respectively, after thirty days' notice thereof. Such forms shall include such a uniform method of bookkeeping, filing and rendering accounts as may insure a uniform statement of purchase of like articles, whether by the pound, measure or otherwise, as the interests of the public service may require, and a uniform method of reporting in such institutions and departments, the amount and value of all produce and other articles of maintenance raised upon the lands of the state, or manufactured in such institution, and which may enter into the maintenance of such institution or department. All purchases for the use of any department, office or work of the state government, shall be for cash. Each voucher, whether for a purchase or for services or other charge shall be filled up at the time it is taken. Where payment is not made directly by the department of taxation and finance, proof in some proper form shall be furnished on oath that the voucher was so filled up at the time it was taken, and that the money stated therein to have been paid, was in fact paid in cash or by check or draft on some specified bank.
+
+1-a. The system of accounting prescribed by the comptroller pursuant to the provisions of subdivision one of this section shall be subject to such internal control as the comptroller deems necessary.
+
+2. (a) (i) Before any contract: (1) made for or by any state agency, department, board, officer, commission, or institution, except the office of general services or its customer agencies serviced by the office of general services business services center, shall be executed or become effective, whenever such contract exceeds fifty thousand dollars in amount, it shall first be approved by the office of the comptroller and filed in his or her office; (2) made for or by the office of general services, whether for itself or for its customer agencies serviced by the office of general services business services center, shall be executed or become effective, whenever such contract exceeds eighty-five thousand dollars in amount, it shall first be approved by the comptroller and filed in his or her office; or (3) established as a centralized contract through the office of general services shall be executed or become effective, whenever such contract exceeds one hundred twenty-five thousand dollars in amount, it shall first be approved by the comptroller and filed in his or her office; provided, however, before any purchase order or other procurement transaction issued under such centralized contract, which exceeds two hundred thousand dollars in amount shall be executed or become effective, it shall first be approved by the comptroller and filed in his or her office. Provided, further, however, that with the exception of contracts identified in subparagraph (ii) of this paragraph the comptroller shall make a final written determination with respect to approval of such contract within ninety days of the submission of such contract to his or her office unless the comptroller shall notify, in writing, the state agency, department, board, officer, commission, or institution, prior to the expiration of the ninety day period, and for good cause, of the need for an extension of not more than fifteen days, or a reasonable period of time agreed to by such state agency, department, board, officer, commission, or institution and provided, further, that such written determination or extension shall be made part of the procurement record pursuant to paragraph f of subdivision one of section one hundred sixty-three of this chapter.
+
+(ii) Before any contract established as a centralized contract through the office of general services, as provided for in item three of subparagraph (i) of this paragraph, or any contract made in accordance with subdivision five, six or paragraph b of subdivision sixteen of section three hundred fifty-five of the education law, section three hundred seventy-three of the education law, section sixty-two hundred eighteen of the education law, or section sixty-two hundred seventy-five of the education law, shall be executed or become effective, such contract shall first be approved by the comptroller and filed in his or her office. Provided, however, that the comptroller shall make a final written determination with respect to approval of such contract within seventy-five days of the submission of such contract to his or her office unless the comptroller shall notify, in writing, the state agency, department, board, officer, commission, or institution, prior to the expiration of the seventy-five day period, and for good cause, of the need for an extension of not more than fifteen days, or a reasonable period of time agreed to by such state agency, department, board, officer, commission, or institution and provided, further, that such written determination or extension shall be made part of the procurement record pursuant to paragraph f of subdivision one of section one hundred sixty-three of this chapter.
+
+(b) Whenever any liability of any nature shall be incurred by or for any state department, board, officer, commission, or institution, notice that such liability has been incurred shall be immediately given in writing to the state comptroller.
+
+3. A contract or other instrument wherein the state or any of its officers, agencies, boards or commissions agrees to give a consideration other than the payment of money, when the value or reasonably estimated value of such consideration exceeds twenty-five thousand dollars, shall not become a valid enforceable contract unless such contract or other instrument shall first be approved by the comptroller and filed in his office.
+
+4. The provisions of this section shall be controlling, any other general, special or local law inconsistent therewith notwithstanding, unless this section is expressly and specifically referred to in such other general, special or local law; except that any agreement or contract negotiated pursuant to article fourteen of the civil service law, in accordance with article twenty-four of the executive law or otherwise, shall not be subject to the requirements of this section or chapter and shall become effective and binding in accordance with the provisions of said article fourteen.
+
+---
+
+## CITATIONS THIS TEXT POINTS TO (tagged for traceability — not part of the rule)
+
+- NY State Finance Law § 163 (procurement; the procurement record at §163(1)(f))
+- NY Education Law §§ 355, 373, 6218, 6275 (SUNY/CUNY contract approval carve-outs)
+- NY Civil Service Law Article 14 (Taylor Law; negotiated agreements)
+- NY Executive Law Article 24
+- Dollar thresholds in this section: $50,000 (general agency); $85,000 (OGS); $125,000 (OGS centralized contract) with $200,000 (purchase order/transaction under centralized contract); $25,000 (consideration other than money, subd. 3); determination windows 90 days / 75 days, +15-day extension
