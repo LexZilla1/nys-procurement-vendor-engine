@@ -1,0 +1,7 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Freshness-checker offline artifacts
+freshness-selftest-*/
