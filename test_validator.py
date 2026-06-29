@@ -44,6 +44,11 @@ def test_every_emitted_citation_is_verbatim():
         val.check_invoice(_load("sample-invoice-fail-missing-cert.json")),
         val.check_budget(_load("sample-budget-pass.json")),
         val.check_budget(_load("sample-budget-fail.json")),
+        val.check_vendrep(_load("sample-vendrep-pass.json")),
+        val.check_vendrep(_load("sample-vendrep-fail-material-change.json")),
+        val.check_bid(_load("sample-bid-pass.json")),
+        val.check_bid(_load("sample-bid-fail-missing-eeo.json")),
+        val.check_bid(_load("sample-bid-fail-overdue.json")),
     ]
     n = 0
     for r in results:
@@ -179,6 +184,113 @@ def test_rm1_amount_scope_term_change_is_surfaced_as_amendment_track():
     res = val.check_budget(_budget(2_000_000, 80_000, changes_amount_scope_or_term=True))
     amend = [f for f in res.findings if "contract amendment" in f.citation_quote]
     assert amend and amend[0].severity == V.INFO
+
+
+# --------------------------------------------------------------------------
+# RM-3 — VendRep stale-certification monitor
+# --------------------------------------------------------------------------
+
+def test_rm3_clean_questionnaire_passes():
+    val = V.Validator(golden=GC)
+    res = val.check_vendrep(_load("sample-vendrep-pass.json"))
+    assert res.overall_status == V.STATUS_PASS, res.overall_status
+
+
+def test_rm3_material_change_fails_requiring_recert():
+    val = V.Validator(golden=GC)
+    res = val.check_vendrep(_load("sample-vendrep-fail-material-change.json"))
+    assert res.overall_status == V.STATUS_FAIL
+    mc = [f for f in res.findings if f.evidence.get("material_change") == "ownership_change"]
+    assert mc and mc[0].severity == V.FAIL and not mc[0].passed
+    assert "material changes" in mc[0].citation_quote
+
+
+def test_rm3_unsigned_certification_fails():
+    val = V.Validator(golden=GC)
+    doc = _load("sample-vendrep-pass.json")
+    doc["certification"]["signed"] = False
+    res = val.check_vendrep(doc)
+    sig = [f for f in res.findings if "penalties of perjury" in f.citation_quote]
+    assert sig and sig[0].severity == V.FAIL and not sig[0].passed
+    assert res.overall_status == V.STATUS_FAIL
+
+
+def test_rm3_recert_after_change_clears_to_pass():
+    val = V.Validator(golden=GC)
+    doc = _load("sample-vendrep-fail-material-change.json")
+    doc["recertified_since_change"] = True
+    res = val.check_vendrep(doc)
+    assert res.overall_status == V.STATUS_PASS
+
+
+def test_rm3_cites_the_form_specific_source_file():
+    val = V.Validator(golden=GC)
+    doc = _load("sample-vendrep-pass.json")
+    doc["form"] = "AC 3293-S"
+    res = val.check_vendrep(doc)
+    assert all(f.source_file == V.VENDREP_FORMS["AC 3293-S"] for f in res.findings)
+    # And the citation is genuinely verbatim in that specific file.
+    for f in res.findings:
+        assert f.citation_quote in GC.body(f.source_file)
+
+
+# --------------------------------------------------------------------------
+# RM-4 — MWBE deadline cascade + §143.3(c) EEO hard-block
+# --------------------------------------------------------------------------
+
+def test_rm4_all_met_passes():
+    val = V.Validator(golden=GC)
+    res = val.check_bid(_load("sample-bid-pass.json"))
+    assert res.overall_status == V.STATUS_PASS, res.overall_status
+
+
+def test_rm4_missing_eeo_is_hard_block_fail():
+    val = V.Validator(golden=GC)
+    res = val.check_bid(_load("sample-bid-fail-missing-eeo.json"))
+    assert res.overall_status == V.STATUS_FAIL
+    eeo = [f for f in res.findings if "EEO policy statement" in f.citation_quote]
+    assert eeo and eeo[0].severity == V.FAIL and not eeo[0].passed
+
+
+def test_rm4_overdue_utilization_plan_fails():
+    val = V.Validator(golden=GC)
+    res = val.check_bid(_load("sample-bid-fail-overdue.json"))
+    assert res.overall_status == V.STATUS_FAIL
+    up = [f for f in res.findings if f.evidence.get("deadline") == "Utilization plan"]
+    assert up and up[0].evidence.get("status") == "OVERDUE" and not up[0].passed
+
+
+def test_rm4_eeo_carveout_softens_to_warn():
+    """A work force of 10 or fewer invokes the §143.3(c) staffing-plan carve-out;
+    a missing EEO policy statement with written justification is a WARN, not FAIL."""
+    val = V.Validator(golden=GC)
+    doc = _load("sample-bid-pass.json")
+    doc["eeo_policy_statement_submitted"] = False
+    doc["eeo_justification_provided"] = True
+    res = val.check_bid(doc)
+    eeo = [f for f in res.findings if "EEO policy statement" in f.citation_quote]
+    assert eeo and eeo[0].severity == V.WARN
+    assert res.overall_status != V.STATUS_FAIL
+
+
+def test_rm4_remedy_and_waiver_clocks_from_deficiency():
+    """A deficiency notice starts the 7-bd remedy clock; if a waiver is requested,
+    the 5-bd waiver clock. An unmet, overdue remedy FAILs."""
+    val = V.Validator(golden=GC)
+    doc = _load("sample-bid-pass.json")
+    doc["deficiency_notice_date"] = "2026-06-19"
+    doc["written_remedy_submitted_date"] = None
+    doc["waiver_requested"] = True
+    doc["waiver_form_submitted_date"] = None
+    doc["today"] = "2026-07-06"  # well past both 7-bd and 5-bd cliffs
+    res = val.check_bid(doc)
+    remedy = [f for f in res.findings if f.evidence.get("deadline") == "Written remedy to deficiency"]
+    waiver = [f for f in res.findings if f.evidence.get("deadline") == "Waiver form"]
+    assert remedy and remedy[0].evidence.get("status") == "OVERDUE"
+    assert waiver and waiver[0].evidence.get("status") == "OVERDUE"
+    assert "seven (7) business days" in remedy[0].citation_quote
+    assert "five (5) business days" in waiver[0].citation_quote
+    assert res.overall_status == V.STATUS_FAIL
 
 
 # --------------------------------------------------------------------------

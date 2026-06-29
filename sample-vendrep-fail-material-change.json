@@ -1,0 +1,26 @@
+{
+  "document_type": "vendrep_questionnaire",
+  "form": "AC 3290-S",
+  "vendor_name": "Acme Civic Services LLC",
+  "nys_vendor_id": "1100098765",
+  "filing_method": "paper",
+  "certification": {
+    "signed": true,
+    "signatory_authorized_to_bind": true,
+    "under_penalty_of_perjury": true,
+    "notarized": true,
+    "signatory_name": "Dana Okafor",
+    "signatory_title": "Managing Member",
+    "date": "2026-01-10"
+  },
+  "material_changes": {
+    "ownership_change": true,
+    "new_judgment_or_lien": false,
+    "tax_status_change": false,
+    "bankruptcy": false,
+    "debarment_or_suspension": false,
+    "key_personnel_integrity_event": false
+  },
+  "recertified_since_change": false,
+  "_note": "A 35% ownership stake changed hands in March 2026; the certified questionnaire on file pre-dates the change and has not been re-certified."
+}
