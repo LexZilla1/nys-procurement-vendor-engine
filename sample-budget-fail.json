@@ -1,0 +1,15 @@
+{
+  "document_type": "budget_modification",
+  "total_contract_value": 2000000,
+  "approved_budget": {
+    "personnel": 1200000,
+    "equipment": 500000,
+    "travel": 300000
+  },
+  "proposed_budget": {
+    "personnel": 980000,
+    "equipment": 720000,
+    "travel": 300000
+  },
+  "changes_amount_scope_or_term": false
+}
