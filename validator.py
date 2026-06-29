@@ -79,6 +79,66 @@ def business_days_between(a, b):
             count += 1
     return count
 
+
+# ---------------------------------------------------------------------------
+# Interest-rate dataset (rates live ONLY in data/nys-interest-rates.csv;
+# never hard-code a rate — a frozen rate is wrong within 90 days)
+# ---------------------------------------------------------------------------
+
+# Which CSV column feeds NFP prompt-contracting (§179-v) interest. The dataset
+# README (full-text-verified against SFL §179-g, which cites Tax Law §1096(e))
+# is explicit: BOTH procurement interest regimes compute on the OVERPAYMENT
+# rate — `overpayment_rate_pct`. §179-v(2) cites the same §1096(e). The
+# similarly-named `underpayment_1096e_rate_pct` column is recorded for
+# completeness and is NOT the one used for procurement interest.
+RATE_COLUMN = "overpayment_rate_pct"
+RATES_CSV = os.path.join(HERE, "data", "nys-interest-rates.csv")
+
+
+class InterestRates:
+    """Loads the quarterly NYS interest-rate time series and answers
+    'what annual rate was in effect on date D' for the chosen column."""
+
+    def __init__(self, csv_path=RATES_CSV, column=RATE_COLUMN):
+        self.column = column
+        self.rows = []  # list of (period_start, period_end, rate_fraction, source_url)
+        self._load(csv_path)
+
+    def _load(self, csv_path):
+        import csv
+        if not os.path.isfile(csv_path):
+            return
+        seen = set()
+        with open(csv_path, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                key = r.get("quarter")
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                ps = parse_date(r.get("period_start"))
+                pe = parse_date(r.get("period_end"))
+                try:
+                    rate = float(r.get(self.column)) / 100.0
+                except (TypeError, ValueError):
+                    continue
+                if ps and pe:
+                    self.rows.append((ps, pe, rate, r.get("source_url", ""), key))
+        self.rows.sort(key=lambda t: t[0])
+
+    def annual_rate_on(self, day):
+        """Return (rate_fraction, quarter_label, source_url) for the quarter
+        covering `day`, or (None, None, None) if no row covers it."""
+        for ps, pe, rate, url, key in self.rows:
+            if ps <= day <= pe:
+                return (rate, key, url)
+        return (None, None, None)
+
+    @property
+    def coverage(self):
+        if not self.rows:
+            return None
+        return (self.rows[0][0], self.rows[-1][1])
+
 # ---------------------------------------------------------------------------
 # Severity / status vocabulary
 # ---------------------------------------------------------------------------
@@ -199,9 +259,10 @@ class Finding:
 
 
 class Result:
-    def __init__(self, document_type, findings):
+    def __init__(self, document_type, findings, extra=None):
         self.document_type = document_type
         self.findings = findings
+        self.extra = extra or {}  # rule-specific payload (e.g. the RM-2 interest summary)
 
     @property
     def overall_status(self):
@@ -211,8 +272,14 @@ class Result:
             return STATUS_WARN
         return STATUS_PASS
 
+    @property
+    def attorney_review_required(self):
+        """True for gated RECOVERY output (RM-2) that must not be asserted as a
+        claim without licensed-attorney oversight."""
+        return bool(self.extra.get("attorney_review_required"))
+
     def to_dict(self):
-        return {
+        d = {
             "document_type": self.document_type,
             "overall_status": self.overall_status,
             "findings": [f.to_dict() for f in self.findings],
@@ -222,6 +289,9 @@ class Result:
                 "legal or financial advice, and performs no submission on your behalf."
             ),
         }
+        if self.extra:
+            d.update(self.extra)
+        return d
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +318,8 @@ XII4F = "source-xii-4-f-proper-invoice.md"
 STF109 = "source-stf-109-vendor-certificate.md"
 XI4B = "source-xi-4-b-grant-budget-variance.md"
 MWBE = "source-mwbe-5nycrr-pass-fail.md"
+STF179V = "source-stf-179-v.md"
+XI4A = "source-xi-4-a-nfp-prompt-contracting.md"
 
 # VendRep questionnaire forms → their golden-copy source file. The
 # material-change obligation and the certification-under-penalties-of-perjury
@@ -285,9 +357,10 @@ def _present(value):
 
 
 class Validator:
-    def __init__(self, golden=None, freshness_report=None):
+    def __init__(self, golden=None, freshness_report=None, rates=None):
         self.gc = golden or GoldenCopy()
         self.freshness = self._load_freshness(freshness_report)
+        self.rates = rates or InterestRates()
 
     # -- optional freshness guardrail (PHASE2-BUILD-SPEC §3 Step 2 / §4) ----
     def _load_freshness(self, path):
@@ -737,6 +810,192 @@ class Validator:
                            label, bd_left, due.isoformat()),
                        True, evidence=ev)
 
+    # ------------------------------------------------------------------ RM-2
+    # GATED RECOVERY feature — §179-v NFP prompt-contracting interest. Produces
+    # an INDICATIVE figure only; every result is flagged attorney_review_required
+    # and must NOT be user-exposed or asserted as a claim without licensed-
+    # attorney oversight (PHASE2-BUILD-SPEC §3 Step 7, §7).
+    def validate_rm2_interest(self, contract):
+        ENTITLE = "\n".join([
+            "entitled to interest payments pursuant to this section: (a) on those",
+            "moneys that would be due under the terms of the contract or renewal",
+            "contract from the scheduled commencement date or the date the",
+            "organization begins to provide services, whichever is later, until the",
+            "date the payment is made under the contract or renewal contract",
+        ])
+        RATE = "\n".join([
+            "Such organizations shall receive such interest payments at a rate",
+            "equal to the rate set by the commissioner of taxation and finance for",
+            "corporate taxes pursuant to paragraph one of subsection (e) of section",
+            "one thousand ninety-six of the tax law.",
+        ])
+        DISAPPROVE = "\n".join([
+            "Should the attorney general or the comptroller disapprove a",
+            "contract or renewal contract, the provisions of this section shall not",
+            "be applicable.",
+        ])
+        ADVANCE = "\n".join([
+            "No interest payments shall be made if the not-for-profit",
+            "organization receives an advance payment pursuant to section one hundred",
+            "seventy-nine-u of this article",
+        ])
+        WAIVER = "\n".join([
+            "the state agency and the not-for-profit organization may mutually",
+            "agree to waive any interest owed to the not-for-profit organization",
+            "under the provisions of this article.",
+        ])
+        DIRECTIVE_ISSUED = ("a State agency is deemed to have issued a written directive when it "
+                            "provides the NFP organization with a proposed contract containing a "
+                            "start date.")
+        SUSPENSION = ("the State agency may suspend a written directive and subsequent interest "
+                      "payments or subsequent advance payments required by the Prompt Contracting "
+                      "Law.")
+        INTEREST_DUE = ("Prompt Contracting interest is due when grant contracts are executed "
+                        "after the contract start date and payments are missed.")
+
+        # -- Conditions (each grounded verbatim; INFO — RECOVERY is not a gate)
+        directive_present = bool(contract.get("written_directive_present"))
+        directive_suspended = bool(contract.get("directive_suspended"))
+        ag_approval = bool(contract.get("ag_approval", True))      # AG/Comptroller approval
+        warranted_waiver = bool(contract.get("warranted_waiver"))
+        advance_payment = bool(contract.get("advance_payment_received"))
+
+        findings = [
+            self._f("RM-2", XI4A, DIRECTIVE_ISSUED, INFO,
+                    "A written directive authorizing the NFP to commence services must exist.",
+                    directive_present, evidence={"written_directive_present": directive_present}),
+            self._f("RM-2", XI4A, SUSPENSION, INFO,
+                    "The written directive (and subsequent interest) must not have been suspended.",
+                    not directive_suspended, evidence={"directive_suspended": directive_suspended}),
+            self._f("RM-2", STF179V, DISAPPROVE, INFO,
+                    "The AG/Comptroller must not have disapproved the contract (§179-v(6)).",
+                    ag_approval, evidence={"ag_approval": ag_approval}),
+            self._f("RM-2", STF179V, WAIVER, INFO,
+                    "No OSC-warranted waiver of interest may be in effect (§179-v(7)).",
+                    not warranted_waiver, evidence={"warranted_waiver": warranted_waiver}),
+            self._f("RM-2", STF179V, ADVANCE, INFO,
+                    "No §179-u advance payment that would exclude interest (§179-v(5)).",
+                    not advance_payment, evidence={"advance_payment_received": advance_payment}),
+        ]
+
+        entitlement_arises = (directive_present and not directive_suspended and ag_approval
+                              and not warranted_waiver and not advance_payment)
+
+        findings.append(self._f("RM-2", STF179V, ENTITLE, INFO,
+            "§179-v(1)(a): interest runs on moneys due from the later of scheduled "
+            "commencement or service start until payment is made.",
+            entitlement_arises, evidence={}))
+        findings.append(self._f("RM-2", XI4A, INTEREST_DUE, INFO,
+            "Prompt-contracting interest is due when a grant contract is executed after the "
+            "start date and payments are missed.", entitlement_arises, evidence={}))
+        # The statutory rate basis is always cited so the rate choice is auditable.
+        findings.append(self._f("RM-2", STF179V, RATE, INFO,
+            "Rate basis: §179-v(2) sets the rate by Tax Law §1096(e); computed on the "
+            "overpayment column per the dataset README and SFL §179-g.",
+            True, evidence={"rate_column": self.rates.column}))
+
+        calc = (self._compute_interest(contract) if entitlement_arises
+                else {"interest_amount_indicative": 0.0, "components": [],
+                      "notes": ["No entitlement under the conditions above; no interest computed."],
+                      "coverage_gap_days": 0})
+
+        rm2 = {
+            "entitlement_arises": entitlement_arises,
+            "interest_amount_indicative": round(calc["interest_amount_indicative"], 2),
+            "interest_rate_basis": {
+                "column": self.rates.column,
+                "note": ("NFP prompt-contracting interest computes on the §1096(e) overpayment "
+                         "rate per the dataset README (full-text-verified against SFL §179-g); "
+                         "§179-v(2) cites the same §1096(e). NOTE: the task brief said "
+                         "'underpayment rate' — the repo's verified data documentation overrides "
+                         "that, and this is flagged for the attorney review."),
+                "quarters_used": calc.get("components", []),
+                "coverage_gap_days": calc.get("coverage_gap_days", 0),
+            },
+            "conditions_required": [
+                "A written directive authorizing the NFP to commence services exists (e.g., a "
+                "proposed contract containing a start date, or a signed Attachment C).",
+                "That written directive (and the subsequent interest) has not been suspended by "
+                "the State agency.",
+                "The Attorney General and the Comptroller have not disapproved the contract or "
+                "renewal contract (§179-v(6)).",
+                "No waiver of interest has been determined warranted by OSC (§179-v(7)).",
+                "No §179-u advance payment was received that would exclude interest (§179-v(5)).",
+            ],
+            "documentation_needed": [
+                "The written directive (proposed contract with a start date, or the signed "
+                "Attachment C Written Directive).",
+                "Dated evidence of the scheduled commencement date and the date services began.",
+                "The contract payment schedule and proof of each payment's due date vs. actual "
+                "payment date (to establish lateness).",
+                "Evidence the contract was approved (AG/Comptroller approval dates) — i.e. not "
+                "disapproved under §179-v(6).",
+                "If a borrowed-funds rate other than the statutory §1096(e) rate is claimed: "
+                "documentation of the rate, the lender, and amounts (§179-v(2)).",
+                "Documentation that the applicable §179-s / §179-t processing timeframes were met.",
+            ],
+            "citing_quote": ENTITLE,
+            "calculation_notes": calc.get("notes", []),
+            "attorney_review_required": True,
+            "gating_notice": (
+                "GATED — RECOVERY feature. This is an INDICATIVE interest figure tied to the "
+                "verbatim rule and the published rate. It is NOT a legal determination that "
+                "interest is due and payable, and must be reviewed by licensed-attorney oversight "
+                "before being asserted as a claim. The tool makes no submission and gives no advice."),
+        }
+        return Result("nfp_contract_interest", findings, extra=rm2)
+
+    def _compute_interest(self, contract):
+        """Indicative interest: for each scheduled payment, accrue the overpayment
+        rate on the amount from the later of its due date / the §179-v(1)(a)
+        entitlement start until it was paid (or the as-of date if still unpaid),
+        quarter by quarter using the rate in effect on each day."""
+        sched_comm = parse_date(contract.get("scheduled_commencement_date"))
+        service_start = parse_date(contract.get("service_start_date"))
+        ent_start = max([d for d in (sched_comm, service_start) if d], default=None)
+        as_of = parse_date(contract.get("as_of_date")) or datetime.date.today()
+        default_paid = parse_date(contract.get("actual_payment_date"))
+
+        total = 0.0
+        quarters = []
+        gap_days = 0
+        notes = []
+        for p in contract.get("payment_schedule") or []:
+            due = parse_date(p.get("due_date"))
+            try:
+                amt = float(p.get("amount", 0) or 0)
+            except (TypeError, ValueError):
+                amt = 0.0
+            if not due or amt <= 0:
+                continue
+            end = parse_date(p.get("paid_date")) or default_paid or as_of
+            accrual_start = max(due, ent_start) if ent_start else due
+            if end <= accrual_start:
+                continue
+            d = accrual_start
+            while d < end:
+                rate, qkey, _ = self.rates.annual_rate_on(d)
+                if rate is None:
+                    gap_days += 1
+                else:
+                    total += amt * rate / 365.0
+                    quarters.append(qkey)
+                d += datetime.timedelta(days=1)
+
+        if gap_days:
+            cov = self.rates.coverage
+            notes.append(
+                "{} day(s) of accrual fell outside the available rate coverage{} and could "
+                "not be computed; figure is a lower bound until those quarters are added to "
+                "data/nys-interest-rates.csv.".format(
+                    gap_days,
+                    " ({} to {})".format(cov[0].isoformat(), cov[1].isoformat()) if cov else ""))
+        if not contract.get("payment_schedule"):
+            notes.append("No payment_schedule provided; no interest could be computed.")
+        return {"interest_amount_indicative": total,
+                "components": sorted(set(quarters)),
+                "coverage_gap_days": gap_days, "notes": notes}
+
 
 # ---------------------------------------------------------------------------
 # Rendering
@@ -756,6 +1015,22 @@ def render_human(result):
     lines.append("NYS Procurement Vendor — Validation Result ({})".format(result.document_type))
     lines.append("=" * 78)
     lines.append("OVERALL: {}".format(result.overall_status))
+    # RM-2 gated recovery summary, surfaced prominently above the findings.
+    if "entitlement_arises" in result.extra:
+        e = result.extra
+        lines.append("")
+        lines.append("!" * 78)
+        lines.append("GATED RECOVERY OUTPUT — ATTORNEY REVIEW REQUIRED (not for user exposure)")
+        lines.append("!" * 78)
+        lines.append("entitlement_arises        : {}".format(e["entitlement_arises"]))
+        lines.append("interest_amount_indicative: ${:,.2f}".format(e["interest_amount_indicative"]))
+        rb = e.get("interest_rate_basis", {})
+        lines.append("rate column / quarters    : {} / {}".format(
+            rb.get("column"), ", ".join(rb.get("quarters_used") or []) or "—"))
+        for n in e.get("calculation_notes", []):
+            lines.append("  note: {}".format(n))
+        lines.append("attorney_review_required  : {}".format(e["attorney_review_required"]))
+        lines.append(e["gating_notice"])
     lines.append("")
     for f in result.findings:
         # Leading mark reflects the actual OUTCOME; basis records the rule nature.
@@ -798,15 +1073,18 @@ def main(argv=None):
                     help="run RM-3 VendRep stale-certification monitor")
     ap.add_argument("--bid", metavar="FILE.json",
                     help="run RM-4 MWBE deadline-cascade tracker")
+    ap.add_argument("--contract", metavar="FILE.json",
+                    help="run RM-2 §179-v NFP interest calculator (GATED — indicative, "
+                         "requires attorney review; not for user exposure)")
     ap.add_argument("--freshness", metavar="REPORT.json",
                     help="consult a freshness-checker JSON report and annotate findings "
                          "whose grounding source is not OK")
     ap.add_argument("--json", action="store_true", help="emit JSON only (no human report)")
     args = ap.parse_args(argv)
 
-    if not any([args.invoice, args.budget, args.vendrep, args.bid]):
+    if not any([args.invoice, args.budget, args.vendrep, args.bid, args.contract]):
         ap.error("specify at least one of --invoice [FILE], --budget FILE, "
-                 "--vendrep FILE, --bid FILE")
+                 "--vendrep FILE, --bid FILE, --contract FILE")
 
     validator = Validator(freshness_report=args.freshness)
     results = []
@@ -836,6 +1114,12 @@ def main(argv=None):
             print("ERROR: bid file not found: {}".format(args.bid), file=sys.stderr)
             return 2
         results.append(validator.check_bid(_load_json(args.bid)))
+
+    if args.contract:
+        if not os.path.isfile(args.contract):
+            print("ERROR: contract file not found: {}".format(args.contract), file=sys.stderr)
+            return 2
+        results.append(validator.validate_rm2_interest(_load_json(args.contract)))
 
     payload = [r.to_dict() for r in results]
     if not args.json:

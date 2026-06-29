@@ -49,6 +49,9 @@ def test_every_emitted_citation_is_verbatim():
         val.check_bid(_load("sample-bid-pass.json")),
         val.check_bid(_load("sample-bid-fail-missing-eeo.json")),
         val.check_bid(_load("sample-bid-fail-overdue.json")),
+        val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json")),
+        val.validate_rm2_interest(_load("sample-contract-no-interest-directive-suspended.json")),
+        val.validate_rm2_interest(_load("sample-contract-no-interest-no-directive.json")),
     ]
     n = 0
     for r in results:
@@ -291,6 +294,92 @@ def test_rm4_remedy_and_waiver_clocks_from_deficiency():
     assert "seven (7) business days" in remedy[0].citation_quote
     assert "five (5) business days" in waiver[0].citation_quote
     assert res.overall_status == V.STATUS_FAIL
+
+
+# --------------------------------------------------------------------------
+# RM-2 — §179-v NFP interest calculator (GATED)
+# --------------------------------------------------------------------------
+
+def test_rm2_entitled_contract_computes_positive_interest():
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    assert res.extra["entitlement_arises"] is True
+    assert res.extra["interest_amount_indicative"] > 0
+    # Quarter-aware accrual across 2026-Q1 (6.0%) and Q2 (5.0%) on the two late
+    # $100k payments. Locks the calculation against silent drift.
+    assert abs(res.extra["interest_amount_indicative"] - 1635.62) < 0.01
+
+
+def test_rm2_directive_suspended_blocks_interest():
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-no-interest-directive-suspended.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert res.extra["interest_amount_indicative"] == 0.0
+    susp = [f for f in res.findings if "suspend a written directive" in f.citation_quote]
+    assert susp and not susp[0].passed
+
+
+def test_rm2_no_written_directive_no_entitlement():
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-no-interest-no-directive.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert res.extra["interest_amount_indicative"] == 0.0
+
+
+def test_rm2_warranted_waiver_blocks_interest():
+    val = V.Validator(golden=GC)
+    doc = _load("sample-contract-entitled-to-interest.json")
+    doc["warranted_waiver"] = True
+    res = val.validate_rm2_interest(doc)
+    assert res.extra["entitlement_arises"] is False
+    waiver = [f for f in res.findings if "may mutually" in f.citation_quote]
+    assert waiver and not waiver[0].passed
+
+
+def test_rm2_ag_disapproval_blocks_interest():
+    val = V.Validator(golden=GC)
+    doc = _load("sample-contract-entitled-to-interest.json")
+    doc["ag_approval"] = False
+    res = val.validate_rm2_interest(doc)
+    assert res.extra["entitlement_arises"] is False
+    dis = [f for f in res.findings if "disapprove" in f.citation_quote]
+    assert dis and not dis[0].passed
+
+
+def test_rm2_uses_overpayment_rate_column_not_underpayment():
+    """The repo's verified data README maps §179-v interest to the §1096(e)
+    overpayment column; the calculator must use it (not the underpayment column)."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    assert res.extra["interest_rate_basis"]["column"] == "overpayment_rate_pct"
+
+
+def test_rm2_is_gated_for_attorney_review():
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    assert res.attorney_review_required is True
+    assert res.extra["attorney_review_required"] is True
+    assert "licensed-attorney" in res.extra["gating_notice"]
+
+
+def test_rm2_citing_quote_is_verbatim_entitlement_clause():
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    quote = res.extra["citing_quote"]
+    assert quote in GC.body(V.STF179V)
+    assert "scheduled commencement date" in quote
+
+
+def test_rm2_never_hardcodes_rate_reads_from_csv():
+    """Swapping in a different rate dataset changes the computed figure — proving
+    the rate is read from data, not embedded in code."""
+    doubled = V.InterestRates.__new__(V.InterestRates)
+    doubled.column = "overpayment_rate_pct"
+    base = V.InterestRates()
+    doubled.rows = [(ps, pe, rate * 2, url, key) for (ps, pe, rate, url, key) in base.rows]
+    val = V.Validator(golden=GC, rates=doubled)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    assert abs(res.extra["interest_amount_indicative"] - 1635.62 * 2) < 0.02
 
 
 # --------------------------------------------------------------------------
