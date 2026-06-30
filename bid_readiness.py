@@ -38,6 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GREEN = "GREEN"
 YELLOW = "YELLOW"
 RED = "RED"
+NA = "N/A"  # threshold-gated rule that genuinely does not apply at this contract size
 _COLOR_SEVERITY = {GREEN: PASS, YELLOW: WARN, RED: FAIL}
 
 # Candidate golden-copy grounding for each requirement kind. Verified verbatim
@@ -101,10 +102,11 @@ _GROUNDING_CANDIDATES = {
 # answers "does the vendor satisfy this"; must=True means unmet → RED.
 _RULE_META = {
     "eeo": {"label": "EEO policy statement", "profile_key": "eeo_policy_statement",
-            "must": True,
+            "must": True, "threshold": 25000,
             "action": "Submit your EEO policy statement with the bid."},
     "mwbe": {"label": "MWBE utilization plan",
              "profile_key": "mwbe_utilization_plan_ready", "must": True,
+             "threshold": 25000,
              "action": "Prepare and submit an MWBE utilization plan meeting the stated goal."},
     "sdvob": {"label": "SDVOB participation", "profile_key": "sdvob_certified",
               "must": False,
@@ -138,7 +140,7 @@ _RULE_META = {
                                   "Entities List."},
     "sales_tax_5a": {"label": "Sales-tax registration certification (Tax Law §5-a)",
                      "profile_key": "sales_tax_certificate_of_authority",
-                     "must": True,
+                     "must": True, "threshold": 100000,
                      "action": "File the Tax Law §5-a sales-tax certification "
                                "(applies to contracts over $100,000)."},
     "tropical_hardwoods": {"label": "Tropical hardwoods certification (§165)",
@@ -190,6 +192,41 @@ def _required_dollar(text):
         return int(m.group(1).replace(",", ""))
     except ValueError:
         return None
+
+
+# A labelled contract value in the tender ("estimated contract value: $X",
+# "not to exceed $X", ...). Used for threshold gating.
+_CV_LABEL_RE = re.compile(
+    r"(?:estimated\s+contract\s+value|total\s+contract\s+value|contract\s+value|"
+    r"estimated\s+value|total\s+value|contract\s+amount|not\s+to\s+exceed)"
+    r"[^$\n]{0,40}\$\s?([\d][\d,]*)", re.IGNORECASE)
+
+
+def _extract_contract_value(extracted):
+    """Find a labelled contract value in the tender text. Returns a POSITIVE int
+    or None (None means we could not determine it — never treated as zero)."""
+    blob = "\n".join(extracted.get("pages", []))
+    m = _CV_LABEL_RE.search(blob)
+    if not m:
+        return None
+    try:
+        v = int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def _contract_value(extracted, profile):
+    """Resolve the tender's contract value for threshold gating. A profile-
+    supplied `contract_value_usd` wins when it is a real positive number; a 0 /
+    null / non-numeric value is NOT a valid 'below threshold' signal — it falls
+    through to 'unknown' (None), same as a value we could not extract."""
+    if "contract_value_usd" in profile:
+        v = profile.get("contract_value_usd")
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            return int(v)
+        return None  # 0 / blank / null / invalid → unknown, never below-threshold
+    return _extract_contract_value(extracted)
 
 
 def _verdict(vendor_has, must, grounded, partial):
@@ -310,10 +347,17 @@ class BidReadinessReport:
         self.pages_read = pages_read
         self.requirements_found = requirements_found
         self.rows = rows
+        self.contract_value = None  # set by score_bid; None = not determined
 
     @property
     def checkable_rows(self):
-        return [r for r in self.rows if r.checkable]
+        # N/A rows (rule below its contract-value threshold) are excluded from
+        # scoring entirely — they are not requirements for this contract.
+        return [r for r in self.rows if r.checkable and r.status != NA]
+
+    @property
+    def na_rows(self):
+        return [r for r in self.rows if r.status == NA]
 
     @property
     def score(self):
@@ -331,12 +375,14 @@ class BidReadinessReport:
     def counts(self):
         c = {GREEN: 0, YELLOW: 0, RED: 0}
         for r in self.rows:
-            c[r.status] += 1
+            if r.status in c:
+                c[r.status] += 1
         return c
 
     @property
     def nongreen(self):
-        return [r for r in self.rows if r.status != GREEN]
+        # NA rows are neither a problem to fix nor a green pass — exclude them.
+        return [r for r in self.rows if r.status not in (GREEN, NA)]
 
     @property
     def actions(self):
@@ -363,6 +409,8 @@ class BidReadinessReport:
                 "pages_read": self.pages_read,
                 "requirements_found": self.requirements_found,
                 "requirements_checked_against_profile": len(self.checkable_rows),
+                "contract_value": self.contract_value,
+                "requirements_not_applicable": len(self.na_rows),
             },
             "bid_readiness_score": self.score,
             "status_counts": self.counts,
@@ -389,6 +437,8 @@ def score_bid(extracted, profile, golden=None):
     rules = _build_rules(golden)
     from tender_extractor import find_requirements
     requirements = find_requirements(extracted)
+
+    contract_value = _contract_value(extracted, profile)
 
     rows = []
     seen_kinds = set()
@@ -419,6 +469,41 @@ def score_bid(extracted, profile, golden=None):
         if vendor_has is not None:
             vendor_has = bool(vendor_has)
         grounded = meta["grounding"] is not None
+
+        # Part 4 — threshold gating. A rule that only applies above a contract-
+        # value threshold has three branches. Crucially, a 0 / blank / unknown
+        # value is NOT a "below threshold" signal (it almost always means the
+        # value couldn't be extracted) — it must NOT silently skip the rule.
+        threshold = meta.get("threshold")
+        if threshold is not None:
+            thr_s = "${:,}".format(threshold)
+            note = NONCOLLUSION_CURE_NOTE if kind == "non_collusion" else None
+            if contract_value is None:
+                # Unknown → YELLOW, not confirmed. Never skip silently.
+                rows.append(RequirementRow(
+                    kind=kind, label=meta["label"], tender_excerpt=req["text"],
+                    page=req["page"], vendor_has=vendor_has, status=YELLOW,
+                    grounding=meta["grounding"], must=meta["must"],
+                    issue=("This requirement depends on the contract value "
+                           "(threshold {}), but the tender's dollar value couldn't "
+                           "be determined (read as zero/blank).".format(thr_s)),
+                    fix=("Confirm the tender's contract value. If it exceeds {}, "
+                         "this certification is required — verify against the "
+                         "original tender.".format(thr_s)),
+                    note=note))
+                continue
+            if contract_value <= threshold:
+                # Genuinely below threshold → N/A; excluded from score & counts.
+                rows.append(RequirementRow(
+                    kind=kind, label=meta["label"], tender_excerpt=req["text"],
+                    page=req["page"], vendor_has=vendor_has, status=NA,
+                    grounding=meta["grounding"], must=meta["must"],
+                    note="N/A — contract value ${:,} is below the {} threshold; "
+                         "this certification is not required at this contract "
+                         "size.".format(contract_value, thr_s)))
+                continue
+            # else contract_value > threshold → the rule applies; evaluate below.
+
         partial = False
         shortfall = None
 
@@ -442,19 +527,21 @@ def score_bid(extracted, profile, golden=None):
             grounding=meta["grounding"], must=meta["must"], issue=issue,
             fix=fix, note=note))
 
-    return BidReadinessReport(
+    report = BidReadinessReport(
         vendor_name=profile.get("vendor_name", "(unnamed vendor)"),
         source=extracted.get("source", "(unknown)"),
         pages_read=extracted.get("page_count", 0),
         requirements_found=len(requirements),
         rows=rows)
+    report.contract_value = contract_value
+    return report
 
 
 # ---------------------------------------------------------------------------
 # Human render — show the work
 # ---------------------------------------------------------------------------
 
-_MARK = {GREEN: "GREEN ", YELLOW: "YELLOW", RED: "RED   "}
+_MARK = {GREEN: "GREEN ", YELLOW: "YELLOW", RED: "RED   ", NA: " N/A  "}
 
 
 def render_bid_readiness(report):
@@ -463,12 +550,16 @@ def render_bid_readiness(report):
     L.append("BID-READINESS — {}".format(report.vendor_name))
     L.append("Tender: {}".format(report.source))
     L.append("=" * 78)
+    cv = ("${:,}".format(report.contract_value) if report.contract_value
+          else "NOT DETERMINED (threshold-gated rules verified, not skipped)")
+    L.append("Contract value: {}".format(cv))
     L.append("Read {} page(s), found {} requirement passage(s), checked {} against "
              "your profile.".format(report.pages_read, report.requirements_found,
                                     len(report.checkable_rows)))
     c = report.counts
-    L.append("Verdicts: GREEN={}  YELLOW={}  RED={}   →   BID-READINESS SCORE: "
-             "{}/100".format(c[GREEN], c[YELLOW], c[RED], report.score))
+    na = len(report.na_rows)
+    L.append("Verdicts: GREEN={}  YELLOW={}  RED={}  N/A={}   →   BID-READINESS "
+             "SCORE: {}/100".format(c[GREEN], c[YELLOW], c[RED], na, report.score))
     L.append("Score = weighted mean over the {} checkable requirements "
              "(mandatory ×2, advisory ×1; GREEN=1.0, YELLOW=0.5, RED=0.0)."
              .format(len(report.checkable_rows)))

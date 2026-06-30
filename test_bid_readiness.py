@@ -219,14 +219,72 @@ def test_action_list_collects_fixes_red_before_yellow():
 
 
 def test_every_nongreen_finding_has_issue_and_fix():
-    """The core output rule: every RED/YELLOW explains itself; GREEN does not."""
+    """The core output rule: every RED/YELLOW explains itself; GREEN/N-A do not."""
     rep = _report()
     for r in rep.rows:
-        if r.status == BR.GREEN:
+        if r.status in (BR.GREEN, BR.NA):
             assert r.issue is None and r.fix is None, r.label
         else:
             assert r.issue and r.fix, "{} ({}) missing issue/fix".format(
                 r.label, r.status)
+
+
+# --------------------------------------------------------------------------
+# Threshold gating (contract-value-dependent rules)
+# --------------------------------------------------------------------------
+
+def test_contract_value_extracted_from_tender():
+    assert _report().contract_value == 250000
+
+
+def test_contract_value_zero_blank_invalid_are_unknown():
+    """0 / null / non-numeric are NOT 'below threshold' — they are unknown."""
+    assert BR._contract_value({"pages": []}, {}) is None
+    assert BR._contract_value({}, {"contract_value_usd": 0}) is None
+    assert BR._contract_value({}, {"contract_value_usd": None}) is None
+    assert BR._contract_value({}, {"contract_value_usd": "abc"}) is None
+    assert BR._contract_value({}, {"contract_value_usd": False}) is None
+    assert BR._contract_value({}, {"contract_value_usd": 90000}) == 90000
+
+
+def _sales_tax_row(rep):
+    rows = [r for r in rep.rows if r.kind == "sales_tax_5a"]
+    return rows[0] if rows else None
+
+
+def test_value_above_threshold_rule_applies():
+    # sample tender value 250000 > $100k §5-a threshold → rule applies, evaluated.
+    rep = _report(_profile(sales_tax_certificate_of_authority=True))
+    st = _sales_tax_row(rep)
+    assert st is not None and st.status == BR.GREEN
+
+
+def test_value_below_threshold_is_na_and_excluded_from_score():
+    rep = _report(_profile(contract_value_usd=30000))
+    st = _sales_tax_row(rep)
+    assert st is not None and st.status == BR.NA
+    assert "below" in (st.note or "") and "100,000" in (st.note or "")
+    assert st.issue is None and st.fix is None
+    # Excluded from scoring and from the GREEN/YELLOW/RED counts entirely.
+    assert st not in rep.checkable_rows
+    assert sum(rep.counts.values()) + len(rep.na_rows) == \
+        len([r for r in rep.rows if r.status in (BR.GREEN, BR.YELLOW, BR.RED, BR.NA)])
+
+
+def test_value_zero_is_not_below_threshold_but_unknown_yellow():
+    """A zero contract value must NOT silently skip §5-a — it is YELLOW unknown."""
+    rep = _report(_profile(contract_value_usd=0))
+    st = _sales_tax_row(rep)
+    assert st is not None and st.status == BR.YELLOW
+    assert "couldn't be determined" in (st.issue or "")
+    assert "100,000" in (st.issue or "") and "verify" in (st.fix or "").lower()
+    assert st not in rep.na_rows  # NOT treated as N/A
+
+
+def test_value_unknown_keeps_threshold_rule_visible_not_skipped():
+    rep = _report(_profile(contract_value_usd=None))
+    st = _sales_tax_row(rep)
+    assert st is not None and st.status == BR.YELLOW  # surfaced, never dropped
 
 
 def test_noncollusion_carries_cure_note_others_do_not():
