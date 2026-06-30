@@ -1079,12 +1079,24 @@ def main(argv=None):
     ap.add_argument("--freshness", metavar="REPORT.json",
                     help="consult a freshness-checker JSON report and annotate findings "
                          "whose grounding source is not OK")
+    ap.add_argument("--tender", metavar="FILE.pdf|txt",
+                    help="BUILD SPEC v2 Part A — score a NYS tender for bid-readiness "
+                         "(requires --profile); accepts a text PDF or a .txt paste")
+    ap.add_argument("--profile", metavar="FILE.json",
+                    help="vendor profile JSON consumed by --tender")
+    ap.add_argument("--cert-renewal", dest="cert_renewal", metavar="FILE.json",
+                    help="BUILD SPEC v2 Part B — MWBE/SDVOB certification-renewal panel "
+                         "(certified firms only)")
     ap.add_argument("--json", action="store_true", help="emit JSON only (no human report)")
     args = ap.parse_args(argv)
 
-    if not any([args.invoice, args.budget, args.vendrep, args.bid, args.contract]):
+    if not any([args.invoice, args.budget, args.vendrep, args.bid, args.contract,
+                args.tender, args.cert_renewal]):
         ap.error("specify at least one of --invoice [FILE], --budget FILE, "
-                 "--vendrep FILE, --bid FILE, --contract FILE")
+                 "--vendrep FILE, --bid FILE, --contract FILE, "
+                 "--tender FILE --profile FILE, --cert-renewal FILE")
+    if args.tender and not args.profile:
+        ap.error("--tender requires --profile FILE.json")
 
     validator = Validator(freshness_report=args.freshness)
     results = []
@@ -1121,16 +1133,62 @@ def main(argv=None):
             return 2
         results.append(validator.validate_rm2_interest(_load_json(args.contract)))
 
-    payload = [r.to_dict() for r in results]
-    if not args.json:
-        for r in results:
-            print(render_human(r))
+    # BUILD SPEC v2 Part A / B — bid-readiness + cert-renewal. These produce
+    # their own report shapes (not Result), so they print alongside the doc
+    # validators rather than joining the findings payload. Imported locally to
+    # keep validator.py free of an import cycle (both modules import from here).
+    exit_extra = 0
+    if args.tender:
+        if not os.path.isfile(args.tender):
+            print("ERROR: tender file not found: {}".format(args.tender), file=sys.stderr)
+            return 2
+        if not os.path.isfile(args.profile):
+            print("ERROR: profile file not found: {}".format(args.profile), file=sys.stderr)
+            return 2
+        import bid_readiness
+        from tender_extractor import extract
+        extracted = extract(args.tender)
+        if not extracted["has_text_layer"]:
+            print("no extractable text layer — not confirmed (scanned/image PDF?). "
+                  "Re-upload a text PDF or paste the tender text as .txt.",
+                  file=sys.stderr)
+            return 1
+        report = bid_readiness.score_bid(extracted, _load_json(args.profile))
+        if not args.json:
+            print(bid_readiness.render_bid_readiness(report))
             print()
-    print(json.dumps(payload if len(payload) > 1 else payload[0],
-                     ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        if report.blocking:
+            exit_extra = 1
 
-    # Exit 1 if any document FAILs (a MUST item unmet); else 0.
-    return 1 if any(r.overall_status == STATUS_FAIL for r in results) else 0
+    if args.cert_renewal:
+        if not os.path.isfile(args.cert_renewal):
+            print("ERROR: cert-renewal file not found: {}".format(args.cert_renewal),
+                  file=sys.stderr)
+            return 2
+        import cert_renewal
+        creport = cert_renewal.check_cert_renewal(_load_json(args.cert_renewal))
+        if not args.json:
+            print(cert_renewal.render_cert_renewal(creport))
+            print()
+        else:
+            print(json.dumps(creport.to_dict(), ensure_ascii=False, indent=2))
+        if any(i.status == "RED" for i in creport.items):
+            exit_extra = 1
+
+    payload = [r.to_dict() for r in results]
+    if results:
+        if not args.json:
+            for r in results:
+                print(render_human(r))
+                print()
+        print(json.dumps(payload if len(payload) > 1 else payload[0],
+                         ensure_ascii=False, indent=2))
+
+    # Exit 1 if any document FAILs (a MUST item unmet) or any Part A/B blocker.
+    doc_fail = any(r.overall_status == STATUS_FAIL for r in results)
+    return 1 if (doc_fail or exit_extra) else 0
 
 
 if __name__ == "__main__":
