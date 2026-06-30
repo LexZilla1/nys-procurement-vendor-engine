@@ -204,9 +204,58 @@ def _verdict(vendor_has, must, grounded, partial):
     return GREEN if grounded else YELLOW
 
 
+# §139-d carries a limited, agency-discretion cure provision. Per the build
+# spec this note attaches to the non-collusion finding ONLY; §139-l and §139-m
+# are absolute and get no such note.
+NONCOLLUSION_CURE_NOTE = (
+    "Note: §139-d contains a limited cure provision — if the certification is "
+    "missing, the agency head MAY still award if they determine the non-disclosure "
+    "was not made to restrict competition. This is at the agency's sole discretion, "
+    "not the bidder's right. Include the certification; do not rely on the cure "
+    "provision.")
+
+
+def _issue_and_fix(meta, status, vendor_has, grounded, shortfall):
+    """Every non-green finding explains itself: a plain-English ISSUE (what's
+    wrong) and a concrete FIX (how to resolve it). GREEN → (None, None)."""
+    if status == GREEN:
+        return None, None
+    label = meta["label"]
+    base_fix = meta.get("action")
+    if shortfall is not None:
+        have_amt, need_amt = shortfall
+        issue = ("Your profile shows ${:,}; this tender requires ${:,}."
+                 .format(have_amt, need_amt))
+        fix = ("Obtain a certificate of insurance for at least ${:,} and attach it "
+               "to your bid.".format(need_amt))
+        return issue, fix
+    if vendor_has is False:
+        if meta["must"]:
+            issue = ("This tender requires {} and it is not included in your "
+                     "profile.".format(label))
+        else:
+            issue = ("{} is a participation goal for this tender and your profile "
+                     "does not show it.".format(label))
+        return issue, base_fix
+    if vendor_has is None:
+        issue = ("This tender requires {}, but your profile does not record it."
+                 .format(label))
+        return issue, base_fix or ("Confirm you meet this requirement and add it to "
+                                   "your profile before bidding.")
+    # vendor_has True but still YELLOW → satisfied yet not golden-copy-confirmed.
+    if not grounded:
+        issue = ("This tender requires {}, but we have no verified golden-copy rule "
+                 "backing it.".format(label))
+        fix = ("Verify this against the original tender and confirm with the issuing "
+               "agency.")
+        return issue, fix
+    return ("{} needs review against the original tender.".format(label),
+            base_fix or "Review this requirement against the original tender.")
+
+
 class RequirementRow:
     def __init__(self, kind, label, tender_excerpt, page, vendor_has, status,
-                 grounding, must, gap=None, action=None, note=None):
+                 grounding, must, issue=None, fix=None, note=None):
         self.kind = kind
         self.label = label
         self.tender_excerpt = tender_excerpt
@@ -215,8 +264,8 @@ class RequirementRow:
         self.status = status
         self.grounding = grounding  # dict or None
         self.must = must
-        self.gap = gap
-        self.action = action
+        self.issue = issue          # plain-English "what's wrong" (non-green only)
+        self.fix = fix              # concrete action to resolve it (non-green only)
         self.note = note
 
     @property
@@ -244,10 +293,10 @@ class RequirementRow:
                 "confirmed": False,
                 "reason": "no golden-copy rule backs this tender requirement",
             }
-        if self.gap:
-            d["gap"] = self.gap
-        if self.action:
-            d["action"] = self.action
+        if self.issue:
+            d["issue"] = self.issue
+        if self.fix:
+            d["fix"] = self.fix
         if self.note:
             d["note"] = self.note
         return d
@@ -286,16 +335,19 @@ class BidReadinessReport:
         return c
 
     @property
-    def gaps(self):
-        return [r for r in self.rows if r.status in (RED, YELLOW) and r.gap]
+    def nongreen(self):
+        return [r for r in self.rows if r.status != GREEN]
 
     @property
     def actions(self):
+        """The action list = collected FIX texts from all RED + YELLOW findings,
+        RED first then YELLOW, deduped on the fix text."""
         seen, out = set(), []
-        for r in self.rows:
-            if r.status in (RED, YELLOW) and r.action and r.action not in seen:
-                seen.add(r.action)
-                out.append({"for": r.label, "status": r.status, "action": r.action})
+        for status in (RED, YELLOW):
+            for r in self.rows:
+                if r.status == status and r.fix and r.fix not in seen:
+                    seen.add(r.fix)
+                    out.append({"for": r.label, "status": status, "fix": r.fix})
         return out
 
     @property
@@ -315,9 +367,10 @@ class BidReadinessReport:
             "bid_readiness_score": self.score,
             "status_counts": self.counts,
             "requirements": [r.to_dict() for r in self.rows],
-            "gaps": [
-                {"requirement": r.label, "status": r.status, "gap": r.gap}
-                for r in self.gaps
+            "issues": [
+                {"requirement": r.label, "status": r.status,
+                 "issue": r.issue, "fix": r.fix}
+                for r in self.nongreen
             ],
             "action_list": self.actions,
             "blocking_count": len(self.blocking),
@@ -344,11 +397,16 @@ def score_bid(extracted, profile, golden=None):
         meta = rules.get(kind)
         if meta is None:
             # A real requirement passage with no profile mapping — show it as
-            # context (YELLOW, unmapped), but do not invent a check.
+            # context (YELLOW, unmapped), but do not invent a check. It still
+            # explains itself: issue + fix, per the general output rule.
             rows.append(RequirementRow(
                 kind=kind, label="General / unmapped requirement",
                 tender_excerpt=req["text"], page=req["page"],
                 vendor_has=None, status=YELLOW, grounding=None, must=False,
+                issue="This tender states a requirement we could not map to your "
+                      "profile.",
+                fix="Review this requirement against the original tender and "
+                    "confirm you meet it.",
                 note="not mapped to a profile field — review manually"))
             continue
         # Collapse multiple tender lines of the same kind to one verdict row,
@@ -362,7 +420,7 @@ def score_bid(extracted, profile, golden=None):
             vendor_has = bool(vendor_has)
         grounded = meta["grounding"] is not None
         partial = False
-        gap = None
+        shortfall = None
 
         # Insurance: compare the tender's stated dollar limit to the profile.
         if kind == "insurance" and vendor_has:
@@ -370,26 +428,19 @@ def score_bid(extracted, profile, golden=None):
             have = profile.get(meta.get("limit_key"))
             if need and isinstance(have, (int, float)) and have < need:
                 partial = True
-                gap = ("carries ${:,} general-liability limit; this tender asks "
-                       "for ${:,}".format(int(have), need))
+                shortfall = (int(have), need)
 
         status = _verdict(vendor_has, meta["must"], grounded, partial)
+        issue, fix = _issue_and_fix(meta, status, vendor_has, grounded, shortfall)
 
-        if status == RED:
-            gap = gap or "{} not satisfied by the vendor profile".format(meta["label"])
-        elif status == YELLOW and gap is None:
-            if vendor_has is False:
-                gap = "{} not satisfied (advisory / goal)".format(meta["label"])
-            elif not grounded:
-                gap = ("{} satisfied, but no golden-copy rule confirms this tender "
-                       "requirement (not confirmed)".format(meta["label"]))
+        # Part 3 — §139-d cure-provision note, attached to non-collusion ONLY.
+        note = NONCOLLUSION_CURE_NOTE if kind == "non_collusion" else None
 
-        action = meta["action"] if status in (RED, YELLOW) else None
         rows.append(RequirementRow(
             kind=kind, label=meta["label"], tender_excerpt=req["text"],
             page=req["page"], vendor_has=vendor_has, status=status,
-            grounding=meta["grounding"], must=meta["must"], gap=gap,
-            action=action))
+            grounding=meta["grounding"], must=meta["must"], issue=issue,
+            fix=fix, note=note))
 
     return BidReadinessReport(
         vendor_name=profile.get("vendor_name", "(unnamed vendor)"),
@@ -439,8 +490,10 @@ def render_bid_readiness(report):
             L.append("   you    : (not in profile)")
         else:
             L.append("   you    : {}".format("YES" if r.vendor_has else "NO"))
-        if r.gap:
-            L.append("   gap    : {}".format(r.gap))
+        if r.issue:
+            L.append("   ISSUE  : {}".format(r.issue))
+        if r.fix:
+            L.append("   FIX    : {}".format(r.fix))
         if r.note:
             L.append("   note   : {}".format(r.note))
         L.append("")
@@ -452,9 +505,9 @@ def render_bid_readiness(report):
     else:
         L.append("No RED blockers.")
     L.append("")
-    L.append("ACTION LIST")
+    L.append("ACTION LIST (RED first, then YELLOW)")
     for a in report.actions:
-        L.append("  [{}] {} — {}".format(a["status"], a["for"], a["action"]))
+        L.append("  [{}] {} — {}".format(a["status"], a["for"], a["fix"]))
     if not report.actions:
         L.append("  (nothing outstanding)")
     L.append("")

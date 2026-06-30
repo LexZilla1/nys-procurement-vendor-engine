@@ -112,11 +112,12 @@ def test_unmet_goal_is_yellow_not_red():
     assert sdvob.status == BR.YELLOW
 
 
-def test_insurance_limit_shortfall_is_yellow_with_gap():
+def test_insurance_limit_shortfall_is_yellow_with_issue_and_fix():
     rep = _report()
     ins = [r for r in rep.rows if r.kind == "insurance"][0]
     assert ins.status == BR.YELLOW
-    assert "1,000,000" in (ins.gap or "") and "2,000,000" in (ins.gap or "")
+    assert "1,000,000" in (ins.issue or "") and "2,000,000" in (ins.issue or "")
+    assert "2,000,000" in (ins.fix or "")  # the FIX names the required limit
 
 
 def test_all_satisfied_profile_scores_higher():
@@ -184,10 +185,13 @@ def test_workers_comp_now_grounded_is_green():
 
 
 def test_non_collusion_satisfied_and_grounded_is_green():
-    rep = _report()
+    """When the profile satisfies it, a statute-grounded rule goes GREEN with no
+    issue/fix (the cure note still attaches — it describes the rule)."""
+    rep = _report(_profile(non_collusion_certification_ready=True))
     nc = [r for r in rep.rows if r.kind == "non_collusion"][0]
     assert nc.vendor_has is True and nc.grounding is not None
     assert nc.status == BR.GREEN
+    assert nc.issue is None and nc.fix is None
 
 
 def test_iran_unsatisfied_mandatory_is_red_blocker_with_confirmed_cite():
@@ -198,12 +202,42 @@ def test_iran_unsatisfied_mandatory_is_red_blocker_with_confirmed_cite():
     assert iran.grounding is not None  # RED, yet citation-grounded (Track 1)
 
 
-def test_action_list_targets_gaps():
+def test_action_list_collects_fixes_red_before_yellow():
     rep = _report()
     actions = rep.actions
     labels = {a["for"] for a in actions}
     assert "MWBE utilization plan" in labels
     assert "Bid bond" in labels
+    # Every action carries a concrete FIX text, never an empty flag.
+    assert all(a["fix"] for a in actions)
+    # Ordering: all RED fixes precede all YELLOW fixes.
+    statuses = [a["status"] for a in actions]
+    last_red = max((i for i, s in enumerate(statuses) if s == BR.RED), default=-1)
+    first_yellow = min((i for i, s in enumerate(statuses) if s == BR.YELLOW),
+                       default=len(statuses))
+    assert last_red < first_yellow, statuses
+
+
+def test_every_nongreen_finding_has_issue_and_fix():
+    """The core output rule: every RED/YELLOW explains itself; GREEN does not."""
+    rep = _report()
+    for r in rep.rows:
+        if r.status == BR.GREEN:
+            assert r.issue is None and r.fix is None, r.label
+        else:
+            assert r.issue and r.fix, "{} ({}) missing issue/fix".format(
+                r.label, r.status)
+
+
+def test_noncollusion_carries_cure_note_others_do_not():
+    """Part 3: §139-d gets the cure-provision note; §139-l/§139-m are absolute."""
+    rep = _report()
+    nc = [r for r in rep.rows if r.kind == "non_collusion"][0]
+    assert nc.note and "cure provision" in nc.note
+    assert "sole discretion" in nc.note
+    for kind in ("sexual_harassment", "gender_based_violence"):
+        row = [r for r in rep.rows if r.kind == kind][0]
+        assert row.note is None, "{} must not carry a cure note".format(kind)
 
 
 def _run():

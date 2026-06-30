@@ -11,7 +11,7 @@
   "vendor_responsibility_questionnaire_current": true,
   "workers_compensation_coverage": true,
   "workforce_employee_count": 22,
-  "non_collusion_certification_ready": true,
+  "non_collusion_certification_ready": false,
   "iran_divestment_certification_ready": false,
   "sexual_harassment_policy": true,
   "gender_based_violence_policy": true
