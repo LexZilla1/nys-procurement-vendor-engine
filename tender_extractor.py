@@ -229,6 +229,15 @@ _KIND_KEYWORDS = [
     ("vendor_responsibility", re.compile(
         r"\b(vendor responsibility|responsibility questionnaire|vendrep|"
         r"vendor responsible)\b", re.IGNORECASE)),
+    # Appendix A standard clauses (grounded verbatim in the golden copy).
+    ("non_collusion", re.compile(r"\b(non-?collusi|collusion|139-d)\b",
+                                 re.IGNORECASE)),
+    ("iran_divestment", re.compile(r"\b(iran divestment|prohibited entities "
+                                   r"list|165-a)\b", re.IGNORECASE)),
+    ("sales_tax_5a", re.compile(r"\b(sales and compensating use tax|tax law "
+                                r"§?\s?5-a|certificate of authority)\b",
+                                re.IGNORECASE)),
+    ("tropical_hardwoods", re.compile(r"\btropical hardwood", re.IGNORECASE)),
     ("registration", re.compile(r"\b(vendor file|registered in the nys|"
                                 r"vendor registration)\b", re.IGNORECASE)),
     ("certification", re.compile(r"\b(certif(?:ied|ication)|certificate)\b",

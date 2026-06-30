@@ -144,6 +144,33 @@ def test_work_summary_shows_its_work():
     assert d["requirements_checked_against_profile"] >= 5
 
 
+def test_appendix_a_clauses_grounded_confirmed_not_flagged():
+    """Step-3 grounding: standard clauses read from the tender now carry a
+    verbatim Appendix A citation instead of 'not confirmed'."""
+    rep = _report()
+    for kind in ("non_collusion", "iran_divestment"):
+        row = [r for r in rep.rows if r.kind == kind]
+        assert row, "expected a {} row from the sample tender".format(kind)
+        g = row[0].grounding
+        assert g is not None and g["source_file"] == "source-appendix-a-june2023.md"
+        assert GC.cite(g["source_file"], g["citation_quote"])  # verbatim choke-point
+
+
+def test_non_collusion_satisfied_and_grounded_is_green():
+    rep = _report()
+    nc = [r for r in rep.rows if r.kind == "non_collusion"][0]
+    assert nc.vendor_has is True and nc.grounding is not None
+    assert nc.status == BR.GREEN
+
+
+def test_iran_unsatisfied_mandatory_is_red_blocker_with_confirmed_cite():
+    rep = _report()
+    iran = [r for r in rep.rows if r.kind == "iran_divestment"][0]
+    assert iran.must is True and iran.vendor_has is False
+    assert iran.status == BR.RED and iran in rep.blocking
+    assert iran.grounding is not None  # RED, yet citation-grounded (Track 1)
+
+
 def test_action_list_targets_gaps():
     rep = _report()
     actions = rep.actions

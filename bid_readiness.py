@@ -59,6 +59,25 @@ _GROUNDING_CANDIDATES = {
         "source-xi-16-vendor-responsibility.md",
         "Such review shall be designed to provide reasonable assurances that the "
         "proposed contractor is responsible."),
+    # Appendix A standard clauses — grounded verbatim from the Appendix A source
+    # already in the repo (no duplicate source file; cite() resolves the clause
+    # text directly out of the Standard-Clauses body).
+    "non_collusion": (
+        "source-appendix-a-june2023.md",
+        "Contractor affirms, under\npenalty of perjury, that its bid was arrived "
+        "at independently and without collusion aimed at\nrestricting competition."),
+    "iran_divestment": (
+        "source-appendix-a-june2023.md",
+        "Contractor certifies in accordance with\nState Finance Law § 165-a "
+        "that it is not on the"),
+    "sales_tax_5a": (
+        "source-appendix-a-june2023.md",
+        "if the contractor fails to make the certification required by Tax Law\n"
+        "§ 5-a"),
+    "tropical_hardwoods": (
+        "source-appendix-a-june2023.md",
+        "Section 165 of the State Finance Law, (Use of\nTropical Hardwoods) which "
+        "prohibits purchase and use of tropical hardwoods"),
 }
 
 # Static per-kind rule metadata. profile_key is the vendor-profile field that
@@ -90,6 +109,26 @@ _RULE_META = {
     "registration": {"label": "NYS Vendor File registration",
                      "profile_key": "nys_vendor_file_registered", "must": True,
                      "action": "Register in the NYS Vendor File before award."},
+    "non_collusion": {"label": "Non-collusive bidding certification (§139-d)",
+                      "profile_key": "non_collusion_certification_ready",
+                      "must": True,
+                      "action": "Execute the non-collusive bidding certification "
+                                "(§139-d) with your bid."},
+    "iran_divestment": {"label": "Iran Divestment Act certification (§165-a)",
+                        "profile_key": "iran_divestment_certification_ready",
+                        "must": True,
+                        "action": "Certify you are not on the §165-a Prohibited "
+                                  "Entities List."},
+    "sales_tax_5a": {"label": "Sales-tax registration certification (Tax Law §5-a)",
+                     "profile_key": "sales_tax_certificate_of_authority",
+                     "must": True,
+                     "action": "File the Tax Law §5-a sales-tax certification "
+                               "(applies to contracts over $100,000)."},
+    "tropical_hardwoods": {"label": "Tropical hardwoods certification (§165)",
+                           "profile_key": "tropical_hardwoods_certification_ready",
+                           "must": True,
+                           "action": "Certify tropical-hardwoods compliance (§165) "
+                                     "if wood products are supplied."},
 }
 
 _WEIGHT_MUST = 2

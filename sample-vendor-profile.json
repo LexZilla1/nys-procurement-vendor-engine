@@ -10,5 +10,7 @@
   "bid_bond_available": false,
   "vendor_responsibility_questionnaire_current": true,
   "workers_compensation_coverage": true,
-  "workforce_employee_count": 22
+  "workforce_employee_count": 22,
+  "non_collusion_certification_ready": true,
+  "iran_divestment_certification_ready": false
 }
