@@ -89,12 +89,12 @@ def test_green_requires_satisfied_and_grounded():
 
 
 def test_met_but_unconfirmed_is_yellow_not_green():
-    """Workers' comp is satisfied by the profile but has no golden-copy rule —
-    it must be YELLOW, never a confident GREEN."""
+    """NYS Vendor File registration is satisfied by the profile but has no
+    golden-copy rule — it must be YELLOW, never a confident GREEN."""
     rep = _report()
-    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
-    assert wc.vendor_has is True and wc.grounding is None
-    assert wc.status == BR.YELLOW
+    reg = [r for r in rep.rows if r.kind == "registration"][0]
+    assert reg.vendor_has is True and reg.grounding is None
+    assert reg.status == BR.YELLOW
 
 
 def test_unmet_mandatory_is_red_blocker():
@@ -144,16 +144,43 @@ def test_work_summary_shows_its_work():
     assert d["requirements_checked_against_profile"] >= 5
 
 
-def test_appendix_a_clauses_grounded_confirmed_not_flagged():
-    """Step-3 grounding: standard clauses read from the tender now carry a
-    verbatim Appendix A citation instead of 'not confirmed'."""
+def test_appendix_a_clause_grounded_confirmed_not_flagged():
+    """Step-3 grounding: the Iran clause read from the tender carries a verbatim
+    Appendix A citation instead of 'not confirmed'."""
     rep = _report()
-    for kind in ("non_collusion", "iran_divestment"):
+    row = [r for r in rep.rows if r.kind == "iran_divestment"]
+    assert row, "expected an iran_divestment row from the sample tender"
+    g = row[0].grounding
+    assert g is not None and g["source_file"] == "source-appendix-a-june2023.md"
+    assert GC.cite(g["source_file"], g["citation_quote"])  # verbatim choke-point
+
+
+def test_statute_grounded_rules_cite_dedicated_sources():
+    """Rules with a dedicated statute file ground to it (verbatim), not to a
+    'not confirmed' flag: §139-d (non-collusion), WCL §57 (workers' comp),
+    §139-l (sexual harassment), §139-m (gender-based violence)."""
+    rep = _report()
+    expected = {
+        "non_collusion": "source-stf-139-d-noncollusion.md",
+        "insurance_workers": "source-wkc-57-workers-comp.md",
+        "sexual_harassment": "source-stf-139-l-sexual-harassment.md",
+        "gender_based_violence": "source-stf-139-m-gender-based-violence.md",
+    }
+    for kind, src in expected.items():
         row = [r for r in rep.rows if r.kind == kind]
         assert row, "expected a {} row from the sample tender".format(kind)
         g = row[0].grounding
-        assert g is not None and g["source_file"] == "source-appendix-a-june2023.md"
-        assert GC.cite(g["source_file"], g["citation_quote"])  # verbatim choke-point
+        assert g is not None and g["source_file"] == src, kind
+        assert GC.cite(g["source_file"], g["citation_quote"])  # verbatim
+
+
+def test_workers_comp_now_grounded_is_green():
+    """Workers' comp was 'not confirmed' (YELLOW); grounded to WCL §57 it is a
+    confident GREEN when the profile satisfies it."""
+    rep = _report()
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert wc.vendor_has is True and wc.grounding is not None
+    assert wc.status == BR.GREEN
 
 
 def test_non_collusion_satisfied_and_grounded_is_green():

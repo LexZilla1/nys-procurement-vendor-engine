@@ -429,6 +429,60 @@ history and current revision date.
 
 ---
 
+## Domain 5 — Bid-Submission Certifications & Coverage
+
+Universal bid-submission rules grounded verbatim from primary New York State statute. Each carries a
+mandatory bid-rejection or contract-bar consequence ("a bid shall not be considered for award...").
+Captured this session to ground the bid-readiness checker (BUILD SPEC v2 Part A). The MWBE
+five-year validity (5.1) also anchors the certification-renewal panel (Part B).
+
+### 5.1 — Executive Law §314(5) MWBE certification validity (5 years)
+- **Name:** NY Executive Law §314 — Certification (validity period, subd. 5)
+- **Date:** current revision 2025 codification (NY Open Legislation / Justia)
+- **Issued by:** NY State Legislature; via NY Senate Open Legislation (Exec. Law Art. 15-A)
+- **Link:** https://www.nysenate.gov/legislation/laws/EXC/314
+- **Verbatim file:** `sources/source-exec-314-mwbe-cert-validity.md`
+- **Verified:** 2026-06-30
+
+### 5.2 — Workers' Compensation Law §57 (proof of coverage as a condition of contract)
+- **Name:** Workers' Compensation Law §57 — Restriction on entering into contracts unless compensation is secured
+- **Date:** Last modified Sep. 22, 2014
+- **Issued by:** New York State Senate (Open Legislation)
+- **Link:** https://www.nysenate.gov/legislation/laws/WKC/57
+- **Verbatim file:** `sources/source-wkc-57-workers-comp.md`
+- **Verified:** 2026-06-30
+- **Note:** disability-benefits parallel is WCL §220(8); agency guidance OSC GFO XI.18.G.
+
+### 5.3 — State Finance Law §139-d (statement of non-collusion in bids)
+- **Name:** State Finance Law §139-d — Statement of non-collusion in bids to the state
+- **Date:** Revision 2014-09-22
+- **Issued by:** New York State Senate (Open Legislation)
+- **Link:** https://www.nysenate.gov/legislation/laws/STF/139-D
+- **Verbatim file:** `sources/source-stf-139-d-noncollusion.md`
+- **Verified:** 2026-06-30
+- **Note:** the STATUTORY non-collusion section (carries the bid-rejection consequence), distinct from
+  Appendix A clause 7, which is the contract-form certification.
+
+### 5.4 — State Finance Law §139-l (sexual-harassment policy certification)
+- **Name:** State Finance Law §139-l — Statement on sexual harassment, in bids
+- **Date:** Revision 2019-01-18
+- **Issued by:** New York State Senate (Open Legislation)
+- **Link:** https://www.nysenate.gov/legislation/laws/STF/139-L
+- **Verbatim file:** `sources/source-stf-139-l-sexual-harassment.md`
+- **Verified:** 2026-06-30
+- **Note:** policy must meet Labor Law §201-g; agency guidance OSC GFO XI.18.I.
+
+### 5.5 — State Finance Law §139-m (gender-based-violence policy certification)
+- **Name:** State Finance Law §139-m — Statement on gender-based violence and the workplace, in bids
+- **Date:** Published 2025-11-07
+- **Issued by:** New York State Senate (Open Legislation)
+- **Link:** https://www.nysenate.gov/legislation/laws/STF/139-M
+- **Verbatim file:** `sources/source-stf-139-m-gender-based-violence.md`
+- **Verified:** 2026-06-30
+- **Note:** policy must meet Executive Law §575(11). Recently published (2025-11-07) — high freshness priority.
+
+---
+
 ## Pain-point layer (separate from the golden copy on purpose — different kind of knowledge)
 
 The golden copy says what each rule **says**. These two files capture what **goes wrong** at each rule

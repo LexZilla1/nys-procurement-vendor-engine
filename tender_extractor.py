@@ -238,6 +238,10 @@ _KIND_KEYWORDS = [
                                 r"§?\s?5-a|certificate of authority)\b",
                                 re.IGNORECASE)),
     ("tropical_hardwoods", re.compile(r"\btropical hardwood", re.IGNORECASE)),
+    ("sexual_harassment", re.compile(r"\b(sexual harassment|201-g|139-l)\b",
+                                     re.IGNORECASE)),
+    ("gender_based_violence", re.compile(r"\b(gender-?based violence|139-m)\b",
+                                         re.IGNORECASE)),
     ("registration", re.compile(r"\b(vendor file|registered in the nys|"
                                 r"vendor registration)\b", re.IGNORECASE)),
     ("certification", re.compile(r"\b(certif(?:ied|ication)|certificate)\b",

@@ -62,10 +62,27 @@ _GROUNDING_CANDIDATES = {
     # Appendix A standard clauses — grounded verbatim from the Appendix A source
     # already in the repo (no duplicate source file; cite() resolves the clause
     # text directly out of the Standard-Clauses body).
+    # Non-collusion grounds to the STATUTE (§139-d) — it carries the actual
+    # bid-rejection consequence, a stronger grounding than the Appendix A
+    # contract-form certification.
     "non_collusion": (
-        "source-appendix-a-june2023.md",
-        "Contractor affirms, under\npenalty of perjury, that its bid was arrived "
-        "at independently and without collusion aimed at\nrestricting competition."),
+        "source-stf-139-d-noncollusion.md",
+        "A bid shall not be considered for award nor shall any award be made "
+        "where (a) (1) (2) and (3) above have not been complied with"),
+    "insurance_workers": (
+        "source-wkc-57-workers-comp.md",
+        "shall not enter into any such contract unless proof duly subscribed by "
+        "an insurance carrier is produced in a form satisfactory to the chair, "
+        "that compensation for all employees has been secured as provided by this "
+        "chapter."),
+    "sexual_harassment": (
+        "source-stf-139-l-sexual-harassment.md",
+        "A bid shall not be considered for award nor shall any award be made to a "
+        "bidder who has not complied with subdivision one of this section"),
+    "gender_based_violence": (
+        "source-stf-139-m-gender-based-violence.md",
+        "A bid shall not be considered for award, nor shall any award be made to a "
+        "bidder who has not complied with subdivision one of this section"),
     "iran_divestment": (
         "source-appendix-a-june2023.md",
         "Contractor certifies in accordance with\nState Finance Law § 165-a "
@@ -129,6 +146,15 @@ _RULE_META = {
                            "must": True,
                            "action": "Certify tropical-hardwoods compliance (§165) "
                                      "if wood products are supplied."},
+    "sexual_harassment": {"label": "Sexual-harassment policy certification (§139-l)",
+                          "profile_key": "sexual_harassment_policy", "must": True,
+                          "action": "Certify a written sexual-harassment-prevention "
+                                    "policy meeting Labor Law §201-g."},
+    "gender_based_violence": {
+        "label": "Gender-based-violence policy certification (§139-m)",
+        "profile_key": "gender_based_violence_policy", "must": True,
+        "action": "Certify a written gender-based-violence-and-the-workplace "
+                  "policy meeting Executive Law §575(11)."},
 }
 
 _WEIGHT_MUST = 2
