@@ -258,3 +258,124 @@ with junk and the loop dies from neglect:
 PHASE 2, after the core demo works. The first slice ships with honest "not confirmed" flags only
 (Track 1 + Track 2). This loop adds the LLM-research + email infrastructure the first slice
 deliberately avoids — build it once the upload→readiness core is validated with real vendors.
+
+---
+
+## 13. PRODUCT ROADMAP — THREE CAPABILITIES (the real product shape)
+
+Clarified after the first real-tender test. The product is a two-phase, three-capability
+progression. Capability 1 is built and proven on real NYS tenders; 2 and 3 are the forward path.
+Each capability is independently valuable and demoable — you do NOT need 3 to have a product worth
+paying for.
+
+### Capability 1 — Requirements checklist (RFP → what's needed)  ✅ BUILT & TESTED
+Vendor uploads an identified RFP; the tool reads it and returns the complete list of documents,
+forms, certifications, and requirements needed to participate — in plain English, RFP-specific.
+- Status: working on real 68/54-page ACCES-VR tenders (extractor reads them, grounds the real NYS
+  clauses, surfaces real numbers: MWBE 30%, SDVOB 6%, insurance $1M).
+- **Output reframe (next small task):** present the result as a REQUIREMENTS CHECKLIST, not a
+  readiness score. The 0-100 score is meaningless on large real docs (only a handful of rows are
+  checkable). The checklist ("here are the 14 things this RFP demands, each with what it requires
+  and the deadline") is the actual value. Reframe output; don't rebuild.
+- Value on its own: knowing the complete required-items list buried across 68 pages is the single
+  hardest, most error-prone part of NYS bidding. This alone is worth paying for.
+- (Future front-end: one day the engine PROPOSES the matched RFP/RFQ to the vendor. Not now.)
+
+### Capability 2 — Gap analysis (checklist × client profile)  ← NEXT BUILD
+If the tool holds an updated client profile (documents on hand + their expiry dates), it produces a
+four-state answer per required item:
+- **Required by this RFP** →
+  - ✓ You already have it, and it's current
+  - ✗ You're missing it
+  - ⏰ You have it but it EXPIRES BEFORE the RFP due date — renew it before you bid
+The expiry-vs-deadline check is the sharpest feature — connecting a document's expiration to THIS
+RFP's specific due date and saying "renew before bidding" catches the exact failure a vendor loses a
+contract over.
+- Difficulty: mostly a DATA + DATE-MATCH problem (profile of held docs/expiries × checklist × RFP
+  due date), NOT hard document-parsing. Close to reach; this is where the "wow" lives.
+- This is the natural home of the existing cert-renewal logic (§314 MWBE 5-yr, §220-i 2-yr, etc.) —
+  the recertification tracking becomes the expiry engine behind the ⏰ state.
+
+### Capability 3 — Compliance review (do the documents actually satisfy the RFP)  ← LATER BUILD
+Not just "you have a non-collusion form" but "your form is signed, dated, and matches what THIS RFP
+demands." Reads the vendor's ACTUAL submitted documents and checks them for apparent compliance
+against each requirement — presence AND apparent match, not just presence.
+- Difficulty: HARDEST — requires parsing the vendor's own (messy) submission documents, a second
+  document-reading job on top of the RFP reading. This is the deepest verification and strongest moat.
+- **REGULATORY BOUNDARY (build in from the start, non-negotiable):** "reviewing compliance" edges
+  toward legal judgment. Safe framing, consistent with the FINRA-safe information-tool posture: the
+  tool states "here is what this RFP requires this document to contain; here is whether yours appears
+  to contain it; verify with counsel." It checks presence and apparent match against the stated
+  requirement — it does NOT render a legal compliance opinion. Bake this boundary in, don't bolt on.
+
+### Build sequence
+1 (done) → reframe 1's output as a checklist → 2 (gap analysis: have / missing / renew-before-deadline)
+→ 3 (compliance review, with the counsel-verification boundary).
+Capability 2 yields a genuinely impressive, demoable product for the cost of profile-data + date
+logic — no hard document-parsing required. Ship through Capability 2 before attempting 3.
+
+### How this relates to earlier sections
+- The "vendor profile" in §5 is the seed of Capability 2's client profile — extend it with held-doc
+  expiry dates.
+- The Active-Learning Loop (§12) still applies: novel mandatory requirements with no golden-copy rule
+  surface in the "other requirements detected" bucket (safe, ungraded) and feed the loop that
+  eventually promotes them into graded Capability-1 checklist items.
+- Real-tender test (2026-06-30) confirmed Capability 1's extractor works and defined the refinement
+  backlog: contract-value safety (done), flood suppression (done), de-hyphenation + number-surfacing
+  (done). Remaining: run a 3rd unseen tender to confirm fixes generalize; decide whether the coarse
+  score is dropped entirely in favor of the checklist framing.
+
+---
+
+## 14. READING-ENGINE ARCHITECTURE DECISION (locked 2026-06-30)
+
+The real-tender test exposed that Phase 1's failures ($50-per-hour misread as contract value,
+"workforce" tripping EEO, hyphenation splits, missed RFP-specific requirements) are artifacts of the
+**stdlib-only, pattern-matching extractor** — NOT limitations of AI. That extractor was chosen for
+privacy (§11: nothing leaves the machine, no LLM). The decision below resolves the reading engine.
+
+### The key insight: match the reader to the data's sensitivity
+The two document types have very different privacy needs, so they get different reading engines:
+
+- **The RFP is a PUBLIC government document** (published on the NYS Contract Reporter, downloadable by
+  anyone). Reading it with a full commercial LLM carries ZERO privacy risk — there is nothing
+  confidential to protect. This is also the most reading-intensive, highest-value task (extract every
+  requirement, incl. the RFP-specific ones the pattern-matcher misses).
+  → **Phase 1 reading = full LLM. No privacy constraint. Do this.**
+
+- **The vendor's own documents** (financials, ownership, certs) ARE private. These need either a
+  local/self-hosted model or a no-retention enterprise LLM arrangement on infrastructure the company
+  controls — never passed to a third-party AI provider.
+  → **Phase 3 reading = LLM on controlled infra (no-retention / self-hosted).**
+
+### "Your machine" = the company's controlled infrastructure, not the vendor's device
+Privacy is protected by the COMPANY (LexZilla) processing uploads on infrastructure IT controls and
+NOT forwarding them to any third-party AI service — not by requiring the model to run on the vendor's
+laptop (impractical for capable models). Trust story to vendors: "Your documents are processed on our
+secured systems and are never sent to any outside AI service or used to train anyone's model." This
+mirrors how regulated industries (e.g. banks) already use LLMs. Founder has direct knowledge of a
+bank-approved setup — start next session from "what did the bank's compliance review approve" rather
+than researching from scratch.
+
+### Privacy options (most-private → most-convenient), for the PRIVATE documents only
+1. Self-hosted open-weight model on company hardware/cloud tenant — data never leaves company perimeter.
+2. Enterprise API with contractual zero-data-retention (no storage, no training) — the common
+   regulated-industry pattern (Anthropic/OpenAI enterprise, AWS Bedrock, Azure OpenAI).
+3. Model running inside the company's own cloud account (Bedrock / Azure OpenAI) — enterprise models,
+   data stays in the controlled environment.
+
+### Migration scope (Phase 1: stdlib → LLM)
+Swapping the RFP reader from the stdlib pattern-matcher to an LLM is a REAL rebuild of the extractor,
+not a tweak — but well-scoped, and it fixes the entire class of today's failures in one move (an LLM
+understands "$50/hour is a rate, not a contract total," catches RFP-specific requirements, never
+splits hyphens). CRITICAL: everything built ON TOP of the extractor stays — the golden copy, the
+citation-by-construction discipline (GoldenCopy.cite), the issue/fix output, the tri-state provenance
+(confirmed / tender-derived / not-confirmed), threshold + scope gating, the gap-analysis design. Only
+the READING layer underneath changes. The LLM extracts requirements; the golden copy still grounds
+consequences verbatim; the LLM's output is never treated as citable rule truth (it reads the RFP, it
+does not invent law).
+
+### Sequence implication
+Phase 1's near-term path is: (a) move RFP reading to an LLM, (b) reframe output as a requirements
+CHECKLIST (not a score), (c) run a 3rd unseen tender to confirm generality. Then Capability 2 (gap
+analysis) and Capability 3 (compliance review on private docs, controlled-infra LLM).
