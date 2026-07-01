@@ -287,6 +287,106 @@ def test_value_unknown_keeps_threshold_rule_visible_not_skipped():
     assert st is not None and st.status == BR.YELLOW  # surfaced, never dropped
 
 
+def test_per_hour_rate_is_not_read_as_contract_value():
+    """The real $50/hour mediation-rate pattern must resolve to UNKNOWN, not a
+    $50 contract value that would void mandatory rules."""
+    ex = {"pages": ["Mediation is held (not to exceed 3 hours) ($50 per hour). "
+                    "Fee for each additional session ($175 for each additional)."]}
+    assert BR._extract_contract_value(ex) is None
+    assert BR._contract_value(ex, {}) is None
+
+
+def test_wrong_positive_value_never_downgrades_mandatory_to_na():
+    """A per-unit rate near a threshold-gated MANDATORY rule must leave it YELLOW
+    'verify', never N/A. A wrong positive fails safe toward verify."""
+    ex = {"pages": [
+        "Bidders must submit an MWBE utilization plan.",
+        "Contractor equal employment opportunity policy is required.",
+        "Compensation is billed at ($50 per hour), not to exceed 3 hours."]}
+    rep = BR.score_bid(ex, {}, golden=GC)
+    for kind in ("mwbe", "eeo"):
+        row = [r for r in rep.rows if r.kind == kind]
+        if row:
+            assert row[0].status != BR.NA, kind
+            assert row[0].status == BR.YELLOW, kind
+
+
+def test_quoted_statutory_threshold_is_not_contract_value():
+    """Boilerplate thresholds ('in excess of $300,000', 'equal or exceed
+    $100,000') are quoted rules, not this contract's value → UNKNOWN."""
+    ex = {"pages": ["cumulative value in excess of $300,000 measured over a year",
+                    "if the subcontract will equal or exceed $100,000 over the life"]}
+    assert BR._extract_contract_value(ex) is None
+
+
+def test_clean_total_value_label_still_extracts():
+    ex = {"pages": ["The total contract value is $450,000 for the full term."]}
+    assert BR._extract_contract_value(ex) == 450000
+    ex2 = {"pages": ["Bids not to exceed $500,000 for this procurement."]}
+    assert BR._extract_contract_value(ex2) == 500000
+
+
+# --------------------------------------------------------------------------
+# Flood suppression — unmapped passages are summarised, not one row each
+# --------------------------------------------------------------------------
+
+def test_unmapped_passages_are_clustered_not_flooded():
+    lines = ["The contractor shall clean widget number {}.".format(i)
+             for i in range(60)]
+    lines += ["Bidders must submit an MWBE utilization plan."]
+    rep = BR.score_bid({"pages": lines, "page_count": 1,
+                        "source": "x", "has_text_layer": True}, {}, golden=GC)
+    # None of the 60 boilerplate 'shall' lines become findings rows.
+    assert all(r.kind not in ("general", "certification") for r in rep.rows)
+    # They are captured as 'other', surfaced as a small clustered summary.
+    assert len(rep.other_requirements) >= 60
+    d = rep.to_dict()
+    assert d["other_requirements"]["detected"] >= 60
+    assert len(d["other_requirements"]["samples"]) <= 8
+    # The mapped MWBE finding still shows up as a real row.
+    assert any(r.kind == "mwbe" for r in rep.rows)
+
+
+def test_cluster_other_dedupes_identical_passages():
+    rep = BR.score_bid({"pages": ["The vendor shall do the thing."] * 20,
+                        "page_count": 1, "source": "x", "has_text_layer": True},
+                       {}, golden=GC)
+    unique, samples = rep.cluster_other()
+    assert unique == 1 and len(samples) == 1
+
+
+# --------------------------------------------------------------------------
+# Fix 3 — surface the real numbers near a keyword
+# --------------------------------------------------------------------------
+
+def test_mwbe_and_sdvob_goal_percent_surfaced():
+    blob = ("The MWBE participation goal for this contract is 30%. "
+            "The SDVOB participation goal is 6% of the total.")
+    assert BR._goal_pct_near(blob, BR._MWBE_TERM_RE) == "30%"
+    assert BR._goal_pct_near(blob, BR._SDVOB_TERM_RE) == "6%"
+
+
+def test_goal_extraction_requires_a_goal_hint():
+    # A bare percentage with no goal/rate hint is not surfaced as a goal.
+    assert BR._goal_pct_near("MWBE firms completed 95% of prior work",
+                             BR._MWBE_TERM_RE) is None
+
+
+def test_insurance_minimum_extracted_from_amount_phrase():
+    assert BR._insurance_limit(
+        "must carry insurance in an amount not less than $1,000,000 per claim") \
+        == 1000000
+
+
+def test_mwbe_goal_detail_appears_on_the_finding():
+    ex = {"pages": ["Bidders must submit an MWBE utilization plan.",
+                    "The MWBE participation goal for this contract is 30%."],
+          "page_count": 1, "source": "x", "has_text_layer": True}
+    rep = BR.score_bid(ex, _profile(contract_value_usd=250000), golden=GC)
+    mwbe = [r for r in rep.rows if r.kind == "mwbe"][0]
+    assert mwbe.detail and "30%" in mwbe.detail
+
+
 # --------------------------------------------------------------------------
 # Scope gating (public-work / Article 8) — Labor Law §220-i
 # --------------------------------------------------------------------------

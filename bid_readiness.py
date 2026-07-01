@@ -220,26 +220,57 @@ def _required_dollar(text):
         return None
 
 
-# A labelled contract value in the tender ("estimated contract value: $X",
-# "not to exceed $X", ...). Used for threshold gating.
+# A labelled TOTAL contract value ("total/estimated contract value $X",
+# "contract amount $X", "not to exceed $X", ...). The label must sit right next
+# to the amount. Groups: (between-label-and-$)(amount)(text-after-amount).
 _CV_LABEL_RE = re.compile(
-    r"(?:estimated\s+contract\s+value|total\s+contract\s+value|contract\s+value|"
-    r"estimated\s+value|total\s+value|contract\s+amount|not\s+to\s+exceed)"
-    r"[^$\n]{0,40}\$\s?([\d][\d,]*)", re.IGNORECASE)
+    r"(?:total\s+contract\s+value|estimated\s+contract\s+value|"
+    r"annual\s+contract\s+value|estimated\s+value|contract\s+amount|"
+    r"annual\s+value|total\s+value|value\s+of\s+(?:this|the)\s+contract|"
+    r"contract\s+value|not\s+to\s+exceed)"
+    r"([^$\n]{0,40}?)\$\s?([\d][\d,]*(?:\.\d{2})?)([^\n]{0,22})", re.IGNORECASE)
+
+# Rate / per-unit context — a $ next to any of these is a RATE, never a total.
+_RATE_CTX_RE = re.compile(
+    r"\b(per\s+hour|per\s+day|per\s+week|per\s+month|per\s+year|per\s+session|"
+    r"per\s+visit|per\s+unit|per\s+item|per\s+mile|per\s+each|per\s+diem|"
+    r"per\s+person|hourly|each\s+additional|/\s*hr|/\s*hour|/\s*day)\b",
+    re.IGNORECASE)
+
+# Comparison / quoted-threshold context — a $ introduced by any of these is a
+# statutory threshold cited in boilerplate ("in excess of $300,000", "equal or
+# exceed $100,000"), NOT this contract's value.
+_CMP_CTX_RE = re.compile(
+    r"\b(in\s+excess\s+of|exceeds?|greater\s+than|less\s+than|more\s+than|"
+    r"at\s+least|not\s+less\s+than|up\s+to|minimum|maximum|above|over|under|"
+    r"below|equal\s+or\s+exceed)\b", re.IGNORECASE)
 
 
 def _extract_contract_value(extracted):
-    """Find a labelled contract value in the tender text. Returns a POSITIVE int
-    or None (None means we could not determine it — never treated as zero)."""
+    """Find a labelled TOTAL contract value in the tender. Returns a POSITIVE int
+    ONLY on a high-confidence match — a strong total-value label with clean
+    context. A per-unit rate ($50 per hour) or a quoted statutory threshold ($X
+    in excess of / equal or exceed) is rejected → None. None means 'unknown',
+    which the caller must treat as YELLOW 'verify', NEVER as below-threshold.
+    Failing safe toward 'verify' is the whole point (a wrong positive can void a
+    mandatory rule)."""
     blob = "\n".join(extracted.get("pages", []))
-    m = _CV_LABEL_RE.search(blob)
-    if not m:
-        return None
-    try:
-        v = int(m.group(1).replace(",", ""))
-    except ValueError:
-        return None
-    return v if v > 0 else None
+    for m in _CV_LABEL_RE.finditer(blob):
+        between, num, after = m.group(1), m.group(2), m.group(3)
+        # The label 'not to exceed' legitimately contains 'exceed'; the reject
+        # checks apply only to the text BETWEEN the label and the amount and the
+        # text AFTER the amount, so the label itself never trips them.
+        if _RATE_CTX_RE.search(after) or _RATE_CTX_RE.search(between):
+            continue  # per-unit rate, not a total
+        if _CMP_CTX_RE.search(between):
+            continue  # a quoted statutory threshold, not this contract's value
+        try:
+            v = int(num.replace(",", "").split(".")[0])
+        except ValueError:
+            continue
+        if v > 0:
+            return v
+    return None
 
 
 def _contract_value(extracted, profile):
@@ -255,25 +286,63 @@ def _contract_value(extracted, profile):
     return _extract_contract_value(extracted)
 
 
-# Strong signals that a tender IS an Article 8 public-work / construction project.
-# Deliberately narrow: a bare mention of "public work" in a requirement line is
-# NOT enough to conclude the whole tender is public work — absence of these
-# signals yields "unknown" (None), never a confident "no".
-_PUBLIC_WORK_RE = re.compile(
-    r"\b(prevailing wage|article eight of the labor law|article 8 of the labor "
-    r"law|public work project|public work contract|public works project|"
-    r"section 224-a|section 224-d|\b224-a\b|\b224-d\b)\b", re.IGNORECASE)
+# Surface the specific number a requirement carries (goal %, insurance $ limit)
+# from text NEAR the keyword — these sit on lines adjacent to the match.
+_PCT_RE = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*%")
+_GOAL_HINT_RE = re.compile(
+    r"\b(goal|participation rate|participation goal|utilization|rate of)\b",
+    re.IGNORECASE)
+_INS_LIMIT_RE = re.compile(
+    r"(?:not less than|no less than|minimum of|at least|in an amount of|"
+    r"combined single limit of|limit of|amount not less than)\s*\$\s?"
+    r"([\d][\d,]*)", re.IGNORECASE)
+
+
+def _goal_pct_near(blob, term_re, window=200):
+    """Find a participation-goal percentage near a term (MWBE/SDVOB). Returns a
+    string like '30%' or None. Requires a goal-hint word next to the % so a
+    random percentage isn't mistaken for a goal."""
+    for m in term_re.finditer(blob):
+        seg = blob[m.start():m.end() + window]
+        for pm in _PCT_RE.finditer(seg):
+            around = seg[max(0, pm.start() - 45):pm.end() + 10]
+            if _GOAL_HINT_RE.search(around):
+                return pm.group(1) + "%"
+    return None
+
+
+def _insurance_limit(blob):
+    """Find a stated insurance dollar minimum ('not less than $X'). Returns int
+    or None."""
+    m = _INS_LIMIT_RE.search(blob)
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+_MWBE_TERM_RE = re.compile(r"m/?wbe|minority[\s-]*and[\s-]*women", re.IGNORECASE)
+_SDVOB_TERM_RE = re.compile(r"sdvob|service-?disabled veteran", re.IGNORECASE)
 
 
 def _is_public_work(extracted, profile):
-    """True / False / None. A profile flag wins; otherwise strong tender signals
-    → True, and their ABSENCE → None (unknown), never a confident False."""
+    """True / False / None.
+
+    A profile `public_work_project` flag wins. Otherwise we return None
+    (unknown) — we deliberately do NOT infer public-work status from the tender
+    text. Real-tender testing showed the tell-tale phrases ('prevailing wage',
+    'Article 8 of the Labor Law', 'public work contract') appear in the Appendix
+    A standard clauses attached to virtually EVERY NYS tender, so they cannot
+    distinguish a genuine public-work construction project from boilerplate.
+    Guessing 'True' off boilerplate would wrongly RED-flag a services/goods
+    bid; unknown → YELLOW 'verify' is the honest, safe default (§220-i scope)."""
     if "public_work_project" in profile:
         v = profile.get("public_work_project")
         if isinstance(v, bool):
             return v
-    blob = "\n".join(extracted.get("pages", []))
-    return True if _PUBLIC_WORK_RE.search(blob) else None
+    return None
 
 
 def _verdict(vendor_has, must, grounded, partial):
@@ -339,7 +408,7 @@ def _issue_and_fix(meta, status, vendor_has, grounded, shortfall):
 
 class RequirementRow:
     def __init__(self, kind, label, tender_excerpt, page, vendor_has, status,
-                 grounding, must, issue=None, fix=None, note=None):
+                 grounding, must, issue=None, fix=None, note=None, detail=None):
         self.kind = kind
         self.label = label
         self.tender_excerpt = tender_excerpt
@@ -351,6 +420,7 @@ class RequirementRow:
         self.issue = issue          # plain-English "what's wrong" (non-green only)
         self.fix = fix              # concrete action to resolve it (non-green only)
         self.note = note
+        self.detail = detail        # extracted specific number (goal %, $ limit)
 
     @property
     def checkable(self):
@@ -377,6 +447,8 @@ class RequirementRow:
                 "confirmed": False,
                 "reason": "no golden-copy rule backs this tender requirement",
             }
+        if self.detail:
+            d["detail"] = self.detail
         if self.issue:
             d["issue"] = self.issue
         if self.fix:
@@ -388,13 +460,29 @@ class RequirementRow:
 
 class BidReadinessReport:
     def __init__(self, vendor_name, source, pages_read, requirements_found,
-                 rows):
+                 rows, other_requirements=None):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
         self.requirements_found = requirements_found
         self.rows = rows
+        # Unmapped "shall/must" passages with no known rule — kept OUT of the
+        # per-requirement findings (they flood the output) and surfaced as a
+        # clustered summary instead.
+        self.other_requirements = other_requirements or []
         self.contract_value = None  # set by score_bid; None = not determined
+
+    def cluster_other(self, limit=8):
+        """De-dupe the unmapped passages and return (unique_count, samples)."""
+        seen, samples = set(), []
+        for o in self.other_requirements:
+            key = " ".join(o["text"].lower().split())
+            if key in seen:
+                continue
+            seen.add(key)
+            if len(samples) < limit:
+                samples.append({"page": o["page"], "text": o["text"]})
+        return len(seen), samples
 
     @property
     def checkable_rows(self):
@@ -447,6 +535,16 @@ class BidReadinessReport:
     def blocking(self):
         return [r for r in self.rows if r.status == RED]
 
+    def _other_dict(self):
+        unique, samples = self.cluster_other()
+        return {
+            "detected": len(self.other_requirements),
+            "unique": unique,
+            "note": "Additional 'shall/must' passages with no matched golden-copy "
+                    "rule — review these against the tender; not scored.",
+            "samples": samples,
+        }
+
     def to_dict(self):
         return {
             "feature": "bid_readiness",
@@ -455,9 +553,11 @@ class BidReadinessReport:
             "work_summary": {
                 "pages_read": self.pages_read,
                 "requirements_found": self.requirements_found,
+                "mapped_findings": len(self.rows),
                 "requirements_checked_against_profile": len(self.checkable_rows),
                 "contract_value": self.contract_value,
                 "requirements_not_applicable": len(self.na_rows),
+                "other_requirements_detected": len(self.other_requirements),
             },
             "bid_readiness_score": self.score,
             "status_counts": self.counts,
@@ -469,6 +569,7 @@ class BidReadinessReport:
             ],
             "action_list": self.actions,
             "blocking_count": len(self.blocking),
+            "other_requirements": self._other_dict(),
             "disclaimer": (
                 "Information and document-readiness only. Requirement excerpts are "
                 "quoted from the uploaded tender (not legal advice); only rules "
@@ -488,24 +589,33 @@ def score_bid(extracted, profile, golden=None):
     contract_value = _contract_value(extracted, profile)
     public_work = _is_public_work(extracted, profile)
 
+    # Surface the specific numbers a tender carries, pulled from text near the
+    # keyword (goal %, insurance $ limit) — computed once over the whole doc.
+    blob = "\n".join(extracted.get("pages", []))
+    mwbe_goal = _goal_pct_near(blob, _MWBE_TERM_RE)
+    sdvob_goal = _goal_pct_near(blob, _SDVOB_TERM_RE)
+    ins_limit = _insurance_limit(blob)
+
+    def _detail_for(kind):
+        if kind == "mwbe" and mwbe_goal:
+            return "This tender's MWBE participation goal: {}".format(mwbe_goal)
+        if kind == "sdvob" and sdvob_goal:
+            return "This tender's SDVOB participation goal: {}".format(sdvob_goal)
+        if kind == "insurance" and ins_limit:
+            return "This tender's stated insurance minimum: ${:,}".format(ins_limit)
+        return None
+
     rows = []
+    other = []
     seen_kinds = set()
     for req in requirements:
         kind = req["kind"]
         meta = rules.get(kind)
         if meta is None:
-            # A real requirement passage with no profile mapping — show it as
-            # context (YELLOW, unmapped), but do not invent a check. It still
-            # explains itself: issue + fix, per the general output rule.
-            rows.append(RequirementRow(
-                kind=kind, label="General / unmapped requirement",
-                tender_excerpt=req["text"], page=req["page"],
-                vendor_has=None, status=YELLOW, grounding=None, must=False,
-                issue="This tender states a requirement we could not map to your "
-                      "profile.",
-                fix="Review this requirement against the original tender and "
-                    "confirm you meet it.",
-                note="not mapped to a profile field — review manually"))
+            # A "shall/must" passage with no known rule. Do NOT emit one row per
+            # passage (a 68-page tender yields hundreds and buries the real
+            # findings). Collect them for a single clustered summary instead.
+            other.append({"text": req["text"], "page": req["page"], "kind": kind})
             continue
         # Collapse multiple tender lines of the same kind to one verdict row,
         # but keep the first verbatim excerpt as the provenance anchor.
@@ -513,6 +623,7 @@ def score_bid(extracted, profile, golden=None):
             continue
         seen_kinds.add(kind)
 
+        detail = _detail_for(kind)
         vendor_has = profile.get(meta["profile_key"])
         if vendor_has is not None:
             vendor_has = bool(vendor_has)
@@ -577,7 +688,7 @@ def score_bid(extracted, profile, golden=None):
                     fix=("Confirm the tender's contract value. If it exceeds {}, "
                          "this certification is required — verify against the "
                          "original tender.".format(thr_s)),
-                    note=note))
+                    note=note, detail=detail))
                 continue
             if contract_value <= threshold:
                 # Genuinely below threshold → N/A; excluded from score & counts.
@@ -587,16 +698,18 @@ def score_bid(extracted, profile, golden=None):
                     grounding=meta["grounding"], must=meta["must"],
                     note="N/A — contract value ${:,} is below the {} threshold; "
                          "this certification is not required at this contract "
-                         "size.".format(contract_value, thr_s)))
+                         "size.".format(contract_value, thr_s), detail=detail))
                 continue
             # else contract_value > threshold → the rule applies; evaluate below.
 
         partial = False
         shortfall = None
 
-        # Insurance: compare the tender's stated dollar limit to the profile.
+        # Insurance: compare the tender's required limit to the profile. Prefer a
+        # limit on the matched line; fall back to the doc-wide stated minimum
+        # (Fix 3: the amount often sits on a different line than the keyword).
         if kind == "insurance" and vendor_has:
-            need = _required_dollar(req["text"])
+            need = _required_dollar(req["text"]) or ins_limit
             have = profile.get(meta.get("limit_key"))
             if need and isinstance(have, (int, float)) and have < need:
                 partial = True
@@ -612,14 +725,14 @@ def score_bid(extracted, profile, golden=None):
             kind=kind, label=meta["label"], tender_excerpt=req["text"],
             page=req["page"], vendor_has=vendor_has, status=status,
             grounding=meta["grounding"], must=meta["must"], issue=issue,
-            fix=fix, note=note))
+            fix=fix, note=note, detail=detail))
 
     report = BidReadinessReport(
         vendor_name=profile.get("vendor_name", "(unnamed vendor)"),
         source=extracted.get("source", "(unknown)"),
         pages_read=extracted.get("page_count", 0),
         requirements_found=len(requirements),
-        rows=rows)
+        rows=rows, other_requirements=other)
     report.contract_value = contract_value
     return report
 
@@ -640,9 +753,10 @@ def render_bid_readiness(report):
     cv = ("${:,}".format(report.contract_value) if report.contract_value
           else "NOT DETERMINED (threshold-gated rules verified, not skipped)")
     L.append("Contract value: {}".format(cv))
-    L.append("Read {} page(s), found {} requirement passage(s), checked {} against "
-             "your profile.".format(report.pages_read, report.requirements_found,
-                                    len(report.checkable_rows)))
+    L.append("Read {} page(s), found {} requirement passage(s) → {} matched to a "
+             "known rule, {} other; checked {} against your profile.".format(
+                 report.pages_read, report.requirements_found, len(report.rows),
+                 len(report.other_requirements), len(report.checkable_rows)))
     c = report.counts
     na = len(report.na_rows)
     L.append("Verdicts: GREEN={}  YELLOW={}  RED={}  N/A={}   →   BID-READINESS "
@@ -664,6 +778,8 @@ def render_bid_readiness(report):
         else:
             L.append("   rule   : NOT CONFIRMED — no golden-copy rule backs this "
                      "tender requirement")
+        if r.detail:
+            L.append("   detail : {}".format(r.detail))
         if r.vendor_has is None:
             L.append("   you    : (not in profile)")
         else:
@@ -688,6 +804,17 @@ def render_bid_readiness(report):
         L.append("  [{}] {} — {}".format(a["status"], a["for"], a["fix"]))
     if not report.actions:
         L.append("  (nothing outstanding)")
+    if report.other_requirements:
+        unique, samples = report.cluster_other()
+        L.append("")
+        L.append("OTHER REQUIREMENTS DETECTED: {} passage(s) ({} unique) with no "
+                 "matched rule.".format(len(report.other_requirements), unique))
+        L.append("  Not scored — review these against the tender. Examples:")
+        for s in samples:
+            txt = s["text"] if len(s["text"]) <= 90 else s["text"][:87] + "..."
+            L.append("  • [p{}] {}".format(s["page"], txt))
+        if unique > len(samples):
+            L.append("  ...and {} more.".format(unique - len(samples)))
     L.append("")
     L.append(report.to_dict()["disclaimer"])
     L.append("=" * 78)

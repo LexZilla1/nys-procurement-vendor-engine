@@ -157,6 +157,19 @@ def _decode_stream(chunk):
     return text if ("Tj" in text or "TJ" in text) else None
 
 
+def _dehyphenate(text):
+    """Rejoin words split by a hyphen across a line break so goal lines and
+    dollar limits reassemble: 'Women-\\nOwned' → 'Women-Owned', 'MWBE utiliza-
+    \\ntion plan' → 'MWBE utilization plan'. A hyphen between two letters at a
+    line break is a wrap artifact; join the lines (drop a soft hyphen inside a
+    single word, keep it in a real compound)."""
+    # letter + soft-wrap hyphen + lowercase continuation → drop the hyphen
+    text = re.sub(r"([A-Za-z])-\n([a-z])", r"\1\2", text)
+    # letter + hyphen + Capitalized continuation → keep hyphen (real compound)
+    text = re.sub(r"([A-Za-z])-\n([A-Z])", r"\1-\2", text)
+    return text
+
+
 def extract_pdf(path):
     """Extract text-layer content from a PDF, one entry per text-bearing page.
 
@@ -173,7 +186,7 @@ def extract_pdf(path):
             continue
         text = _text_from_content(decoded)
         if text:
-            pages.append(text)
+            pages.append(_dehyphenate(text))
     return {
         "source": os.path.basename(path),
         "page_count": len(pages),
@@ -216,8 +229,11 @@ _SIGNAL_RE = re.compile(
 # Domain buckets. The first matching keyword wins; order matters (specific
 # before general). "kind" lets bid_readiness map a passage to a known rule.
 _KIND_KEYWORDS = [
-    ("eeo", re.compile(r"\b(equal employment opportunity|eeo|staffing plan|"
-                       r"work ?force)\b", re.IGNORECASE)),
+    # "work force" (two words) is the §143.3(c) EEO term; the single word
+    # "workforce" (e.g. "Workforce Innovation and Opportunity Act") is NOT — the
+    # required space keeps a WIOA program mention from tripping EEO.
+    ("eeo", re.compile(r"\b(equal employment opportunity|\beeo\b|staffing plan|"
+                       r"work\s+force)\b", re.IGNORECASE)),
     ("mwbe", re.compile(r"\b(m/?wbe|minority[ -]and[ -]women|minority and women|"
                         r"minority-? ?and ?-?women-?owned|utilization plan)\b",
                         re.IGNORECASE)),
@@ -242,9 +258,13 @@ _KIND_KEYWORDS = [
                                      re.IGNORECASE)),
     ("gender_based_violence", re.compile(r"\b(gender-?based violence|139-m)\b",
                                          re.IGNORECASE)),
+    # §220-i is the contractor-REGISTRATION requirement. Bare "public work"
+    # appears in boilerplate standard clauses (§142, prevailing-wage) and must
+    # NOT trip it; only a specific registration reference does.
     ("public_work_registration", re.compile(
-        r"\b(220-i|certificate of registration|contractor registr|nysdol|"
-        r"public work)\b", re.IGNORECASE)),
+        r"\b(220-i|certificate of registration|nysdol contractor|"
+        r"contractor registry|prevailing wage.{0,40}registrat)\b",
+        re.IGNORECASE)),
     ("international_boycott", re.compile(
         r"\b(international boycott|139-h|export administration)\b", re.IGNORECASE)),
     ("registration", re.compile(r"\b(vendor file|registered in the nys|"

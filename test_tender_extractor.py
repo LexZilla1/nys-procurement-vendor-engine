@@ -88,6 +88,32 @@ def test_scanned_pdf_reports_no_text_layer_not_guess():
         os.remove(path)
 
 
+def test_dehyphenate_rejoins_words_split_across_lines():
+    # Capitalized continuation → keep the hyphen (real compound).
+    assert TE._dehyphenate("Minority and Women-\nOwned Business") == \
+        "Minority and Women-Owned Business"
+    # lowercase continuation → soft wrap hyphen dropped.
+    assert TE._dehyphenate("utiliza-\ntion plan") == "utilization plan"
+
+
+def test_workforce_one_word_does_not_trigger_eeo():
+    # The WIOA false positive: "Workforce" (one word) must NOT classify as EEO.
+    assert TE._classify("Under the Workforce Innovation and Opportunity Act") != "eeo"
+    # The real §143.3(c) term "work force" (two words) still does.
+    assert TE._classify("submit total work force data to the agency") == "eeo"
+
+
+def test_public_work_boilerplate_does_not_trigger_220i():
+    # Bare 'public work contract' in a standard clause must NOT trip §220-i.
+    assert TE._classify(
+        "If this is a public work contract covered by Article 8") \
+        != "public_work_registration"
+    # An explicit registration reference still does.
+    assert TE._classify(
+        "Contractor must hold a Certificate of Registration (220-i)") \
+        == "public_work_registration"
+
+
 def test_pdf_string_unescape_octal_and_parens():
     assert TE._unescape_pdf_string(r"a\(b\)c") == "a(b)c"
     assert TE._unescape_pdf_string(r"line\nbreak") == "line\nbreak"
