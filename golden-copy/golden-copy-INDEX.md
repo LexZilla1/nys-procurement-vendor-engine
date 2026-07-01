@@ -481,6 +481,28 @@ five-year validity (5.1) also anchors the certification-renewal panel (Part B).
 - **Verified:** 2026-06-30
 - **Note:** policy must meet Executive Law §575(11). Recently published (2025-11-07) — high freshness priority.
 
+### 5.6 — Labor Law §220-i (public-work contractor registration)
+- **Name:** Labor Law §220-i — Registration system for contractors and subcontractors
+- **Date:** 2025 (effective Dec 30, 2024)
+- **Issued by:** New York State Legislature (Justia codification of NY Labor Law)
+- **Link:** https://law.justia.com/codes/new-york/lab/article-8/220-i/
+- **Verbatim file:** `sources/source-lab-220-i-public-work-registration.md`
+- **Verified:** 2026-06-30
+- **Note:** SCOPE-GATED — applies only to public-work / Article 8 construction tenders, not every
+  commodity/service bid. Subd. 6: no bid on public work unless registered; submit the certificate
+  with the bid (an application is not a substitute). Certificate valid 2 years, renew 90 days before
+  expiry (feeds the Part B recertification module).
+
+### 5.7 — State Finance Law §139-h (international boycott prohibition)
+- **Name:** State Finance Law §139-h — Participation in an international boycott prohibited
+- **Date:** Current as of January 01, 2026
+- **Issued by:** New York State Legislature (FindLaw codification; also Appendix A clause 8)
+- **Link:** https://codes.findlaw.com/ny/state-finance-law/stf-sect-139-h/
+- **Verbatim file:** `sources/source-stf-139-h-international-boycott.md`
+- **Verified:** 2026-06-30
+- **Note:** THRESHOLD-GATED at >$5,000. A material contract CONDITION (WARN), not a bid-rejection —
+  the consequence is forfeiture/void on a later boycott conviction, not non-responsiveness.
+
 ---
 
 ## Pain-point layer (separate from the golden copy on purpose — different kind of knowledge)

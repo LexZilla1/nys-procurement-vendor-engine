@@ -96,6 +96,14 @@ _GROUNDING_CANDIDATES = {
         "source-appendix-a-june2023.md",
         "Section 165 of the State Finance Law, (Use of\nTropical Hardwoods) which "
         "prohibits purchase and use of tropical hardwoods"),
+    "public_work_registration": (
+        "source-lab-220-i-public-work-registration.md",
+        "No contractor shall bid on a contract for public work unless such "
+        "contractor is registered pursuant to this section."),
+    "international_boycott": (
+        "source-stf-139-h-international-boycott.md",
+        "Any such contract shall be rendered forfeit and void by the state "
+        "comptroller"),
 }
 
 # Static per-kind rule metadata. profile_key is the vendor-profile field that
@@ -157,6 +165,24 @@ _RULE_META = {
         "profile_key": "gender_based_violence_policy", "must": True,
         "action": "Certify a written gender-based-violence-and-the-workplace "
                   "policy meeting Executive Law §575(11)."},
+    # Scope-gated (public work / Article 8), not dollar-gated. FAIL only when the
+    # tender IS public work; N/A when it is not; YELLOW when we cannot tell.
+    "public_work_registration": {
+        "label": "Public-work contractor registration (Labor Law §220-i)",
+        "profile_key": "public_work_contractor_registered", "must": True,
+        "scope": "public_work",
+        "action": "Register at the NYSDOL Contractor Registry and include your "
+                  "Certificate of Registration with the bid — an application is "
+                  "not a substitute."},
+    # Threshold-gated at >$5,000. Material contract CONDITION, not a bid-rejection
+    # (must=False → WARN, never RED); consequence is forfeiture on later conviction.
+    "international_boycott": {
+        "label": "International boycott prohibition (§139-h)",
+        "profile_key": "international_boycott_certification_ready", "must": False,
+        "threshold": 5000,
+        "action": "Note the §139-h international-boycott clause — a material "
+                  "condition of contracts over $5,000; you agree not to participate "
+                  "in a prohibited international boycott."},
 }
 
 _WEIGHT_MUST = 2
@@ -227,6 +253,27 @@ def _contract_value(extracted, profile):
             return int(v)
         return None  # 0 / blank / null / invalid → unknown, never below-threshold
     return _extract_contract_value(extracted)
+
+
+# Strong signals that a tender IS an Article 8 public-work / construction project.
+# Deliberately narrow: a bare mention of "public work" in a requirement line is
+# NOT enough to conclude the whole tender is public work — absence of these
+# signals yields "unknown" (None), never a confident "no".
+_PUBLIC_WORK_RE = re.compile(
+    r"\b(prevailing wage|article eight of the labor law|article 8 of the labor "
+    r"law|public work project|public work contract|public works project|"
+    r"section 224-a|section 224-d|\b224-a\b|\b224-d\b)\b", re.IGNORECASE)
+
+
+def _is_public_work(extracted, profile):
+    """True / False / None. A profile flag wins; otherwise strong tender signals
+    → True, and their ABSENCE → None (unknown), never a confident False."""
+    if "public_work_project" in profile:
+        v = profile.get("public_work_project")
+        if isinstance(v, bool):
+            return v
+    blob = "\n".join(extracted.get("pages", []))
+    return True if _PUBLIC_WORK_RE.search(blob) else None
 
 
 def _verdict(vendor_has, must, grounded, partial):
@@ -439,6 +486,7 @@ def score_bid(extracted, profile, golden=None):
     requirements = find_requirements(extracted)
 
     contract_value = _contract_value(extracted, profile)
+    public_work = _is_public_work(extracted, profile)
 
     rows = []
     seen_kinds = set()
@@ -469,6 +517,45 @@ def score_bid(extracted, profile, golden=None):
         if vendor_has is not None:
             vendor_has = bool(vendor_has)
         grounded = meta["grounding"] is not None
+
+        # Scope gating (public work / Article 8). Like threshold gating but on a
+        # boolean applicability: applies only to public-work tenders. Not being
+        # able to tell → YELLOW (never silently skip), NOT a confident N/A.
+        if meta.get("scope") == "public_work":
+            if public_work is None:
+                rows.append(RequirementRow(
+                    kind=kind, label=meta["label"], tender_excerpt=req["text"],
+                    page=req["page"], vendor_has=vendor_has, status=YELLOW,
+                    grounding=meta["grounding"], must=meta["must"],
+                    issue="Not confirmed: couldn't determine if this is an Article 8 "
+                          "public-work project; if so, a NYSDOL Certificate of "
+                          "Registration is required.",
+                    fix="Confirm whether this tender is public work (Article 8). If "
+                        "it is, register at the NYSDOL Contractor Registry and submit "
+                        "your Certificate of Registration with the bid."))
+                continue
+            if public_work is False:
+                rows.append(RequirementRow(
+                    kind=kind, label=meta["label"], tender_excerpt=req["text"],
+                    page=req["page"], vendor_has=vendor_has, status=NA,
+                    grounding=meta["grounding"], must=meta["must"],
+                    note="N/A — not an Article 8 public-work project; contractor "
+                         "registration does not apply to this tender."))
+                continue
+            # public_work is True → the rule applies; evaluate against the profile.
+            status = _verdict(vendor_has, meta["must"], grounded, False)
+            if status == GREEN:
+                issue = fix = None
+            else:
+                issue = ("This is a public-work project; you must hold a NYSDOL "
+                         "Certificate of Registration and submit it with your bid.")
+                fix = meta["action"]
+            rows.append(RequirementRow(
+                kind=kind, label=meta["label"], tender_excerpt=req["text"],
+                page=req["page"], vendor_has=vendor_has, status=status,
+                grounding=meta["grounding"], must=meta["must"], issue=issue,
+                fix=fix))
+            continue
 
         # Part 4 — threshold gating. A rule that only applies above a contract-
         # value threshold has three branches. Crucially, a 0 / blank / unknown

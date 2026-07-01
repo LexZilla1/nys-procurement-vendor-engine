@@ -223,6 +223,8 @@ cross-checked against a second live authority before acceptance.
 | 40 | source-stf-139-d-noncollusion.md | full-section diff vs NY Open Legislation STF §139-d | **PASS** — subds. 1–2 verbatim; bid-rejection consequence ("A bid shall not be considered for award...") cite()-checked |
 | 41 | source-stf-139-l-sexual-harassment.md | full-section diff vs NY Open Legislation STF §139-l | **PASS** — subds. 1–4 verbatim; bid-rejection consequence (subd. 3) cite()-checked; policy ties to Labor Law §201-g |
 | 42 | source-stf-139-m-gender-based-violence.md | full-section diff vs NY Open Legislation STF §139-m | **PASS** — subds. 1–4 verbatim; bid-rejection consequence (subd. 3) cite()-checked; policy ties to Executive Law §575(11) |
+| 43 | source-lab-220-i-public-work-registration.md | load-bearing-passage check vs Justia NY Labor Law §220-i | **PASS** — subd. 6 verbatim; the "No contractor shall bid on a contract for public work unless…registered" consequence cite()-checked; scope-gated to Article 8 public work |
+| 44 | source-stf-139-h-international-boycott.md | full-section diff vs FindLaw NY State Finance Law §139-h | **PASS** — subds. 1–4 verbatim; the "rendered forfeit and void by the state comptroller" consequence cite()-checked; threshold-gated at >$5,000 (material condition, not bid-rejection) |
 
 **Stale-risk discipline applied (MWBE, row 37).** The capture source was an ESD compilation PDF dated
 12/02/2020. Because a compiled secondary PDF can drift from current law, the load-bearing provisions
@@ -244,6 +246,7 @@ discipline as this report: every RISK-MAP entry must trace to (a) a verified gol
 and (b) a register entry with sources. They are the Phase-2 production-engine spec, not rule text, and
 are intentionally kept out of the verbatim golden copy.
 
-**Total verified source files: 42.** (34 prior + 3 invoice/budget/MWBE addendum + 5 bid-submission
-addendum: §314(5) MWBE validity, WCL §57, STF §139-d, §139-l, §139-m.) **Plus** the 2-file pain-point
-layer (RISK-MAP + PAINPOINT-REGISTER).
+**Total verified source files: 44.** (34 prior + 3 invoice/budget/MWBE addendum + 5 bid-submission
+addendum: §314(5) MWBE validity, WCL §57, STF §139-d, §139-l, §139-m + 2 scope/threshold-gated
+addendum: LAB §220-i public-work registration, STF §139-h international boycott.) **Plus** the 2-file
+pain-point layer (RISK-MAP + PAINPOINT-REGISTER).

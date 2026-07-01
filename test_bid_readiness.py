@@ -287,6 +287,81 @@ def test_value_unknown_keeps_threshold_rule_visible_not_skipped():
     assert st is not None and st.status == BR.YELLOW  # surfaced, never dropped
 
 
+# --------------------------------------------------------------------------
+# Scope gating (public-work / Article 8) — Labor Law §220-i
+# --------------------------------------------------------------------------
+
+def _pw_row(rep):
+    rows = [r for r in rep.rows if r.kind == "public_work_registration"]
+    return rows[0] if rows else None
+
+
+def test_public_work_rule_grounded_verbatim():
+    rep = _report()
+    pw = _pw_row(rep)
+    assert pw is not None and pw.grounding is not None
+    assert pw.grounding["source_file"] == "source-lab-220-i-public-work-registration.md"
+    assert GC.cite(pw.grounding["source_file"], pw.grounding["citation_quote"])
+
+
+def test_public_work_unknown_is_yellow_not_skipped():
+    """Default services tender: can't confirm Article 8 → YELLOW, never dropped."""
+    rep = _report()
+    pw = _pw_row(rep)
+    assert pw.status == BR.YELLOW
+    assert "couldn't determine" in (pw.issue or "").lower()
+    assert "article 8" in (pw.issue or "").lower()
+
+
+def test_public_work_false_is_na_not_red():
+    rep = _report(_profile(public_work_project=False))
+    pw = _pw_row(rep)
+    assert pw.status == BR.NA and pw not in rep.checkable_rows
+    assert "not an Article 8" in (pw.note or "")
+
+
+def test_public_work_true_missing_registration_is_red_blocker():
+    rep = _report(_profile(public_work_project=True,
+                           public_work_contractor_registered=False))
+    pw = _pw_row(rep)
+    assert pw.status == BR.RED and pw in rep.blocking
+    assert "Certificate of Registration" in (pw.fix or "")
+    assert "application is not a substitute" in (pw.fix or "")
+
+
+def test_public_work_true_registered_is_green():
+    rep = _report(_profile(public_work_project=True,
+                           public_work_contractor_registered=True))
+    pw = _pw_row(rep)
+    assert pw.status == BR.GREEN and pw.issue is None and pw.fix is None
+
+
+# --------------------------------------------------------------------------
+# §139-h international boycott — threshold $5k, WARN (never RED)
+# --------------------------------------------------------------------------
+
+def _boycott_row(rep):
+    rows = [r for r in rep.rows if r.kind == "international_boycott"]
+    return rows[0] if rows else None
+
+
+def test_boycott_is_warn_never_red_even_when_unmet():
+    """§139-h is a material condition (must=False) — unmet is YELLOW, not RED,
+    even above the $5,000 threshold."""
+    rep = _report(_profile(international_boycott_certification_ready=False))
+    b = _boycott_row(rep)
+    assert b is not None and b.must is False
+    assert b.status == BR.YELLOW and b not in rep.blocking
+    assert b.grounding["source_file"] == "source-stf-139-h-international-boycott.md"
+
+
+def test_boycott_below_5k_threshold_is_na():
+    rep = _report(_profile(contract_value_usd=3000))
+    b = _boycott_row(rep)
+    assert b is not None and b.status == BR.NA
+    assert "5,000" in (b.note or "")
+
+
 def test_noncollusion_carries_cure_note_others_do_not():
     """Part 3: §139-d gets the cure-provision note; §139-l/§139-m are absolute."""
     rep = _report()

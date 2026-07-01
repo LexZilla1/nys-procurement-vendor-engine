@@ -242,6 +242,11 @@ _KIND_KEYWORDS = [
                                      re.IGNORECASE)),
     ("gender_based_violence", re.compile(r"\b(gender-?based violence|139-m)\b",
                                          re.IGNORECASE)),
+    ("public_work_registration", re.compile(
+        r"\b(220-i|certificate of registration|contractor registr|nysdol|"
+        r"public work)\b", re.IGNORECASE)),
+    ("international_boycott", re.compile(
+        r"\b(international boycott|139-h|export administration)\b", re.IGNORECASE)),
     ("registration", re.compile(r"\b(vendor file|registered in the nys|"
                                 r"vendor registration)\b", re.IGNORECASE)),
     ("certification", re.compile(r"\b(certif(?:ied|ication)|certificate)\b",
