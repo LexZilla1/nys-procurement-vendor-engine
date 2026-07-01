@@ -94,6 +94,19 @@ def _has_mwbe_line(requirements):
     return False
 
 
+def _find_verify_flags(requirements):
+    """Return list of (item, requirement) tuples where the model flagged
+    applicability uncertainty. Uses prefix match so both the bare token
+    '[verify applicability]' and extended forms like
+    '[verify applicability – <reason>]' are caught."""
+    MARKER = "[verify applicability"
+    flags = []
+    for req in requirements:
+        if MARKER in req.get("requirement", ""):
+            flags.append((req.get("item", "(unnamed)"), req.get("requirement", "")))
+    return flags
+
+
 def _report_tender(label, extracted):
     parsed, meta = read_requirements(extracted)
     if parsed is None:
@@ -103,6 +116,7 @@ def _report_tender(label, extracted):
     cat_counts = Counter(r.get("category", "unknown") for r in reqs)
     appendix_a = _find_appendix_a(reqs)
     mwbe_present = _has_mwbe_line(reqs)
+    verify_flags = _find_verify_flags(reqs)
 
     return {
         "label": label,
@@ -112,6 +126,7 @@ def _report_tender(label, extracted):
         "category_breakdown": dict(sorted(cat_counts.items())),
         "mwbe_line_present": mwbe_present,
         "appendix_a_surfaced": appendix_a,
+        "verify_applicability_flags": verify_flags,
         "meta": meta,
     }
 
@@ -124,6 +139,10 @@ def _print_report(result):
     print("  Deadline:     {}".format(result.get("submission_deadline") or "(not extracted)"))
     print("  Total reqs:   {}".format(result["total_requirements"]))
     print("  MWBE line:    {}".format("YES" if result["mwbe_line_present"] else "NO"))
+    flags = result.get("verify_applicability_flags", [])
+    print("  [verify applicability] flags: {}".format(len(flags)))
+    for item, req in flags:
+        print("    → {}".format(item))
     print("  Category breakdown:")
     for cat, n in result["category_breakdown"].items():
         print("    {:30s} {}".format(cat, n))
@@ -184,11 +203,12 @@ def main():
             if "error" in r:
                 print("  {:50s}  ERROR".format(r["label"]))
                 continue
-            print("  {:50s}  {:3d} reqs   MWBE={}   AppA={}".format(
+            print("  {:50s}  {:3d} reqs   MWBE={}   AppA={}   flags={}".format(
                 r["label"][:50],
                 r["total_requirements"],
                 "Y" if r["mwbe_line_present"] else "N",
                 len(r["appendix_a_surfaced"]),
+                len(r.get("verify_applicability_flags", [])),
             ))
     return 0
 
