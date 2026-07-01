@@ -1,0 +1,20 @@
+{
+  "document_type": "invoice",
+  "vendor_name": "Acme Civic Services LLC",
+  "agency_name": "NYS Office of General Services",
+  "description": "Janitorial services for Empire State Plaza, March 2026 (Net 30)",
+  "quantity": 1,
+  "amount": 12450.00,
+  "po_applicable": true,
+  "po_number": "C-2026-OGS-00417",
+  "nys_vendor_id": "1100098765",
+  "invoice_date": "2026-04-02",
+  "invoice_number": "ACME-2026-0337",
+  "payment_terms": "Net 30",
+  "certification_required": true,
+  "certification": {
+    "statement": "I certify that the above bill is just, true and correct; that no part thereof has been paid except as stated and that the balance is actually due and owing, and that taxes from which the State is exempt are excluded.",
+    "signature": "Dana Okafor, Controller",
+    "signed": true
+  }
+}

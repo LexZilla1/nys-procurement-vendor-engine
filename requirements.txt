@@ -1,0 +1,8 @@
+# Phase-1 stdlib engine (validator, tender_extractor, bid_readiness) needs NO
+# third-party packages — it is standard-library only by design.
+#
+# These are for the BUILD SPEC v2 §14 LLM-based RFP reader (the public-document
+# reader migration). Install when you start that work:
+#   pip install -r requirements.txt
+python-dotenv>=1.0
+anthropic>=0.40

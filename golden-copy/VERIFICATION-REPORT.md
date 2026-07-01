@@ -218,6 +218,13 @@ cross-checked against a second live authority before acceptance.
 | 35 | source-stf-109-vendor-certificate.md | load-bearing-passage check vs 3 primary sources (nysenate.gov §109 + OSC XII.4.A + AC 3253-S PDF) | **PASS** (12 passages) — incl. the verbatim AC 3253-S certification clause and the §109(1-a) normal-course-invoice exception |
 | 36 | source-xi-4-b-grant-budget-variance.md | **dual-source** load-bearing check: OSC XI.4.B (REV. 9/11/2024) + DOB NYS Contract for Grants face page (H-1032) | **PASS** (11 passages) — both primary sources state the 10%/≤$5M, 5%/>$5M modification-approval threshold verbatim |
 | 37 | source-mwbe-5nycrr-pass-fail.md | **triple-check:** ESD reg PDF → live NYCRR via Cornell LII → threshold cross-ref | **PASS** (28 passages) — pass/fail subset of 5 NYCRR Parts 140–145 |
+| 38 | source-exec-314-mwbe-cert-validity.md | load-bearing-passage check vs NY Open Legislation §314(5) | **PASS** — the verbatim five-year MWBE validity sentence (subd. 5); cite()-checked |
+| 39 | source-wkc-57-workers-comp.md | full-section diff vs NY Open Legislation WKC §57 | **PASS** — subds. 1–2 verbatim; key consequence quote ("shall not enter into any such contract unless proof...secured") cite()-checked |
+| 40 | source-stf-139-d-noncollusion.md | full-section diff vs NY Open Legislation STF §139-d | **PASS** — subds. 1–2 verbatim; bid-rejection consequence ("A bid shall not be considered for award...") cite()-checked |
+| 41 | source-stf-139-l-sexual-harassment.md | full-section diff vs NY Open Legislation STF §139-l | **PASS** — subds. 1–4 verbatim; bid-rejection consequence (subd. 3) cite()-checked; policy ties to Labor Law §201-g |
+| 42 | source-stf-139-m-gender-based-violence.md | full-section diff vs NY Open Legislation STF §139-m | **PASS** — subds. 1–4 verbatim; bid-rejection consequence (subd. 3) cite()-checked; policy ties to Executive Law §575(11) |
+| 43 | source-lab-220-i-public-work-registration.md | load-bearing-passage check vs Justia NY Labor Law §220-i | **PASS** — subd. 6 verbatim; the "No contractor shall bid on a contract for public work unless…registered" consequence cite()-checked; scope-gated to Article 8 public work |
+| 44 | source-stf-139-h-international-boycott.md | full-section diff vs FindLaw NY State Finance Law §139-h | **PASS** — subds. 1–4 verbatim; the "rendered forfeit and void by the state comptroller" consequence cite()-checked; threshold-gated at >$5,000 (material condition, not bid-rejection) |
 
 **Stale-risk discipline applied (MWBE, row 37).** The capture source was an ESD compilation PDF dated
 12/02/2020. Because a compiled secondary PDF can drift from current law, the load-bearing provisions
@@ -239,5 +246,7 @@ discipline as this report: every RISK-MAP entry must trace to (a) a verified gol
 and (b) a register entry with sources. They are the Phase-2 production-engine spec, not rule text, and
 are intentionally kept out of the verbatim golden copy.
 
-**Total verified source files: 37.** (34 prior + 3 this addendum.) **Plus** the 2-file pain-point
-layer (RISK-MAP + PAINPOINT-REGISTER).
+**Total verified source files: 44.** (34 prior + 3 invoice/budget/MWBE addendum + 5 bid-submission
+addendum: §314(5) MWBE validity, WCL §57, STF §139-d, §139-l, §139-m + 2 scope/threshold-gated
+addendum: LAB §220-i public-work registration, STF §139-h international boycott.) **Plus** the 2-file
+pain-point layer (RISK-MAP + PAINPOINT-REGISTER).

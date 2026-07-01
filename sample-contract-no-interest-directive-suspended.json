@@ -1,0 +1,20 @@
+{
+  "document_type": "nfp_contract_interest",
+  "contract_id": "DOH-NFP-2026-0092",
+  "vendor_name": "Riverside Community Health Services (NFP)",
+  "contract_amount": 600000,
+  "contract_start_date": "2026-01-01",
+  "scheduled_commencement_date": "2026-01-15",
+  "service_start_date": "2026-01-20",
+  "osc_approval_date": "2026-03-05",
+  "payment_schedule": [
+    { "due_date": "2026-02-15", "amount": 100000, "paid_date": "2026-04-16" }
+  ],
+  "written_directive_present": true,
+  "directive_suspended": true,
+  "ag_approval": true,
+  "warranted_waiver": false,
+  "advance_payment_received": false,
+  "as_of_date": "2026-06-29",
+  "_note": "The State agency suspended the written directive and subsequent interest after determining the NFP was not negotiating in good faith — interest accrual is blocked."
+}

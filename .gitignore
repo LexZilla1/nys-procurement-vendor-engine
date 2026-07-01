@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Freshness-checker offline artifacts
+freshness-selftest-*/
+
+# Secrets / local environment — NEVER commit real keys.
+# .env holds ANTHROPIC_API_KEY and other secrets; .env.example is the safe,
+# committed template with placeholders only.
+.env
+.env.*
+!.env.example
+*.local
+secrets.*
