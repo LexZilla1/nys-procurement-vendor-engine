@@ -38,23 +38,38 @@ SYSTEM = (
     "responsive bid.\n\n"
     "Extract EVERY requirement, including:\n"
     "- Required documents, forms, and attachments (e.g. VendRep questionnaire, "
-    "EEO policy, MWBE/SDVOB utilization plans, W-9, non-collusion, Iran "
-    "divestment, sales-tax cert, etc.)\n"
+    "EEO policy, MWBE utilization plans, SDVOB utilization plans, W-9, "
+    "non-collusion, Iran divestment, sales-tax cert, etc.)\n"
     "- Certifications and signatures\n"
     "- Insurance requirements WITH their dollar amounts/limits\n"
-    "- MWBE and SDVOB participation goals WITH their percentages\n"
+    "- MWBE participation goals WITH their percentages (give MWBE its OWN "
+    "entry — do NOT fold it into a general certification or SDVOB entry)\n"
+    "- SDVOB participation goals WITH their percentages (separate entry)\n"
     "- Bonding / bid-deposit requirements with amounts\n"
     "- Submission deadline(s), method, and number of copies\n"
     "- Pre-bid / pre-proposal conferences (mandatory or optional) with date/time\n"
     "- References, experience, and staffing / key-personnel requirements\n"
     "- Any disqualification / non-responsiveness triggers and post-award "
-    "reporting obligations\n\n"
-    "RULES:\n"
-    "- Extract ONLY what is actually stated in the tender text. Do NOT invent or "
-    "infer requirements that are not present. If a value (amount, %, date) is "
-    "not stated, use null.\n"
-    "- Be exhaustive but DEDUPLICATE: one entry per distinct requirement, not one "
-    "per sentence.\n"
+    "reporting obligations\n"
+    "- Standard Appendix A / OGS Boilerplate clauses that impose vendor "
+    "obligations: e.g. prevailing wage (Labor Law §220), workers' compensation "
+    "(WCL §57), non-collusion (§139-d), Iran divestment (§165-a), sexual "
+    "harassment (§139-l), gender-based violence (§139-m), sales-tax cert "
+    "(Tax Law §5-a), international boycott (§139-h), MWBE (§316), SDVOB, "
+    "vendor responsibility (VendRep), prompt-payment interest, etc.\n\n"
+    "COMPLETENESS RULE — THE MOST IMPORTANT RULE:\n"
+    "Silent omission is the worst failure. When in doubt, SURFACE the "
+    "requirement. If a clause exists in the document but its applicability is "
+    "uncertain (e.g. prevailing wage on a contract that may or may not be "
+    "'public work'), include it and set its 'requirement' field to note "
+    "'[verify applicability]'. NEVER silently drop a requirement because you "
+    "are unsure whether it applies — flag it instead.\n\n"
+    "OTHER RULES:\n"
+    "- Extract ONLY what is actually stated in the tender text. Do NOT invent "
+    "or infer requirements that are not present. If a value (amount, %, date) "
+    "is not stated, use null.\n"
+    "- Be exhaustive but DEDUPLICATE: one entry per distinct requirement, not "
+    "one per sentence.\n"
     "- Use the '=== PAGE n ===' markers in the text to record the page.\n"
     "- Return ONLY a single valid JSON object, no markdown fences, no prose. "
     "Schema:\n"
@@ -63,11 +78,13 @@ SYSTEM = (
     '  "submission_deadline": string|null,\n'
     '  "requirements": [\n'
     "    {\n"
-    '      "category": string,            // e.g. "Form", "Certification", '
-    '"Insurance", "MWBE/SDVOB", "Deadline", "Conference", "References", '
-    '"Staffing", "Bonding", "Other"\n'
+    '      "category": string,            // MUST be one of: "certifications", '
+    '"insurance", "technical-standards", "pricing/cost", "qualifications", '
+    '"submission-mechanics", "post-award-obligations", "compliance", "MWBE", '
+    '"SDVOB", "bonding"\n'
     '      "item": string,                // short name of the requirement\n'
-    '      "requirement": string,         // what specifically is required\n'
+    '      "requirement": string,         // what specifically is required; '
+    'append "[verify applicability]" if applicability is uncertain\n'
     '      "value": string|null,          // the number/amount/% if any (e.g. '
     '"$2,000,000", "30%")\n'
     '      "deadline": string|null,       // date/time if this item has one\n'
@@ -107,7 +124,12 @@ def _parse_json(text):
         raise
 
 
-def read_requirements(extracted, model=MODEL, max_tokens=32000):
+_CHARS_PER_TOKEN = 4
+_THINKING_BUDGET = 8000   # tokens reserved for thinking; rest goes to JSON output
+_MAX_TOKENS = 32000       # total output budget (thinking + text)
+
+
+def read_requirements(extracted, model=MODEL, max_tokens=_MAX_TOKENS):
     """Send the extracted tender text to Claude and return (parsed, meta)."""
     client = anthropic.Anthropic(api_key=get_anthropic_api_key())
     text = _build_text(extracted)
@@ -116,12 +138,14 @@ def read_requirements(extracted, model=MODEL, max_tokens=32000):
         "(page markers included). Extract the complete requirements checklist "
         "as specified.\n\n" + text
     )
-    # Stream (the doc is large; streaming avoids HTTP timeouts). Adaptive thinking
-    # helps the model be thorough across a 50-70 page document.
+    # Cap thinking tokens so the bulk of max_tokens is available for JSON output.
+    # Adaptive thinking can silently consume the entire budget on long documents,
+    # leaving no room for the text reply and producing an empty/truncated JSON.
+    thinking_budget = min(_THINKING_BUDGET, max(1000, max_tokens // 4))
     with client.messages.stream(
         model=model,
         max_tokens=max_tokens,
-        thinking={"type": "adaptive"},
+        thinking={"type": "enabled", "budget_tokens": thinking_budget},
         system=SYSTEM,
         messages=[{"role": "user", "content": user}],
     ) as stream:
@@ -188,16 +212,35 @@ def render_checklist(parsed, meta, source):
     return "\n".join(L)
 
 
+def _merge_extracted(paths):
+    """Extract one or more tender files and merge their pages into one structure."""
+    merged_pages = []
+    for p in paths:
+        r = extract(p)
+        if not r["has_text_layer"]:
+            print("warning: no text layer in {} — skipping".format(p), file=sys.stderr)
+            continue
+        merged_pages.extend(r.get("pages", []))
+    return {
+        "pages": merged_pages,
+        "has_text_layer": bool(merged_pages),
+        "source": " + ".join(paths),
+    }
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        print("usage: llm_reader.py TENDER.(pdf|txt) [--json]", file=sys.stderr)
-        return 2
-    path = argv[0]
-    extracted = extract(path)
-    if not extracted["has_text_layer"]:
-        print("no extractable text layer — not confirmed (scanned/image PDF?).",
+        print("usage: llm_reader.py TENDER.(pdf|txt) [TENDER2 ...] [--json]",
               file=sys.stderr)
+        return 2
+    paths = [a for a in argv if not a.startswith("--")]
+    if not paths:
+        print("error: no input files given", file=sys.stderr)
+        return 2
+    extracted = _merge_extracted(paths)
+    if not extracted["has_text_layer"]:
+        print("no extractable text layer in any input — aborting.", file=sys.stderr)
         return 1
     parsed, meta = read_requirements(extracted)
     if parsed is None:
@@ -207,7 +250,7 @@ def main(argv=None):
         print(json.dumps({"meta": meta, "checklist": parsed}, indent=2,
                          ensure_ascii=False))
     else:
-        print(render_checklist(parsed, meta, extracted.get("source", path)))
+        print(render_checklist(parsed, meta, extracted.get("source", paths[0])))
     return 0
 
 
