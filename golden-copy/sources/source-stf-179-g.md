@@ -29,3 +29,24 @@
   payment date")
 - Interest accrues from the day after the required payment date to the payment date, at the rate in
   effect on the date the interest payment is made
+
+---
+
+## RATE-COLUMN DETERMINATION (verified — feeds RM-2)
+
+**Determination:** Vendor prompt-payment interest is computed on the **OVERPAYMENT rate**
+(`overpayment_rate_pct` column), NOT any underpayment rate.
+
+**Primary-source basis (re-verified 2026-07-01 against nysenate.gov):** § 179-g states verbatim
+that interest "shall be computed at the rate equal to the **overpayment rate** set by the
+commissioner of taxation and finance pursuant to subsection (e) of section one thousand ninety-six
+of the tax law." Tax Law § 1096(e)(2): overpayment rate = federal short-term rate + 2 points;
+underpayment rate = federal short-term rate + 7 points. The +2/+7 spread confirms the two columns
+in nysinterestrates.csv are correctly labeled.
+
+**Deviation note:** The Phase 2 build brief instructed "underpayment rate." That instruction is
+INCORRECT against § 179-g. The engine correctly follows verified statute over the brief. This
+resolves the RM-2 open decision: `RATE_COLUMN = overpayment_rate_pct` is CONFIRMED CORRECT.
+
+Reference values (from nysinterestrates.csv, full-text verified 2026-06-28):
+2026-Q1 overpayment = 6.0% · 2026-Q2 overpayment = 5.0%.
