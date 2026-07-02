@@ -366,6 +366,16 @@ history and current revision date.
   **overpayment rate** under **Tax Law §1096(e)** — the same column as NFP interest, not an
   underpayment rate. Interest runs day-after-required-payment-date to payment date.
 
+### 4.5a — State Finance Law §179-p (Inapplicability of the provisions — Article 11-A)
+- **Name:** SFL §179-p — Inapplicability of the provisions (Prompt Payment, Article 11-A)
+- **Date:** current revision 2014-09-22 · **Link:** https://www.nysenate.gov/legislation/laws/STF/179-P
+- **Verbatim file:** `sources/source-stf-179-p.md` · **Verified:** 2026-07-01 — full word-by-word diff PASS against a primary-source browser capture (all six inapplicability clauses verbatim)
+- **Note:** the exclusion list that gates §179-f/§179-g prompt-payment interest — eminent domain
+  (cl. 1), non-Article-11-A court-judgment interest (cl. 2), government / authority / PBC /
+  state-employee payees (cl. 3), third-party-payment (SSL §367-b) contractors (cl. 4),
+  non-state-agency intermediary recipients (cl. 5), and comptroller set-offs (cl. 6, defined at
+  §179-e(8)). Grounds the RM-2 exclusion pre-screen.
+
 ### 4.6 — State Finance Law §139-j (Restrictions on contacts during the procurement process — Article 9)
 - **Date:** current revision 2026-05-29 · **Link:** https://www.nysenate.gov/legislation/laws/STF/139-J
 - **Verbatim file:** `sources/source-stf-139-j.md` · **Verified:** 2026-06-29 — full word-by-word diff PASS (body)

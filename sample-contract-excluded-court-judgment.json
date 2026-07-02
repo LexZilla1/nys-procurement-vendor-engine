@@ -1,0 +1,22 @@
+{
+  "document_type": "nfp_contract_interest",
+  "contract_id": "AG-NFP-2026-0101",
+  "vendor_name": "Example Services Corp (NFP)",
+  "payee_category": "not_for_profit",
+  "payment_type": "court_judgment",
+  "contract_amount": 600000,
+  "contract_start_date": "2026-01-01",
+  "scheduled_commencement_date": "2026-01-15",
+  "service_start_date": "2026-01-20",
+  "osc_approval_date": "2026-03-05",
+  "payment_schedule": [
+    { "due_date": "2026-02-15", "amount": 100000, "paid_date": "2026-04-16" }
+  ],
+  "written_directive_present": true,
+  "directive_suspended": false,
+  "ag_approval": true,
+  "warranted_waiver": false,
+  "advance_payment_received": false,
+  "as_of_date": "2026-06-29",
+  "_note": "Interest is being sought on a court-rendered judgment under a provision of law other than Article 11-A — excluded by §179-p clause 2; no Article 11-A prompt-payment interest entitlement arises."
+}

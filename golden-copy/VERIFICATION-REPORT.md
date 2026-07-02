@@ -225,6 +225,7 @@ cross-checked against a second live authority before acceptance.
 | 42 | source-stf-139-m-gender-based-violence.md | full-section diff vs NY Open Legislation STF §139-m | **PASS** — subds. 1–4 verbatim; bid-rejection consequence (subd. 3) cite()-checked; policy ties to Executive Law §575(11) |
 | 43 | source-lab-220-i-public-work-registration.md | load-bearing-passage check vs Justia NY Labor Law §220-i | **PASS** — subd. 6 verbatim; the "No contractor shall bid on a contract for public work unless…registered" consequence cite()-checked; scope-gated to Article 8 public work |
 | 44 | source-stf-139-h-international-boycott.md | full-section diff vs FindLaw NY State Finance Law §139-h | **PASS** — subds. 1–4 verbatim; the "rendered forfeit and void by the state comptroller" consequence cite()-checked; threshold-gated at >$5,000 (material condition, not bid-rejection) |
+| 45 | source-stf-179-p.md | full word-by-word diff vs primary-source browser capture (NY Open Legislation STF §179-p, rev. 2014-09-22) | **PASS — identical** — all six inapplicability clauses verbatim; each exclusion clause cite()-checked (RM-2 pre-screen); clause-6 set-off cross-referenced to the §179-e(8) definition |
 
 **Stale-risk discipline applied (MWBE, row 37).** The capture source was an ESD compilation PDF dated
 12/02/2020. Because a compiled secondary PDF can drift from current law, the load-bearing provisions
