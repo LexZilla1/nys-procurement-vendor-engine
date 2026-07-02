@@ -320,6 +320,38 @@ XI4B = "source-xi-4-b-grant-budget-variance.md"
 MWBE = "source-mwbe-5nycrr-pass-fail.md"
 STF179V = "source-stf-179-v.md"
 XI4A = "source-xi-4-a-nfp-prompt-contracting.md"
+STF179F = "source-stf-179-f.md"
+XII5I = "source-xii-5-i-prompt-payment-interest.md"
+
+# §179-f $10 de minimis floor: no interest is due when the computed amount is
+# below this threshold.
+DE_MINIMIS_FLOOR = 10.0
+
+# §179-p / OSC XII.5.I exclusions. Payee categories and payment types NOT
+# entitled to prompt-payment interest, each mapped to the verbatim exclusion
+# line in the XII.5.I golden source that grounds it. Any other category/type is
+# treated as not-excluded. (These are Article 11-A prompt-PAYMENT provisions;
+# applied here as an additional conservative screen on the gated RM-2 output and
+# flagged for the attorney review — see the scope note in the result.)
+EXCLUDED_PAYEE_CATEGORIES = {
+    "federal_government": "Federal government",
+    "state_agency": "State agencies and their related entities",
+    "local_government": ("local governments , including but not limited to, counties, cities, "
+                         "towns, villages, school districts, special districts and their related "
+                         "entities when receiving payment for state aid"),
+    "public_authority": "public authorities and public benefit corporations",
+    "public_benefit_corporation": "public authorities and public benefit corporations",
+    "state_employee": "state employees working in their public employment capacity",
+    "third_party_payment_contractor": ("third party payment agreement contractors, including but "
+                                       "not limited to, the fiscal agent or intermediary under "
+                                       "Social Services Law, Section 367-b"),
+}
+EXCLUDED_PAYMENT_TYPES = {
+    "eminent_domain": "for property under eminent domain procedure law.",
+    "court_judgment": "for court judgements.",
+    "osc_offset": "where OSC offsets all or part of the payment due.",
+    "pass_through_state_funds": "vendors receive as pass-through state funds.",
+}
 
 # VendRep questionnaire forms → their golden-copy source file. The
 # material-change obligation and the certification-under-penalties-of-perjury
@@ -878,30 +910,58 @@ class Validator:
                     not advance_payment, evidence={"advance_payment_received": advance_payment}),
         ]
 
-        entitlement_arises = (directive_present and not directive_suspended and ag_approval
-                              and not warranted_waiver and not advance_payment)
+        conditions_met = (directive_present and not directive_suspended and ag_approval
+                          and not warranted_waiver and not advance_payment)
 
         findings.append(self._f("RM-2", STF179V, ENTITLE, INFO,
             "§179-v(1)(a): interest runs on moneys due from the later of scheduled "
             "commencement or service start until payment is made.",
-            entitlement_arises, evidence={}))
+            conditions_met, evidence={}))
         findings.append(self._f("RM-2", XI4A, INTEREST_DUE, INFO,
             "Prompt-contracting interest is due when a grant contract is executed after the "
-            "start date and payments are missed.", entitlement_arises, evidence={}))
+            "start date and payments are missed.", conditions_met, evidence={}))
         # The statutory rate basis is always cited so the rate choice is auditable.
         findings.append(self._f("RM-2", STF179V, RATE, INFO,
             "Rate basis: §179-v(2) sets the rate by Tax Law §1096(e); computed on the "
             "overpayment column per the dataset README and SFL §179-g.",
             True, evidence={"rate_column": self.rates.column}))
 
-        calc = (self._compute_interest(contract) if entitlement_arises
+        # -- Exclusion pre-screen (§179-p / OSC XII.5.I) --------------------
+        excluded, excl_label = self._interest_exclusion(contract, findings)
+
+        # -- Compute only if entitled by conditions AND not excluded --------
+        eligible = conditions_met and not excluded
+        calc = (self._compute_interest(contract) if eligible
                 else {"interest_amount_indicative": 0.0, "components": [],
-                      "notes": ["No entitlement under the conditions above; no interest computed."],
+                      "notes": ["No interest computed (conditions unmet or payee/payment excluded)."],
                       "coverage_gap_days": 0})
+        computed = calc["interest_amount_indicative"]
+
+        # -- §179-f $10 de minimis floor ------------------------------------
+        FLOOR = ("the amount of the interest payment as computed in accordance with the provisions "
+                 "of section one hundred seventy-nine-g of this article is less than ten dollars.")
+        below_floor = eligible and 0 < computed < DE_MINIMIS_FLOOR
+        if eligible:
+            findings.append(self._f("RM-2", STF179F, FLOOR, INFO,
+                ("Computed interest ${:.2f} is BELOW the §179-f ${:.0f} de minimis floor; no "
+                 "interest is due.".format(computed, DE_MINIMIS_FLOOR)) if below_floor else
+                ("Computed interest ${:.2f} meets the §179-f ${:.0f} de minimis floor."
+                 .format(computed, DE_MINIMIS_FLOOR)),
+                not below_floor,
+                evidence={"computed_interest": round(computed, 2),
+                          "de_minimis_floor": DE_MINIMIS_FLOOR, "below_floor": below_floor}))
+
+        # Entitlement requires the conditions, no exclusion, AND a computed
+        # amount at or above the §179-f $10 floor.
+        entitlement_arises = eligible and computed >= DE_MINIMIS_FLOOR
 
         rm2 = {
             "entitlement_arises": entitlement_arises,
-            "interest_amount_indicative": round(calc["interest_amount_indicative"], 2),
+            "interest_amount_indicative": round(computed, 2),
+            "excluded": excluded,
+            "exclusion_basis": excl_label,
+            "de_minimis_floor": DE_MINIMIS_FLOOR,
+            "de_minimis_floor_applies": below_floor,
             "interest_rate_basis": {
                 "column": self.rates.column,
                 "note": ("NFP prompt-contracting interest computes on the §1096(e) overpayment "
@@ -921,6 +981,11 @@ class Validator:
                 "renewal contract (§179-v(6)).",
                 "No waiver of interest has been determined warranted by OSC (§179-v(7)).",
                 "No §179-u advance payment was received that would exclude interest (§179-v(5)).",
+                "The payee is not an excluded entity and the payment is not an excluded type under "
+                "§179-p / OSC XII.5.I (local governments; public authorities / public benefit "
+                "corporations; state employees in a public capacity; third-party payment "
+                "contractors; eminent-domain, court-judgment, OSC-offset, or pass-through payments).",
+                "The computed interest is at least the §179-f $10 de minimis floor.",
             ],
             "documentation_needed": [
                 "The written directive (proposed contract with a start date, or the signed "
@@ -936,6 +1001,14 @@ class Validator:
             ],
             "citing_quote": ENTITLE,
             "calculation_notes": calc.get("notes", []),
+            "scope_note": (
+                "The de minimis floor (§179-f) and the entity/payment exclusions (§179-p / OSC "
+                "XII.5.I) are Article 11-A prompt-PAYMENT provisions, applied here as an additional "
+                "conservative screen on this gated RM-2 output. Whether they bind a §179-v "
+                "(Article 11-B) prompt-contracting entitlement is a question for the attorney "
+                "review. The full §179-p statutory payment-type list is not yet captured "
+                "(nysenate.gov is unreachable from this environment); the entity exclusions here "
+                "are grounded verbatim in OSC GFO XII.5.I."),
             "attorney_review_required": True,
             "gating_notice": (
                 "GATED — RECOVERY feature. This is an INDICATIVE interest figure tied to the "
@@ -944,6 +1017,31 @@ class Validator:
                 "before being asserted as a claim. The tool makes no submission and gives no advice."),
         }
         return Result("nfp_contract_interest", findings, extra=rm2)
+
+    def _interest_exclusion(self, contract, findings):
+        """Screen the payee category / payment type against the §179-p / OSC
+        XII.5.I exclusion list. Appends a grounded finding and returns
+        (excluded: bool, matched_label: str | None)."""
+        EXCL_TRIGGER = ("states the following payment types or entities are not entitled to "
+                        "prompt payment interest:")
+        payee = (contract.get("payee_category") or "").strip().lower()
+        ptype = (contract.get("payment_type") or "").strip().lower()
+        matched, cite = None, None
+        if payee in EXCLUDED_PAYEE_CATEGORIES:
+            matched, cite = "payee category '{}'".format(payee), EXCLUDED_PAYEE_CATEGORIES[payee]
+        elif ptype in EXCLUDED_PAYMENT_TYPES:
+            matched, cite = "payment type '{}'".format(ptype), EXCLUDED_PAYMENT_TYPES[ptype]
+
+        ev = {"payee_category": payee or None, "payment_type": ptype or None}
+        if matched:
+            findings.append(self._f("RM-2", XII5I, cite, INFO,
+                "Excluded from prompt-payment interest (§179-p / OSC XII.5.I): {}.".format(matched),
+                False, evidence={**ev, "excluded": True}))
+            return (True, matched)
+        findings.append(self._f("RM-2", XII5I, EXCL_TRIGGER, INFO,
+            "Payee/payment is not on the §179-p / OSC XII.5.I exclusion list.",
+            True, evidence={**ev, "excluded": False}))
+        return (False, None)
 
     def _compute_interest(self, contract):
         """Indicative interest: for each scheduled payment, accrue the overpayment
@@ -1027,6 +1125,12 @@ def render_human(result):
         rb = e.get("interest_rate_basis", {})
         lines.append("rate column / quarters    : {} / {}".format(
             rb.get("column"), ", ".join(rb.get("quarters_used") or []) or "—"))
+        if e.get("excluded"):
+            lines.append("EXCLUDED                  : {} (§179-p / OSC XII.5.I)".format(
+                e.get("exclusion_basis")))
+        if e.get("de_minimis_floor_applies"):
+            lines.append("de minimis floor          : computed < ${:.0f} (§179-f) — no interest due".format(
+                e.get("de_minimis_floor", 10)))
         for n in e.get("calculation_notes", []):
             lines.append("  note: {}".format(n))
         lines.append("attorney_review_required  : {}".format(e["attorney_review_required"]))

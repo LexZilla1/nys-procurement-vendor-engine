@@ -52,6 +52,8 @@ def test_every_emitted_citation_is_verbatim():
         val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json")),
         val.validate_rm2_interest(_load("sample-contract-no-interest-directive-suspended.json")),
         val.validate_rm2_interest(_load("sample-contract-no-interest-no-directive.json")),
+        val.validate_rm2_interest(_load("sample-contract-excluded-local-government.json")),
+        val.validate_rm2_interest(_load("sample-contract-below-de-minimis.json")),
     ]
     n = 0
     for r in results:
@@ -380,6 +382,68 @@ def test_rm2_never_hardcodes_rate_reads_from_csv():
     val = V.Validator(golden=GC, rates=doubled)
     res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
     assert abs(res.extra["interest_amount_indicative"] - 1635.62 * 2) < 0.02
+
+
+def test_rm2_de_minimis_floor_blocks_small_interest():
+    """§179-f: a computed interest below $10 yields no entitlement, cited to §179-f."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-below-de-minimis.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert 0 < res.extra["interest_amount_indicative"] < 10
+    assert res.extra["de_minimis_floor_applies"] is True
+    floor = [f for f in res.findings if "less than ten dollars" in f.citation_quote]
+    assert floor and not floor[0].passed
+    assert floor[0].source_file == V.STF179F
+
+
+def test_rm2_excluded_local_government_blocks_interest():
+    """§179-p / OSC XII.5.I: a local-government payee is excluded, no interest
+    computed, cited verbatim to the XII.5.I exclusion line."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-excluded-local-government.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert res.extra["excluded"] is True
+    assert res.extra["interest_amount_indicative"] == 0.0
+    excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+    assert excl and excl[0].source_file == V.XII5I
+    assert "local governments" in excl[0].citation_quote
+
+
+def test_rm2_public_authority_and_payment_type_exclusions():
+    """Each excluded payee category / payment type is caught and cited verbatim."""
+    val = V.Validator(golden=GC)
+    for cat, needle in [("public_authority", "public authorities and public benefit corporations"),
+                        ("state_employee", "state employees working in their public employment"),
+                        ("third_party_payment_contractor", "third party payment agreement contractors")]:
+        doc = _load("sample-contract-entitled-to-interest.json")
+        doc["payee_category"] = cat
+        res = val.validate_rm2_interest(doc)
+        assert res.extra["excluded"] is True, cat
+        excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+        assert excl and needle in excl[0].citation_quote, cat
+    doc = _load("sample-contract-entitled-to-interest.json")
+    doc["payment_type"] = "eminent_domain"
+    res = val.validate_rm2_interest(doc)
+    assert res.extra["excluded"] is True
+    excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+    assert excl and "eminent domain" in excl[0].citation_quote
+
+
+def test_rm2_refinements_keep_attorney_review_gate():
+    """The de minimis / exclusion refinements must not drop the attorney-review gate."""
+    val = V.Validator(golden=GC)
+    for fx in ("sample-contract-below-de-minimis.json",
+               "sample-contract-excluded-local-government.json"):
+        res = val.validate_rm2_interest(_load(fx))
+        assert res.attorney_review_required is True
+
+
+def test_rm2_normal_payee_not_excluded_stays_entitled():
+    """A non-excluded payee with a normal payment type is not screened out."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-entitled-to-interest.json"))
+    assert res.extra["excluded"] is False
+    assert res.extra["entitlement_arises"] is True
 
 
 # --------------------------------------------------------------------------

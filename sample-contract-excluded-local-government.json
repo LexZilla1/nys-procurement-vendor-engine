@@ -1,0 +1,21 @@
+{
+  "document_type": "nfp_contract_interest",
+  "contract_id": "DOH-NFP-2026-0094",
+  "vendor_name": "Example County Health Department",
+  "payee_category": "local_government",
+  "contract_amount": 600000,
+  "contract_start_date": "2026-01-01",
+  "scheduled_commencement_date": "2026-01-15",
+  "service_start_date": "2026-01-20",
+  "osc_approval_date": "2026-03-05",
+  "payment_schedule": [
+    { "due_date": "2026-02-15", "amount": 100000, "paid_date": "2026-04-16" }
+  ],
+  "written_directive_present": true,
+  "directive_suspended": false,
+  "ag_approval": true,
+  "warranted_waiver": false,
+  "advance_payment_received": false,
+  "as_of_date": "2026-06-29",
+  "_note": "Payee is a local government — excluded from prompt-payment interest per §179-p / OSC XII.5.I even though the payment was late; no entitlement arises."
+}
