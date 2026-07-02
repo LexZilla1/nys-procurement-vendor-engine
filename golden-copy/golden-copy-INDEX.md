@@ -448,11 +448,12 @@ five-year validity (5.1) also anchors the certification-renewal panel (Part B).
 
 ### 5.1 — Executive Law §314(5) MWBE certification validity (5 years)
 - **Name:** NY Executive Law §314 — Certification (validity period, subd. 5)
-- **Date:** current revision 2025 codification (NY Open Legislation / Justia)
+- **Date:** current §314(5)(a) version effective 2026-07-01 (recertification-presumption amendment; five-year validity unchanged)
 - **Issued by:** NY State Legislature; via NY Senate Open Legislation (Exec. Law Art. 15-A)
 - **Link:** https://www.nysenate.gov/legislation/laws/EXC/314
 - **Verbatim file:** `sources/source-exec-314-mwbe-cert-validity.md`
-- **Verified:** 2026-06-30
+- **Verified:** 2026-07-02 — dual-model (GPT-5 High + Perplexity, blind) + human primary-source confirmation of the current §314(5)(a) text
+- **Note:** captures the CURRENT "5.(a)" clause (with the EXC §310(23) provisional-certification exception), replacing the superseded "5." text that was effective only until 2026-07-01. **Sunset watch:** Article 15-A authorization expires **2028-07-01** (Part KK FY2025-26 budget; sunset date pending primary verification) — if it lapses the rule is dead, not merely stale.
 
 ### 5.2 — Workers' Compensation Law §57 (proof of coverage as a condition of contract)
 - **Name:** Workers' Compensation Law §57 — Restriction on entering into contracts unless compensation is secured

@@ -55,12 +55,55 @@ TODAY = datetime.date(2026, 6, 29)  # spec-fixed "as of" date for this build run
 WATCH_179_BILLS = ["S7001", "A11179", "S4877"]
 WATCH_179_FILE_RE = re.compile(r"source-stf-179-")
 
-# Scheduled statutory repeal dates. Keyed by a filename fragment.
-REPEAL_DATES = {
-    "source-stf-139-j": datetime.date(2028, 7, 31),
-    "source-stf-139-k": datetime.date(2028, 7, 31),
-    "source-stf-163": datetime.date(2031, 6, 30),
+# Sunset / authorization-expiry watch (unifies scheduled repeals AND program
+# sunsets into one axis). A verbatim-correct rule can still be legally DEAD once
+# its authorizing program lapses, so this is tracked SEPARATELY from text
+# freshness. A source file may declare it inline via the optional fields
+# `sunset_watch: true` + `authorization_expires: YYYY-MM-DD` (plus optional
+# `authorizing_vehicle:` and `sunset_date_verified:`); the seed below covers
+# statutes whose files carry no such fields (the scheduled repeals).
+SUNSET_APPROACHING_DAYS = 180
+SUNSET_SEED = {
+    # filename fragment -> (authorization_expires, primary_verified, kind)
+    "source-stf-139-j": (datetime.date(2028, 7, 31), True, "scheduled repeal"),
+    "source-stf-139-k": (datetime.date(2028, 7, 31), True, "scheduled repeal"),
+    "source-stf-163":   (datetime.date(2031, 6, 30), True, "scheduled repeal"),
 }
+
+SUNSET_WATCH_RE = re.compile(r"sunset_watch:\s*true", re.IGNORECASE)
+AUTH_EXPIRES_RE = re.compile(r"authorization_expires:\s*(\d{4})-(\d{2})-(\d{2})")
+AUTH_VEHICLE_RE = re.compile(r"authorizing_vehicle:\s*(.+)")
+SUNSET_VERIFIED_RE = re.compile(r"sunset_date_verified:\s*(\w+)")
+
+
+def read_sunset(record):
+    """Return (expires_date, primary_verified, kind) for a source under sunset
+    watch, or None. Inline `sunset_watch: true` + `authorization_expires:` in the
+    file take precedence; otherwise the SUNSET_SEED table (scheduled repeals)."""
+    raw = record.get("raw", "")
+    if SUNSET_WATCH_RE.search(raw):
+        m = AUTH_EXPIRES_RE.search(raw)
+        if m:
+            exp = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            vm = SUNSET_VERIFIED_RE.search(raw)
+            verified = bool(vm) and vm.group(1).lower() in ("confirmed", "verified", "yes", "true")
+            km = AUTH_VEHICLE_RE.search(raw)
+            kind = km.group(1).strip() if km else "program authorization"
+            return (exp, verified, kind)
+    for frag, seed in SUNSET_SEED.items():
+        if record["file"].startswith(frag):
+            return seed
+    return None
+
+
+def classify_sunset(expires):
+    """OK (>=180 days out) / APPROACHING (<180 days) / LAPSED (past)."""
+    days = (expires - TODAY).days
+    if days < 0:
+        return ("LAPSED", days)
+    if days < SUNSET_APPROACHING_DAYS:
+        return ("APPROACHING", days)
+    return ("OK", days)
 
 # ---------------------------------------------------------------------------
 # Header parsing (mirrors parse_golden_copy.py, incl. multi-line label values)
@@ -128,6 +171,7 @@ def extract_record(path):
         "date_raw": fields.get("Date", ""),
         "link": fields.get("Link", ""),
         "body": body,
+        "raw": "\n".join(lines),
     }
 
 
@@ -370,10 +414,16 @@ def assess(record, snapshot_dir=None):
     watch = []
     if WATCH_179_FILE_RE.search(record["file"]):
         watch.append("§179 cluster — watch bills " + ", ".join(WATCH_179_BILLS))
-    for frag, rdate in REPEAL_DATES.items():
-        if record["file"].startswith(frag):
-            days = (rdate - TODAY).days
-            watch.append("scheduled repeal {} ({} days out)".format(rdate.isoformat(), days))
+
+    # Sunset / authorization axis (separate from text freshness).
+    sunset = read_sunset(record)
+    sunset_status = sunset_days = None
+    if sunset:
+        s_expires, s_verified, s_kind = sunset
+        sunset_status, sunset_days = classify_sunset(s_expires)
+        watch.append("authorization sunset {} — {} ({}, {} days out){}".format(
+            s_expires.isoformat(), sunset_status, s_kind, sunset_days,
+            "" if s_verified else " — DATE PENDING PRIMARY VERIFICATION"))
 
     result = {
         "file": record["file"],
@@ -387,6 +437,13 @@ def assess(record, snapshot_dir=None):
         "reason": "",
         "elevated": bool(watch),
         "watch": watch,
+        # Sunset axis — LAPSED quarantines the rule from "green" regardless of text status.
+        "sunset_status": sunset_status,
+        "authorization_expires": sunset[0].isoformat() if sunset else None,
+        "sunset_days": sunset_days,
+        "sunset_verified": sunset[1] if sunset else None,
+        "sunset_kind": sunset[2] if sunset else None,
+        "quarantined": sunset_status == "LAPSED",
     }
 
     ok, content = fetch(record["link"], snapshot_dir=snapshot_dir)
@@ -459,24 +516,39 @@ def print_report(results):
         print("       name     : {}".format(r["name"][:90]))
         print("       captured : {}   current: {}".format(cap, cur))
         print("       detail   : {}".format(r["reason"]))
+        if r.get("sunset_status"):
+            print("       sunset   : {} — authorization expires {} ({} days){}{}".format(
+                r["sunset_status"], r["authorization_expires"], r["sunset_days"],
+                "" if r.get("sunset_verified") else " [date pending verification]",
+                "  ⛔ QUARANTINED" if r.get("quarantined") else ""))
 
     print("-" * 78)
     counts = {"OK": 0, "DRIFTED": 0, "UNREACHABLE": 0}
     for r in results:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    print("Totals: {} rule(s) | OK={} DRIFTED={} UNREACHABLE={}".format(
+    sunset_counts = {"OK": 0, "APPROACHING": 0, "LAPSED": 0}
+    for r in results:
+        if r.get("sunset_status"):
+            sunset_counts[r["sunset_status"]] = sunset_counts.get(r["sunset_status"], 0) + 1
+    print("Totals: {} rule(s) | text: OK={} DRIFTED={} UNREACHABLE={}".format(
         len(results), counts["OK"], counts["DRIFTED"], counts["UNREACHABLE"]))
+    print("        sunset watch: OK={} APPROACHING={} LAPSED={}".format(
+        sunset_counts["OK"], sunset_counts["APPROACHING"], sunset_counts["LAPSED"]))
 
-    all_ok = counts["DRIFTED"] == 0 and counts["UNREACHABLE"] == 0
+    # A LAPSED authorization quarantines the rule from "green" regardless of text status.
+    all_ok = (counts["DRIFTED"] == 0 and counts["UNREACHABLE"] == 0
+              and sunset_counts["LAPSED"] == 0)
     print("=" * 78)
     if all_ok:
-        print("RESULT: ALL FRESH — every rule OK.")
+        print("RESULT: ALL FRESH — every rule OK (text current, no lapsed authorizations).")
     else:
-        print("RESULT: ATTENTION NEEDED — {} drifted, {} unreachable. "
-              "These rules must not be presented as authoritative until "
-              "re-verified per the methodology manual.".format(
-                  counts["DRIFTED"], counts["UNREACHABLE"]))
+        print("RESULT: ATTENTION NEEDED — {} drifted, {} unreachable, {} LAPSED "
+              "(authorization expired → quarantined). These rules must not be presented "
+              "as authoritative until re-verified per the methodology manual.".format(
+                  counts["DRIFTED"], counts["UNREACHABLE"], sunset_counts["LAPSED"]))
     print("=" * 78)
+    counts["LAPSED_sunset"] = sunset_counts["LAPSED"]
+    counts["APPROACHING_sunset"] = sunset_counts["APPROACHING"]
     return all_ok, counts
 
 
@@ -488,7 +560,10 @@ def emit_json(results, counts, all_ok):
         "totals": {"rules": len(results), **counts},
         "watch_list": {
             "s179_bills": WATCH_179_BILLS,
-            "repeal_dates": {k: v.isoformat() for k, v in REPEAL_DATES.items()},
+            "sunset_seed": {frag: {"authorization_expires": exp.isoformat(),
+                                   "primary_verified": ver, "kind": kind}
+                            for frag, (exp, ver, kind) in SUNSET_SEED.items()},
+            "sunset_approaching_days": SUNSET_APPROACHING_DAYS,
         },
         "rules": [
             {
@@ -502,6 +577,12 @@ def emit_json(results, counts, all_ok):
                 "elevated": r["elevated"],
                 "watch": r["watch"],
                 "reason": r["reason"],
+                "sunset_status": r.get("sunset_status"),
+                "authorization_expires": r.get("authorization_expires"),
+                "sunset_days": r.get("sunset_days"),
+                "sunset_verified": r.get("sunset_verified"),
+                "sunset_kind": r.get("sunset_kind"),
+                "quarantined": r.get("quarantined", False),
             }
             for r in sorted(results, key=lambda r: r["file"])
         ],
@@ -560,6 +641,30 @@ def run_selftest():
         fh.write("Current revision as of 2099-01-01. " + body)
     res5 = assess(rec5, snapshot_dir=snap)
     cases.append(("assess() flags an altered/newer Date as DRIFTED", res5["status"], "DRIFTED"))
+
+    # 6) Sunset classification: OK (>=180 days), APPROACHING (<180), LAPSED (past).
+    cases.append(("sunset OK when >180 days out",
+                  classify_sunset(TODAY + datetime.timedelta(days=400))[0], "OK"))
+    cases.append(("sunset APPROACHING when <180 days out",
+                  classify_sunset(TODAY + datetime.timedelta(days=90))[0], "APPROACHING"))
+    cases.append(("sunset LAPSED when past",
+                  classify_sunset(TODAY - datetime.timedelta(days=1))[0], "LAPSED"))
+
+    # 7) Inline sunset read: a file declaring sunset_watch:true is picked up and,
+    #    when the authorization has lapsed, is quarantined from "green".
+    lapsed_raw = ("## SUNSET / AUTHORIZATION\n- sunset_watch: true\n"
+                  "- authorization_expires: 2020-01-01\n- sunset_date_verified: pending\n")
+    rec7 = {"file": "source-fixture-sunset.md", "name": "sunset fixture",
+            "date_raw": "", "link": "https://x/sunset", "body": body, "raw": lapsed_raw}
+    res7 = assess(rec7, snapshot_dir="/nonexistent-snapshot-dir")
+    cases.append(("inline sunset_watch parsed → LAPSED", res7.get("sunset_status"), "LAPSED"))
+    cases.append(("LAPSED authorization quarantines the rule", res7.get("quarantined"), True))
+
+    # 8) Seeded sunset (§163 repeal date 2031-06-30) classifies OK today.
+    rec8 = {"file": "source-stf-163.md", "name": "163", "date_raw": "", "link": "https://x/163b",
+            "body": body, "raw": ""}
+    res8 = assess(rec8, snapshot_dir="/nonexistent-snapshot-dir")
+    cases.append(("seeded §163 repeal date → sunset OK", res8.get("sunset_status"), "OK"))
 
     print()
     all_pass = True
