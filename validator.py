@@ -321,37 +321,58 @@ MWBE = "source-mwbe-5nycrr-pass-fail.md"
 STF179V = "source-stf-179-v.md"
 XI4A = "source-xi-4-a-nfp-prompt-contracting.md"
 STF179F = "source-stf-179-f.md"
+STF179P = "source-stf-179-p.md"
+STF179E = "source-stf-179-e.md"
 XII5I = "source-xii-5-i-prompt-payment-interest.md"
 
 # §179-f $10 de minimis floor: no interest is due when the computed amount is
 # below this threshold.
 DE_MINIMIS_FLOOR = 10.0
 
-# §179-p / OSC XII.5.I exclusions. Payee categories and payment types NOT
-# entitled to prompt-payment interest, each mapped to the verbatim exclusion
-# line in the XII.5.I golden source that grounds it. Any other category/type is
-# treated as not-excluded. (These are Article 11-A prompt-PAYMENT provisions;
-# applied here as an additional conservative screen on the gated RM-2 output and
-# flagged for the attorney review — see the scope note in the result.)
+# §179-p inapplicability exclusions. Payee categories and payment types to which
+# Article 11-A prompt-payment interest does NOT apply, each mapped to the VERBATIM
+# clause of SFL §179-p (source-stf-179-p.md) that grounds it. Any other
+# category/type is treated as not-excluded. (These are Article 11-A prompt-PAYMENT
+# provisions applied as a conservative screen on the gated RM-2 output — see the
+# scope note in the result.)
 EXCLUDED_PAYEE_CATEGORIES = {
-    "federal_government": "Federal government",
-    "state_agency": "State agencies and their related entities",
-    "local_government": ("local governments , including but not limited to, counties, cities, "
-                         "towns, villages, school districts, special districts and their related "
-                         "entities when receiving payment for state aid"),
-    "public_authority": "public authorities and public benefit corporations",
-    "public_benefit_corporation": "public authorities and public benefit corporations",
-    "state_employee": "state employees working in their public employment capacity",
-    "third_party_payment_contractor": ("third party payment agreement contractors, including but "
-                                       "not limited to, the fiscal agent or intermediary under "
-                                       "Social Services Law, Section 367-b"),
+    # §179-p clause 3
+    "federal_government": "to the federal government;",
+    "state_agency": "to any state agency or its related instrumentalities;",
+    "local_government": ("to any duly constituted unit of local government including, but not "
+                         "limited to, counties, cities, towns, villages, school districts, special "
+                         "districts, or any of their related instrumentalities;"),
+    "public_authority": "to any public authority or public benefit corporation;",
+    "public_benefit_corporation": "to any public authority or public benefit corporation;",
+    "state_employee": ("to employees of state agencies when acting in, or incidental to, their "
+                       "public employment capacity;"),
+    # §179-p clause 4
+    "third_party_payment_contractor": ("to contractors of third party payment agreements including, "
+                                       "but not limited to, the fiscal agent or fiscal intermediary "
+                                       "designated pursuant to section three hundred sixty-seven-b "
+                                       "of the social services law;"),
+    # §179-p clause 5 (NEW)
+    "non_state_agency_intermediary": ("to entities which receive state funds through any "
+                                      "intermediary organization other than a state agency;"),
 }
 EXCLUDED_PAYMENT_TYPES = {
-    "eminent_domain": "for property under eminent domain procedure law.",
-    "court_judgment": "for court judgements.",
-    "osc_offset": "where OSC offsets all or part of the payment due.",
-    "pass_through_state_funds": "vendors receive as pass-through state funds.",
+    # §179-p clause 1
+    "eminent_domain": "under the eminent domain procedure law;",
+    # §179-p clause 2 (NEW)
+    "court_judgment": ("as interest allowed on judgments rendered by a court pursuant to any "
+                       "provision of law other than those provisions contained in this article;"),
+    # §179-p clause 6 (set-off) — defined at §179-e(8)
+    "set_off": ("in situations where the comptroller exercises a legally authorized set-off against "
+                "all or part of the payment due the contractor."),
+    "osc_offset": ("in situations where the comptroller exercises a legally authorized set-off "
+                   "against all or part of the payment due the contractor."),
 }
+# Payment-type keys whose exclusion is the §179-p clause-6 set-off; these also get
+# the §179-e(8) definition of "Set-off" attached as a grounding finding.
+SETOFF_PAYMENT_KEYS = {"set_off", "osc_offset"}
+SETOFF_DEFINITION_179E = ("means the reduction by the comptroller of a payment due to a contractor "
+                          "by an amount equal to the amount of an unpaid legally enforceable debt "
+                          "owed by the contractor to the state of New York.")
 
 # VendRep questionnaire forms → their golden-copy source file. The
 # material-change obligation and the certification-under-penalties-of-perjury
@@ -1002,13 +1023,13 @@ class Validator:
             "citing_quote": ENTITLE,
             "calculation_notes": calc.get("notes", []),
             "scope_note": (
-                "The de minimis floor (§179-f) and the entity/payment exclusions (§179-p / OSC "
-                "XII.5.I) are Article 11-A prompt-PAYMENT provisions, applied here as an additional "
-                "conservative screen on this gated RM-2 output. Whether they bind a §179-v "
-                "(Article 11-B) prompt-contracting entitlement is a question for the attorney "
-                "review. The full §179-p statutory payment-type list is not yet captured "
-                "(nysenate.gov is unreachable from this environment); the entity exclusions here "
-                "are grounded verbatim in OSC GFO XII.5.I."),
+                "The de minimis floor (§179-f) and the inapplicability exclusions (§179-p, with the "
+                "set-off defined at §179-e(8)) are Article 11-A prompt-PAYMENT provisions, applied "
+                "here as an additional conservative screen on this gated RM-2 output. Whether they "
+                "bind a §179-v (Article 11-B) prompt-contracting entitlement is a question for the "
+                "attorney review. All six §179-p inapplicability clauses are now captured verbatim "
+                "in the golden copy (source-stf-179-p.md, revision 2014-09-22) and each exclusion is "
+                "cited to them."),
             "attorney_review_required": True,
             "gating_notice": (
                 "GATED — RECOVERY feature. This is an INDICATIVE interest figure tied to the "
@@ -1019,27 +1040,37 @@ class Validator:
         return Result("nfp_contract_interest", findings, extra=rm2)
 
     def _interest_exclusion(self, contract, findings):
-        """Screen the payee category / payment type against the §179-p / OSC
-        XII.5.I exclusion list. Appends a grounded finding and returns
-        (excluded: bool, matched_label: str | None)."""
-        EXCL_TRIGGER = ("states the following payment types or entities are not entitled to "
-                        "prompt payment interest:")
+        """Screen the payee category / payment type against the SFL §179-p
+        inapplicability list. Every citation is grounded verbatim in
+        source-stf-179-p.md (and §179-e(8) for the set-off definition). Appends
+        grounded finding(s) and returns (excluded: bool, matched_label: str|None)."""
+        # §179-p opening clause — grounds the "not on the exclusion list" case.
+        EXCL_TRIGGER = ("The provisions of this article shall not apply to payments due and owing "
+                        "by the state:")
         payee = (contract.get("payee_category") or "").strip().lower()
         ptype = (contract.get("payment_type") or "").strip().lower()
-        matched, cite = None, None
+        matched, cite, is_setoff = None, None, False
         if payee in EXCLUDED_PAYEE_CATEGORIES:
             matched, cite = "payee category '{}'".format(payee), EXCLUDED_PAYEE_CATEGORIES[payee]
         elif ptype in EXCLUDED_PAYMENT_TYPES:
             matched, cite = "payment type '{}'".format(ptype), EXCLUDED_PAYMENT_TYPES[ptype]
+            is_setoff = ptype in SETOFF_PAYMENT_KEYS
 
         ev = {"payee_category": payee or None, "payment_type": ptype or None}
         if matched:
-            findings.append(self._f("RM-2", XII5I, cite, INFO,
-                "Excluded from prompt-payment interest (§179-p / OSC XII.5.I): {}.".format(matched),
+            findings.append(self._f("RM-2", STF179P, cite, INFO,
+                "Excluded from Article 11-A prompt-payment interest (§179-p): {}.".format(matched),
                 False, evidence={**ev, "excluded": True}))
+            # Clause 6 set-off is defined at §179-e(8); attach that verbatim
+            # definition so the set-off screen is fully grounded.
+            if is_setoff:
+                findings.append(self._f("RM-2", STF179E, SETOFF_DEFINITION_179E, INFO,
+                    "The §179-p clause-6 set-off is the §179-e(8) set-off: a comptroller reduction "
+                    "of a payment by the amount of an unpaid legally enforceable debt.",
+                    True, evidence={**ev, "setoff_definition": "SFL §179-e(8)"}))
             return (True, matched)
-        findings.append(self._f("RM-2", XII5I, EXCL_TRIGGER, INFO,
-            "Payee/payment is not on the §179-p / OSC XII.5.I exclusion list.",
+        findings.append(self._f("RM-2", STF179P, EXCL_TRIGGER, INFO,
+            "Payee/payment is not on the §179-p inapplicability list.",
             True, evidence={**ev, "excluded": False}))
         return (False, None)
 
@@ -1126,7 +1157,7 @@ def render_human(result):
         lines.append("rate column / quarters    : {} / {}".format(
             rb.get("column"), ", ".join(rb.get("quarters_used") or []) or "—"))
         if e.get("excluded"):
-            lines.append("EXCLUDED                  : {} (§179-p / OSC XII.5.I)".format(
+            lines.append("EXCLUDED                  : {} (§179-p)".format(
                 e.get("exclusion_basis")))
         if e.get("de_minimis_floor_applies"):
             lines.append("de minimis floor          : computed < ${:.0f} (§179-f) — no interest due".format(

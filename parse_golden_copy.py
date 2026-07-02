@@ -28,7 +28,7 @@ import sys
 # Configuration / constants
 # ---------------------------------------------------------------------------
 
-EXPECTED_COUNT = 44
+EXPECTED_COUNT = 45
 
 # The four required header labels plus the copy stamp. "Link" is matched by a
 # prefix because the source files carry several verbatim variants of the label

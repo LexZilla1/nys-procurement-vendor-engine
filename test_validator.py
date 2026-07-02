@@ -54,6 +54,8 @@ def test_every_emitted_citation_is_verbatim():
         val.validate_rm2_interest(_load("sample-contract-no-interest-no-directive.json")),
         val.validate_rm2_interest(_load("sample-contract-excluded-local-government.json")),
         val.validate_rm2_interest(_load("sample-contract-below-de-minimis.json")),
+        val.validate_rm2_interest(_load("sample-contract-excluded-court-judgment.json")),
+        val.validate_rm2_interest(_load("sample-contract-excluded-nonstate-intermediary.json")),
     ]
     n = 0
     for r in results:
@@ -397,43 +399,86 @@ def test_rm2_de_minimis_floor_blocks_small_interest():
 
 
 def test_rm2_excluded_local_government_blocks_interest():
-    """§179-p / OSC XII.5.I: a local-government payee is excluded, no interest
-    computed, cited verbatim to the XII.5.I exclusion line."""
+    """§179-p clause 3: a local-government payee is excluded, no interest
+    computed, cited verbatim to the §179-p exclusion clause."""
     val = V.Validator(golden=GC)
     res = val.validate_rm2_interest(_load("sample-contract-excluded-local-government.json"))
     assert res.extra["entitlement_arises"] is False
     assert res.extra["excluded"] is True
     assert res.extra["interest_amount_indicative"] == 0.0
     excl = [f for f in res.findings if f.evidence.get("excluded") is True]
-    assert excl and excl[0].source_file == V.XII5I
-    assert "local governments" in excl[0].citation_quote
+    assert excl and excl[0].source_file == V.STF179P
+    assert "unit of local government" in excl[0].citation_quote
 
 
 def test_rm2_public_authority_and_payment_type_exclusions():
-    """Each excluded payee category / payment type is caught and cited verbatim."""
+    """Each excluded payee category / payment type is caught and cited verbatim to §179-p."""
     val = V.Validator(golden=GC)
-    for cat, needle in [("public_authority", "public authorities and public benefit corporations"),
-                        ("state_employee", "state employees working in their public employment"),
-                        ("third_party_payment_contractor", "third party payment agreement contractors")]:
+    for cat, needle in [("public_authority", "public authority or public benefit corporation"),
+                        ("state_employee", "employees of state agencies when acting in"),
+                        ("third_party_payment_contractor", "third party payment agreements")]:
         doc = _load("sample-contract-entitled-to-interest.json")
         doc["payee_category"] = cat
         res = val.validate_rm2_interest(doc)
         assert res.extra["excluded"] is True, cat
         excl = [f for f in res.findings if f.evidence.get("excluded") is True]
         assert excl and needle in excl[0].citation_quote, cat
+        assert excl[0].source_file == V.STF179P, cat
     doc = _load("sample-contract-entitled-to-interest.json")
     doc["payment_type"] = "eminent_domain"
     res = val.validate_rm2_interest(doc)
     assert res.extra["excluded"] is True
     excl = [f for f in res.findings if f.evidence.get("excluded") is True]
-    assert excl and "eminent domain" in excl[0].citation_quote
+    assert excl and "eminent domain procedure law" in excl[0].citation_quote
+
+
+def test_rm2_court_judgment_payment_excluded():
+    """§179-p clause 2 (NEW): interest on a non-Article-11-A court judgment is excluded."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-excluded-court-judgment.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert res.extra["excluded"] is True
+    assert res.extra["interest_amount_indicative"] == 0.0
+    excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+    assert excl and excl[0].source_file == V.STF179P
+    assert "judgments rendered by a court" in excl[0].citation_quote
+
+
+def test_rm2_non_state_agency_intermediary_payee_excluded():
+    """§179-p clause 5 (NEW): an entity receiving state funds via a non-state-agency
+    intermediary is excluded."""
+    val = V.Validator(golden=GC)
+    res = val.validate_rm2_interest(_load("sample-contract-excluded-nonstate-intermediary.json"))
+    assert res.extra["entitlement_arises"] is False
+    assert res.extra["excluded"] is True
+    assert res.extra["interest_amount_indicative"] == 0.0
+    excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+    assert excl and excl[0].source_file == V.STF179P
+    assert "intermediary organization other than a state agency" in excl[0].citation_quote
+
+
+def test_rm2_setoff_exclusion_grounds_179e_definition():
+    """§179-p clause 6 set-off is excluded and additionally grounded in the
+    §179-e(8) definition of 'Set-off'."""
+    val = V.Validator(golden=GC)
+    doc = _load("sample-contract-entitled-to-interest.json")
+    doc["payment_type"] = "set_off"
+    res = val.validate_rm2_interest(doc)
+    assert res.extra["excluded"] is True
+    excl = [f for f in res.findings if f.evidence.get("excluded") is True]
+    assert excl and "legally authorized set-off" in excl[0].citation_quote
+    setoff_def = [f for f in res.findings if f.source_file == V.STF179E
+                  and "reduction by the comptroller" in f.citation_quote]
+    assert setoff_def, "expected a §179-e(8) set-off definition grounding finding"
 
 
 def test_rm2_refinements_keep_attorney_review_gate():
     """The de minimis / exclusion refinements must not drop the attorney-review gate."""
     val = V.Validator(golden=GC)
     for fx in ("sample-contract-below-de-minimis.json",
-               "sample-contract-excluded-local-government.json"):
+               "sample-contract-excluded-local-government.json",
+               "sample-contract-excluded-court-judgment.json",
+               "sample-contract-excluded-nonstate-intermediary.json"):
         res = val.validate_rm2_interest(_load(fx))
         assert res.attorney_review_required is True
 
