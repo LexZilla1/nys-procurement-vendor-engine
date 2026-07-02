@@ -187,6 +187,23 @@ def test_never_green_when_unknown_invariant():
     assert all(r["verdict"] != G.HAVE for r in bundle["results"])
 
 
+def test_analyze_summary_have_is_zero_when_authorization_lapsed():
+    """Aggregate never-green: the ONLY would-be-✅-HAVE credential (MWBE, valid
+    dates: issuance 2022-03-01 → expiry 2027-03-01, after the 2026-09-01 deadline)
+    must drop out of the vendor-facing summary counts when its authorization is
+    LAPSED — proving the invariant holds in the aggregate, not just per-row."""
+    lapsed = lambda rid: "LAPSED"
+    profile = [_mwbe("2022-03-01")]                     # on dates alone this is HAVE
+    bundle = G.analyze(["mwbe-certification"], "2026-09-01", profile, sunset_status_fn=lapsed)
+    assert bundle["summary"]["have"] == 0               # no false green in the counts
+    assert bundle["summary"]["unknown"] == 1
+    assert all(r["verdict"] != G.HAVE for r in bundle["results"])
+    # And with the authorization OK, the same profile DOES count as one HAVE —
+    # confirming the LAPSED status is what zeroes it out, not the dates.
+    ok = G.analyze(["mwbe-certification"], "2026-09-01", profile, sunset_status_fn=lambda rid: "OK")
+    assert ok["summary"]["have"] == 1
+
+
 # --------------------------------------------------------------------------
 # Built-in runner
 # --------------------------------------------------------------------------
