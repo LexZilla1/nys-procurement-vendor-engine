@@ -10,11 +10,15 @@
 > verified via dual independent AI cross-check (GPT-5 High + Perplexity, each blind) — both returned
 > the identical verbatim quote and the same primary-source URL and jurisdiction (NYS-state) — and
 > human-confirmed against the primary source at nysenate.gov/legislation/laws/EXC/314 on 2026-07-02.
-> VERSION NOTE: nysenate.gov shows two versions of subdivision 5 — the older "5." (marked "Effective
-> until July 1, 2026") is EXPIRED and must not be cited; this entry captures the CURRENT "5. (a)"
-> text (effective July 1, 2026 onward). The recertification-presumption amendment added subsections
-> but LEFT the five-year validity period unchanged. Earlier secondary blogs reporting "2 years"
-> confused NYS with NYC and are WRONG; the statute is FIVE years.
+> VERSION NOTE: nysenate.gov shows two versions of subdivision 5 — the older "5." (marked "NB
+> Effective until July 1, 2026") is EXPIRED and must not be cited; this entry DELIBERATELY captures
+> ONLY the CURRENT "5. (a)" version (effective July 1, 2026 onward), together with its own statutory
+> markers as printed: "** NB Effective July 1, 2026" and "* NB Repealed July 1, 2028". The superseded
+> "5." version and its "NB Effective until July 1, 2026" marker are intentionally OMITTED, not dropped
+> — the single-version capture is by design (capture the live text, exclude the expired one). Do not
+> read the absence of the old "5." block as a capture gap. The recertification-presumption amendment
+> added subsections but LEFT the five-year validity period unchanged. Earlier secondary blogs
+> reporting "2 years" confused NYS with NYC and are WRONG; the statute is FIVE years.
 
 ---
 
@@ -33,7 +37,9 @@
 - sunset_watch: true
 - authorization_expires: 2028-07-01
 - authorizing_vehicle: Part KK FY2025-26 budget (signed 2025-05-08)
-- sunset_date_verified: 2026-07-03
+- sunset_date_verified: verified
+- sunset_date_verified_on: 2026-07-03
+- sunset_date_verified_source: nysenate.gov/legislation/laws/EXC/314 (* NB Repealed July 1, 2028)
 - **Primary-verified 2026-07-03. Source: NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314 — the section page carries the statutory note '* NB Repealed July 1, 2028' directly. Repeal applies to all of Article 15-A (§§310–318); §314 five-year validity terminates with it. Now captured verbatim in STATE TEXT above.**
 - Why this matters: Article 15-A is a sunsetting authorization (orig. 1988), periodically renewed
   (→2024-12-31 →2025-07-01 →2028-07-01). If it lapses without renewal, the entire MWBE rule set
