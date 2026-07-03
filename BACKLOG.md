@@ -1,4 +1,4 @@
-# LexZilla / NYS Procurement Vendor Engine — Backlog & Open State
+# NYS Procurement Vendor Engine — Backlog & Open State
 
 ## Build state (as of this entry)
 - Step 4.5 Clarification-Question Generator: BUILT (PR #9). Reader schema
@@ -162,3 +162,109 @@ Practices" (joint OGS/ESD publication).
   active enrollment) at esd.ny.gov before citing as active.
   GTM NOTE: named lenders + TA providers already reach this exact ICP —
   potential co-marketing/referral partners, separate from core product build.
+
+## Data connectors — verified BUILD-NOW set (API + reuse checked 2026-07-03)
+
+Verification method note: dataset IDs + API existence confirmed via Socrata
+catalog / official docs; live HTTP GETs and verbatim license text NOT yet run
+(research env blocks outbound). Two license reads still gate a fully clean
+build (flagged below). Grades: BUILD-NOW = API + procurement-useful + acceptable
+reuse; REVIEW-LATER = useful but reuse/API unread; NOT-USEFUL = API exists, wrong
+domain; DOC-WARNING = metadata open but actual RFP/bid docs not API-accessible.
+
+SCOPE TRUTH (state before building): the BUILD-NOW set gives federal live
+tenders+documents (SAM), federal award intel (USAspending), and NY/NYC HISTORY +
+vendor + notice-metadata (Socrata x2, Checkbook) + statute monitoring (Open Leg).
+It does NOT provide NY/NYC LIVE RFP DOCUMENTS — those exist only in NYSCR (locked,
+no API, ESD-proprietary) and PASSPort Public (viewer/manual-export, no clean API).
+State this gap in product scope; do not imply NY live-document coverage.
+
+### BUILD-NOW connectors
+- [ ] SAM.gov Opportunities — `https://api.sam.gov/opportunities/v2/search`
+  (api_key, free SAM.gov account). FEDERAL ONLY. Live solicitations + actual
+  documents via the `resourceLinks` field (public domain). The one confirmed
+  API with real RFP-document access. Store metadata AND raw docs (PD).
+- [ ] USAspending — `https://api.usaspending.gov/api/v2/search/spending_by_award/`
+  (no key, CC0). Federal awards/spending only — no solicitations, no docs.
+  Use for incumbent/competitor intelligence, not tender discovery.
+- [ ] NYC Open Data (Socrata) — `https://data.cityofnewyork.us/resource/{4x4}.json`.
+  Reuse VERIFIED OPEN: "Open Data belongs to all New Yorkers. There are no
+  restrictions on the use of Open Data" (NYC Open Data FAQ; attribution of
+  source/version/modifications + AS-IS per Admin Code §23-504). Core datasets:
+  City Record Online `dg92-zbpx` (HIGH — live+historical citywide notices, all
+  agencies; verify 37-col schema for a notice-URL/body field); Recent Contract
+  Awards `qyyg-4tf5` (weekly recent-award signal); Bid Tabulations `9k82-ys7w`
+  (historical pricing, FROZEN post-PASSPort); M/WBE-LBE-EBE Certified list
+  `ci93-uc8s` (vendor directory). AVOID `3khw-qi8f` (Current Solicitations —
+  private/deprecated). Documents live in PASSPort, not here.
+- [ ] Open Data NY (Socrata) — `https://data.ny.gov/resource/{4x4}.json`;
+  discovery `https://api.us.socrata.com/api/catalog/v1?domains=data.ny.gov&q=procurement`.
+  Reuse = Open NY license — **READ / RESOLVED 2026-07-03**: public data.ny.gov
+  datasets are usable for commercial/reuse through the official Open Data NY /
+  Socrata channel, subject to conditions — license is revocable; State gives no
+  warranty on accuracy/completeness; use at own risk; user indemnifies/holds the
+  State harmless; downstream product pages must carry a data-accuracy disclaimer +
+  source/date attribution. Procurement reports (historical
+  transactions >=$5,000, 8 FY, ABO/PARIS; no live RFPs, no docs): State Auth
+  `ehig-g5x3`, Local Auth `8w5p-k45m`, IDA `p3p6-xqr5`, LDC `d84c-dk28`, MTA
+  procurement `gpsc-qqsz`. Forward-lead to inspect: "Eye On The Future — MTA
+  Contract Solicitations" `e3e7-qwer`. Vendor enrichment: DOS Corporations
+  `63wc-4exh` (+ `ekwr-p59j`, `2tms-hftb`), Certified DBEs `pfeu-dsx6`.
+- [ ] NY Senate Open Legislation — `https://legislation.nysenate.gov/api/3/laws/EXC?key=`
+  (free key). Statutory/compliance monitoring only — no tenders, no docs. This
+  is the golden-copy FRESHNESS pipe (pull statute text/versions, e.g. the §314
+  sunset watch, instead of manual capture). Data-payload license unverified
+  (open-source posture is worded around code); statutory text not copyrightable.
+- [ ] Checkbook NYC — `https://www.checkbooknyc.com/contract-api` (NYC Comptroller).
+  XML over HTTP POST; up to 20,000 records/call; rate limit "1 concurrent
+  session per IP and at a rate of 1 per second." Deep NYC contract/spend/vendor-
+  payment history — no solicitations, no docs. CAVEAT: redistribution terms
+  REVIEW PENDING. Build a batched ingestion/cache layer (not live per-request).
+
+### REVIEW-LATER
+- [ ] Open Book NY (osc.ny.gov) — no clean API (web viewer + manual spreadsheet
+  export); historical state contracts/authority financials. Pull the same class
+  of data through the data.ny.gov Socrata APIs instead. Reuse terms unverified.
+
+### NOT-USEFUL (API exists, wrong domain — drop from procurement roadmap)
+- [ ] MTA developer feeds (mta.info/developers) — GTFS/GTFS-RT transit data, not
+  procurement. For MTA procurement use data.ny.gov `gpsc-qqsz` / `e3e7-qwer`.
+- [ ] 511NY (511ny.org/developers) — traffic/transit ops; requires key + signed
+  NYSDOT Developers Access Agreement; redistribution restricted. Not procurement.
+
+### DOC-WARNING (metadata open, actual RFP/bid docs NOT API-accessible)
+- [ ] NYSCR — holds NY-state live solicitations >=$50,000 + documents, but NO API
+  and ESD-proprietary ("expressly prohibits the copying of any protected
+  materials on the site without written permission... case-by-case at the sole
+  discretion of the Department"). BD/licensing path only; never scrape.
+- [ ] PASSPort Public (a0333-passportpublic.nyc.gov) — authoritative NYC live RFx
+  + documents, viewable without account, but NO documented stable public API
+  (browse + manual export). Drive discovery from CROL `dg92-zbpx`, deep-link into
+  PASSPort for the document; ask MOCS about any sanctioned bulk feed before
+  depending on an undocumented endpoint.
+
+### Open reads to promote REVIEW -> BUILD (one live GET each)
+- [x] Open NY license — RESOLVED 2026-07-03. Public data.ny.gov datasets are
+  usable for commercial/reuse through the official Open Data NY / Socrata access
+  path, subject to the license conditions: (1) no State warranty on accuracy or
+  completeness; (2) use at own risk; (3) user indemnifies / holds the State
+  harmless; (4) downstream product pages should include a data-accuracy
+  disclaimer + source/date attribution. License is revocable.
+- [ ] Read NYC Terms of Use + Admin Code §23-504 verbatim; read Checkbook NYC
+  redistribution terms verbatim.
+- [ ] Live-GET each 4x4 for HTTP 200 + schema (esp. CROL `dg92-zbpx` notice-URL/
+  body column; SAM `resourceLinks`; data.ny.gov vendor/award-amount fields).
+
+Remaining open questions (golden-copy/connectors legal):
+1. Checkbook NYC redistribution terms.
+2. Whether PASSPort has a sanctioned bulk feed / API from MOCS.
+3. Whether NYSCR licensing / data access is possible through ESD.
+
+### Document-storage rule (rights-driven)
+- Store raw documents ONLY where a doc link AND reuse rights both hold -> SAM.gov
+  (`resourceLinks`, public domain): retain + index.
+- Metadata + deep-link ONLY, no server-side retention of document bodies ->
+  NYSCR and PASSPort docs (proprietary/unverified; retention trips the NYSCR/
+  aggregator ToS gates above). Per-vendor transient processing only.
+- Metadata rows, retain freely -> all NYC/NYS Socrata datasets and Checkbook
+  (open reuse; contain no documents anyway).
