@@ -38,8 +38,14 @@
   award-notice / RFI); flag the ~8% non-biddable. Pure rules, smallest build.
 
 ## Open verification items (golden copy)
-- [ ] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — verify against PRIMARY
-  source: Part KK, FY2025-26 enacted budget. Currently unconfirmed.
+- [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
+  Primary-verified against NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314:
+  the section page carries the statutory note "* NB Repealed July 1, 2028" directly.
+  Repeal applies to all of Article 15-A (§§310–318); §314's five-year validity
+  terminates with it. The NB markers ("** NB Effective July 1, 2026", "* NB
+  Repealed July 1, 2028") are now captured verbatim in the STATE TEXT block of
+  source-exec-314-mwbe-cert-validity.md (they had been dropped from the original
+  capture). File metadata updated: sunset_date_verified: 2026-07-03.
 
 ## Golden copy — verified entries (source: OGS/ESD "Doing Business With New York State" guide, primary source)
 
