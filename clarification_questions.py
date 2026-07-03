@@ -16,11 +16,15 @@ Hard boundaries (per task):
     citation requirement) comes from the solicitation at runtime, verbatim.
   * No credentials, no scraping, no auto-send.
 
-A draft is produced ONLY when ALL of these hold:
+A draft is produced automatically ONLY when ALL of these hold:
   * question_submission is not null,
-  * the question deadline has not passed (compared to the run date), and
+  * the question deadline is present, parseable, and has NOT passed, and
   * the gap list is non-empty.
-Otherwise `generate()` returns a null draft with a one-line reason.
+Otherwise `generate()` returns a null draft with either a one-line `reason`
+(no question window / deadline passed / no gaps found) or, when the block is
+present but the deadline can't be confirmed, a `deadline_unverified` status that
+asks the vendor to verify the window and offers on-demand generation via
+`force=True`.
 
 This module is pure Python (no `anthropic`/network dependency) so it runs and is
 tested offline; it consumes the reader's already-parsed output.
@@ -36,6 +40,24 @@ import sys
 NO_WINDOW = "no question window"
 DEADLINE_PASSED = "deadline passed"
 NO_GAPS = "no gaps found"
+
+# State 3 status (block present but the question deadline can't be confirmed).
+DEADLINE_UNVERIFIED = "deadline_unverified"
+
+
+def _verify_location(question_submission):
+    """Where the vendor should look to confirm the question window is open:
+    the question-submission source citation, plus a page if one is provided.
+    Returns None if the solicitation stated no location."""
+    sc = question_submission.get("source_citation")
+    page = question_submission.get("page")
+    if sc and page is not None:
+        return "{} (p. {})".format(sc, page)
+    if sc:
+        return sc
+    if page is not None:
+        return "p. {}".format(page)
+    return None
 
 DISCLAIMER = ("This is an editable draft for the vendor to review, edit, and send from "
               "their own email. The engine does not send it and does not contact the agency.")
@@ -117,20 +139,29 @@ def _gap_citation(gap):
 # Generator
 # ---------------------------------------------------------------------------
 
-def generate(question_submission, gaps, run_date=None):
+def generate(question_submission, gaps, run_date=None, force=False):
     """Return a result dict. When a draft is produced:
         {"draft": <text>, "reason": None, "questions": [...], "contact": ...,
          "deadline": ..., "format": ..., "citation_requirement": ...,
          "question_count": N, "disclaimer": ...}
-    When not produced:
-        {"draft": None, "reason": "<one line>"}.
+    When not produced, one of:
+        State 1 — {"draft": None, "reason": "no question window"}
+        State 2 — {"draft": None, "reason": "deadline passed"}
+        (original) {"draft": None, "reason": "no gaps found"}
+        State 3 — {"draft": None, "status": "deadline_unverified", "message": ...,
+                   "verify_location": ..., "can_generate_on_demand": True}
+
+    `force=True` is the ONLY way to produce a draft in State 3 (deadline
+    absent/unparseable). It never overrides State 1 or State 2.
     """
     run_date = run_date or datetime.date.today()
 
+    # -- State 1 — no question-submission block (UNCHANGED; ignores force) ----
     if not question_submission:
         return {"draft": None, "reason": NO_WINDOW}
 
-    # Deadline gate: only suppress when we can PROVE the deadline has passed.
+    # -- State 2 — deadline present, parseable, and PASSED (UNCHANGED; ignores
+    #    force). Only suppress when we can PROVE the deadline has passed. -------
     deadline_raw = question_submission.get("deadline")
     deadline_date = parse_deadline(deadline_raw)
     if deadline_date is not None and deadline_date < run_date:
@@ -139,6 +170,21 @@ def generate(question_submission, gaps, run_date=None):
     gaps = gaps or []
     if not gaps:
         return {"draft": None, "reason": NO_GAPS}
+
+    # -- State 3 — block present but deadline absent/unparseable → UNVERIFIED.
+    #    No auto-draft: the vendor must confirm the window is open and opt in
+    #    via force=True (which then falls through to the SAME draft builder). ---
+    if deadline_date is None and not force:
+        loc = _verify_location(question_submission)
+        return {
+            "draft": None,
+            "status": DEADLINE_UNVERIFIED,
+            "message": ("Couldn't confirm the question deadline. Verify the window is open "
+                        "at: {}. If confirmed open, generate the draft.".format(
+                            loc or "the solicitation's question-submission section")),
+            "verify_location": loc,
+            "can_generate_on_demand": True,
+        }
 
     contact = question_submission.get("contact")
     fmt = question_submission.get("format")
@@ -234,7 +280,8 @@ def main(argv=None):
     with open(args.input, "r", encoding="utf-8") as fh:
         doc = json.load(fh)
     run_date = parse_deadline(doc.get("run_date")) if doc.get("run_date") else None
-    result = generate(doc.get("question_submission"), doc.get("gaps"), run_date=run_date)
+    result = generate(doc.get("question_submission"), doc.get("gaps"), run_date=run_date,
+                      force=bool(doc.get("force")))
     if not args.json and result["draft"]:
         print(result["draft"])
         print("\n[note] " + result["disclaimer"])

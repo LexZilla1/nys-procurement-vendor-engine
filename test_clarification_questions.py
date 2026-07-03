@@ -86,11 +86,54 @@ def test_deadline_on_run_date_is_still_open():
     assert r["draft"] is not None
 
 
-def test_absent_or_unparseable_deadline_treated_as_open():
-    qs_none = dict(_QS, deadline=None)
-    assert CQ.generate(qs_none, _GAPS, run_date=RUN)["draft"] is not None
-    qs_bad = dict(_QS, deadline="see the addendum")
-    assert CQ.generate(qs_bad, _GAPS, run_date=RUN)["draft"] is not None
+def test_absent_or_unparseable_deadline_is_unverified_not_auto_drafted():
+    """NEW State 3: block present but deadline absent/unparseable → no auto-draft;
+    an explicit unverified status instead (replaces the old permissive default)."""
+    for bad in (None, "see the addendum"):
+        r = CQ.generate(dict(_QS, deadline=bad), _GAPS, run_date=RUN)
+        assert r["draft"] is None
+        assert r["status"] == CQ.DEADLINE_UNVERIFIED
+        assert r["can_generate_on_demand"] is True
+        assert r["verify_location"] == "§3.1"          # from question_submission.source_citation
+        assert "Verify the window is open at: §3.1" in r["message"]
+        assert "reason" not in r                        # State 3 uses status/message, not reason
+
+
+def test_deadline_unverified_verify_location_includes_page_when_present():
+    qs = dict(_QS, deadline=None, page=7)
+    r = CQ.generate(qs, _GAPS, run_date=RUN)
+    assert r["status"] == CQ.DEADLINE_UNVERIFIED
+    assert r["verify_location"] == "§3.1 (p. 7)"
+
+
+def test_deadline_unverified_force_true_produces_identical_shape_draft():
+    """force=True is the ONLY way to draft in State 3, and yields the SAME draft
+    shape the normal (parseable-open-deadline) path would."""
+    qs_unverified = dict(_QS, deadline=None)
+    forced = CQ.generate(qs_unverified, _GAPS, run_date=RUN, force=True)
+    normal = CQ.generate(_QS, _GAPS, run_date=RUN)          # parseable, open → normal draft
+    assert forced["draft"] is not None and forced["reason"] is None
+    assert set(forced.keys()) == set(normal.keys())        # identical shape
+    # Same factual/clarifying, citation-tagged content + no-send disclaimer.
+    assert forced["question_count"] == 2
+    assert "[RFP §5.2, p. 14]" in forced["draft"]
+    assert "procurement.questions@example.ny.gov" in forced["draft"]
+    assert "does not send" in forced["disclaimer"]
+
+
+def test_force_does_not_override_state1_or_state2():
+    """force only unlocks State 3 — it never overrides no-block or deadline-passed."""
+    assert CQ.generate(None, _GAPS, run_date=RUN, force=True) == {
+        "draft": None, "reason": CQ.NO_WINDOW}
+    passed = CQ.generate(_QS, _GAPS, run_date=datetime.date(2026, 9, 1), force=True)
+    assert passed == {"draft": None, "reason": CQ.DEADLINE_PASSED}
+
+
+def test_states_1_and_2_outputs_are_byte_identical():
+    """Regression: States 1 and 2 must be unchanged by this refinement."""
+    assert CQ.generate(None, _GAPS, run_date=RUN) == {"draft": None, "reason": CQ.NO_WINDOW}
+    assert CQ.generate(_QS, _GAPS, run_date=datetime.date(2026, 9, 1)) == {
+        "draft": None, "reason": CQ.DEADLINE_PASSED}
 
 
 # --------------------------------------------------------------------------
