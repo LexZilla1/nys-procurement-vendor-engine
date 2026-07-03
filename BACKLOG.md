@@ -17,6 +17,22 @@
   typed. Do not build shape-selection before confirming the taxonomy exists.
   Must preserve factual-only boundary + denylist test when added.
 
+## Architecture — pre-Triage gates (design, not yet built)
+- [ ] SOURCE-DECLARATION FLAG at upload: user declares whether the uploaded
+  tender is (a) an underlying public solicitation (agency/NYSCR record) or
+  (b) proprietary enrichment from a paid aggregator (GovWin/BidNet/GovSpend).
+  Wire to retention: (a) process + may retain; (b) process for uploading
+  vendor ONLY, no retention, never fed into internal lead-gen store.
+  Rationale: the agency's actual RFQ/solicitation is a public record
+  regardless of how the vendor found it; the aggregator's analyst summaries/
+  enrichment are licensed content.
+- [ ] JURISDICTION GATE (separate from source flag): is this NY state / NY
+  municipal-authority / non-NY? Full engine applies only to NY state-level.
+  Municipal/authority = flag "verify which rules apply" (golden copy may be
+  partial). Non-NY = "out of scope, NY-only" rather than asserting NY rules.
+  Source flag and jurisdiction gate are INDEPENDENT checks; neither substitutes
+  for the other
+
 ## Next build
 - Step 1 Triage: classify NYSCR ad from metadata (open IFB / sole-source /
   award-notice / RFI); flag the ~8% non-biddable. Pure rules, smallest build.
