@@ -1,4 +1,4 @@
-# LexZilla / NYS Procurement Vendor Engine — Backlog & Open State
+# NYS Procurement Vendor Engine — Backlog & Open State
 
 ## Build state (as of this entry)
 - Step 4.5 Clarification-Question Generator: BUILT (PR #9). Reader schema
@@ -199,9 +199,12 @@ State this gap in product scope; do not imply NY live-document coverage.
   private/deprecated). Documents live in PASSPort, not here.
 - [ ] Open Data NY (Socrata) — `https://data.ny.gov/resource/{4x4}.json`;
   discovery `https://api.us.socrata.com/api/catalog/v1?domains=data.ny.gov&q=procurement`.
-  Reuse = Open NY license (documented-permissive; commercial+redistribution, no
-  attribution, but ~5pp incl. user-indemnification) — OPEN LICENSE READ STILL
-  PENDING (`.../api/views/{id}.json` .license). Procurement reports (historical
+  Reuse = Open NY license — **READ / RESOLVED 2026-07-03**: public data.ny.gov
+  datasets are usable for commercial/reuse through the official Open Data NY /
+  Socrata channel, subject to conditions — license is revocable; State gives no
+  warranty on accuracy/completeness; use at own risk; user indemnifies/holds the
+  State harmless; downstream product pages must carry a data-accuracy disclaimer +
+  source/date attribution. Procurement reports (historical
   transactions >=$5,000, 8 FY, ABO/PARIS; no live RFPs, no docs): State Auth
   `ehig-g5x3`, Local Auth `8w5p-k45m`, IDA `p3p6-xqr5`, LDC `d84c-dk28`, MTA
   procurement `gpsc-qqsz`. Forward-lead to inspect: "Eye On The Future — MTA
@@ -241,11 +244,21 @@ State this gap in product scope; do not imply NY live-document coverage.
   depending on an undocumented endpoint.
 
 ### Open reads to promote REVIEW -> BUILD (one live GET each)
-- [ ] Read Open NY license verbatim (`https://data.ny.gov/api/views/{id}.json`).
+- [x] Open NY license — RESOLVED 2026-07-03. Public data.ny.gov datasets are
+  usable for commercial/reuse through the official Open Data NY / Socrata access
+  path, subject to the license conditions: (1) no State warranty on accuracy or
+  completeness; (2) use at own risk; (3) user indemnifies / holds the State
+  harmless; (4) downstream product pages should include a data-accuracy
+  disclaimer + source/date attribution. License is revocable.
 - [ ] Read NYC Terms of Use + Admin Code §23-504 verbatim; read Checkbook NYC
   redistribution terms verbatim.
 - [ ] Live-GET each 4x4 for HTTP 200 + schema (esp. CROL `dg92-zbpx` notice-URL/
   body column; SAM `resourceLinks`; data.ny.gov vendor/award-amount fields).
+
+Remaining open questions (golden-copy/connectors legal):
+1. Checkbook NYC redistribution terms.
+2. Whether PASSPort has a sanctioned bulk feed / API from MOCS.
+3. Whether NYSCR licensing / data access is possible through ESD.
 
 ### Document-storage rule (rights-driven)
 - Store raw documents ONLY where a doc link AND reuse rights both hold -> SAM.gov

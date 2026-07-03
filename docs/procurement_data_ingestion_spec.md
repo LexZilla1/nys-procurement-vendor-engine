@@ -114,9 +114,15 @@ deliver NY/NYC live RFP documents — see "NY/NYC RFP document gap and workaroun
     fiscal years).
 11. **Raw bid/RFP documents:** NO.
 12. **Raw-document storage rule:** store **metadata** (no documents exist here).
-13. **Legal/reuse status:** Open NY license — documented-permissive
-    (commercial + redistribution, no attribution) but ~5 pages incl.
-    user-indemnification; **verbatim read PENDING** (Open questions).
+13. **Legal/reuse status:** Open NY license — **READ / RESOLVED 2026-07-03.**
+    Public data.ny.gov datasets are usable for commercial/reuse purposes through
+    the official Open Data NY / Socrata access path, subject to the license
+    conditions: (1) the State gives no warranty on data accuracy or completeness;
+    (2) users rely on the data at their own risk; (3) users indemnify / hold the
+    State harmless; (4) downstream product pages should include a data-accuracy
+    disclaimer + source/date attribution. The license is revocable. Practical
+    build impact: safe to build on now; surface the disclaimer + attribution in
+    any vendor-facing view that renders this data.
 14. **Failure modes:** annual-only freshness (stale mid-year); PARIS reporting
     lag/gaps; schema differences across authority-type reports; 4x4 drift;
     `e3e7-qwer` may be a viz/derived view, not a base dataset.
@@ -330,16 +336,27 @@ retaining or redistributing NYSCR/PASSPort-protected document bodies.
 
 ---
 
+## Resolved (2026-07-03)
+
+- **Open NY license — RESOLVED.** The Open NY license was read on 2026-07-03. It
+  confirms public data.ny.gov datasets are usable for commercial/reuse purposes
+  through the official Open Data NY / Socrata access path, subject to conditions.
+  The license is revocable and includes important conditions/disclaimers:
+  (1) the State gives no warranty about data accuracy or completeness;
+  (2) users rely on the data at their own risk;
+  (3) users indemnify / hold the State harmless;
+  (4) downstream product pages should include a data-accuracy disclaimer and
+  source/date attribution.
+  Build impact: Open Data NY is cleared for build; carry the disclaimer +
+  attribution in any vendor-facing view rendering this data.
+
 ## Open questions (block promotion / must be resolved by a human)
 
-- **Open NY license — verbatim read.** Confirm commercial-use, redistribution,
-  and indemnification clauses at `https://data.ny.gov/api/views/{id}.json`
-  (`.license`) and the linked Terms of Use before relying on Open Data NY reuse.
-- **Checkbook NYC redistribution terms.** Verify the exact reuse/redistribution
-  terms before any commercial redistribution of Checkbook-sourced data.
-- **PASSPort sanctioned feed.** Ask NYC MOCS whether a sanctioned bulk/API feed
-  exists (vs. web viewer + manual export) before depending on any undocumented
-  endpoint.
-- **NYSCR licensing.** Determine whether a data-licensing / sharing arrangement
-  is possible through ESD (written permission is "case-by-case at the sole
-  discretion of the Department") — a BD/legal path, never a scrape.
+1. **Checkbook NYC redistribution terms.** Verify the exact reuse/redistribution
+   terms before any commercial redistribution of Checkbook-sourced data.
+2. **PASSPort sanctioned feed.** Ask NYC MOCS whether a sanctioned bulk feed / API
+   exists (vs. web viewer + manual export) before depending on any undocumented
+   endpoint.
+3. **NYSCR licensing.** Determine whether a data-licensing / data-access
+   arrangement is possible through ESD (written permission is "case-by-case at the
+   sole discretion of the Department") — a BD/legal path, never a scrape.
