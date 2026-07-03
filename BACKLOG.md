@@ -32,6 +32,24 @@
   partial). Non-NY = "out of scope, NY-only" rather than asserting NY rules.
   Source flag and jurisdiction gate are INDEPENDENT checks; neither substitutes
   for the other
+- [ ] NYSCR ToS / IP CONSTRAINT — GATE before any feature retains NYSCR content.
+  Source (verified 2026-07-03): nyscr.ny.gov/policies.cfm — "All Content on any
+  ESD Site is Proprietary... The Department expressly prohibits the copying of
+  any protected materials on this site without written permission," granted
+  case-by-case at ESD's sole discretion.
+  - Cleared for build: (a) public list metadata — title, agency, ad type, dates
+    — are facts, usable as Triage classification vocabulary; (b) vendor downloads
+    own solicitation and uploads to engine for processing FOR THAT VENDOR
+    (own-use, transient).
+  - GATED pending attorney sign-off: any feature that RETAINS NYSCR solicitation
+    body text server-side beyond the uploading vendor's session, feeds it into a
+    shared corpus, or reuses it for lead-gen/other users. Mirrors the existing
+    aggregator-content rule (SOURCE-DECLARATION FLAG above) — now applies to
+    NYSCR-sourced content too.
+  - Open legal question (not to be self-resolved): whether transient per-vendor
+    processing-then-discard counts as prohibited "copying." Low-risk read =
+    permitted own-use; confirm with counsel before productionizing retention.
+  - 12 ad-type labels + list metadata: NOT protected (facts) — safe to use.
 
 ## Next build
 - Step 1 Triage: classify NYSCR ad from metadata (open IFB / sole-source /
