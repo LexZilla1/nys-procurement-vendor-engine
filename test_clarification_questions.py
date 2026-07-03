@@ -137,6 +137,80 @@ def test_states_1_and_2_outputs_are_byte_identical():
 
 
 # --------------------------------------------------------------------------
+# Gap-specific ambiguity woven into the question text
+# --------------------------------------------------------------------------
+
+_IFB_QS = {
+    "contact": "ifbteam@dhses.ny.gov",
+    "deadline": "July 1, 2026",
+    "format": "Exhibit 1 Bidder Questions form",
+    "citation_requirement": "cite page, section, paragraph",
+    "source_citation": "IFB §3.1, p.8",
+}
+_IFB_GAPS = [
+    {"item": "Transmission mounting plate",
+     "gap": "¼\" steel plate spec states thickness but no flatness/tolerance or acceptance criteria",
+     "citation": "Attachment 4, p.1"},
+    {"item": "Warranty scope",
+     "gap": "1-yr/2-yr warranty stated but coverage scope (parts vs labor vs consumables) undefined",
+     "citation": "Solicitation §2.4, p.7"},
+    {"item": "Pre-delivery inspection",
+     "gap": "inspection required by Sept 18 but pass/fail acceptance criteria not specified",
+     "citation": "Solicitation §2.2, p.6"},
+]
+_IFB_RUN = datetime.date(2026, 6, 27)
+
+
+def test_gap_ambiguity_is_woven_into_question_verbatim():
+    r = CQ.generate(_IFB_QS, _IFB_GAPS, run_date=_IFB_RUN)
+    d = r["draft"]
+    # Each specific ambiguity (gap['gap'], verbatim) appears in the question text.
+    assert "no flatness/tolerance or acceptance criteria" in d
+    assert "coverage scope (parts vs labor vs consumables) undefined" in d
+    assert "pass/fail acceptance criteria not specified" in d
+    # The generic sentence is NOT used when a gap ambiguity is present.
+    assert "can you confirm exactly what a bidder must submit or demonstrate" not in d
+    # The neutral verification ask is present.
+    assert "how conformance/acceptance will be verified" in d
+    # Each question carries the verbatim ambiguity + item + citation.
+    assert [q["ambiguity"] for q in r["questions"]] == [g["gap"] for g in _IFB_GAPS]
+    assert [q["rfp_citation"] for q in r["questions"]] == \
+        ["Attachment 4, p.1", "Solicitation §2.4, p.7", "Solicitation §2.2, p.6"]
+
+
+def test_missing_gap_field_falls_back_to_neutral():
+    r = CQ.generate(_IFB_QS, [{"item": "Bid bond", "citation": "p.5"}], run_date=_IFB_RUN)
+    assert "can you confirm exactly what a bidder must submit or demonstrate" in r["draft"]
+    assert r["questions"][0]["ambiguity"] is None
+
+
+def test_empty_gap_field_falls_back_to_neutral():
+    r = CQ.generate(_IFB_QS, [{"item": "Bid bond", "gap": "   ", "citation": "p.5"}],
+                    run_date=_IFB_RUN)
+    assert "can you confirm exactly what a bidder must submit or demonstrate" in r["draft"]
+    assert r["questions"][0]["ambiguity"] is None
+
+
+def test_no_scope_steering_language_in_woven_questions():
+    """Denylist: a woven question must never steer the procurement."""
+    r = CQ.generate(_IFB_QS, _IFB_GAPS, run_date=_IFB_RUN)
+    banned = ("should", "recommend", "we propose", "prefer", "instead of")
+    assert not any(b in r["draft"].lower() for b in banned)
+    for q in r["questions"]:
+        assert not any(b in q["text"].lower() for b in banned)
+
+
+def test_state3_unchanged_by_woven_refinement():
+    """Regression: State 3 (deadline unverified) is unaffected by the template change."""
+    r = CQ.generate(dict(_IFB_QS, deadline=None), _IFB_GAPS, run_date=_IFB_RUN)
+    assert r["draft"] is None and r["status"] == CQ.DEADLINE_UNVERIFIED
+    assert r["can_generate_on_demand"] is True
+    # ...and force=True now weaves the ambiguity into the on-demand draft too.
+    forced = CQ.generate(dict(_IFB_QS, deadline=None), _IFB_GAPS, run_date=_IFB_RUN, force=True)
+    assert "no flatness/tolerance or acceptance criteria" in forced["draft"]
+
+
+# --------------------------------------------------------------------------
 # (c) no gaps → null
 # --------------------------------------------------------------------------
 

@@ -135,6 +135,16 @@ def _gap_citation(gap):
     return None
 
 
+def _gap_ambiguity(gap):
+    """The specific ambiguity the engine found (gap['gap']), verbatim. None if
+    the gap record states no ambiguity — the caller then falls back to neutral
+    phrasing rather than fabricating one."""
+    v = gap.get("gap")
+    if isinstance(v, str) and v.strip():
+        return v.strip()
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Generator
 # ---------------------------------------------------------------------------
@@ -216,12 +226,24 @@ def generate(question_submission, gaps, run_date=None, force=False):
     for i, gap in enumerate(gaps, start=1):
         label = _gap_label(gap)
         cite = _gap_citation(gap)
+        ambiguity = _gap_ambiguity(gap)
         tag = "[RFP {}]".format(cite) if cite else "[RFP citation: please verify location]"
-        text = ('{}. {} Regarding "{}": can you confirm exactly what a bidder must submit or '
-                "demonstrate to satisfy this requirement, and the acceptable form of proof?"
-                .format(i, tag, label))
+        if ambiguity:
+            # Weave the SPECIFIC ambiguity (gap['gap'], verbatim) + the item into a
+            # factual clarifying question. The ask is neutral — it requests the
+            # criteria and how they'll be checked; it never proposes a scope change,
+            # suggests a preferred answer, or steers the procurement.
+            amb = ambiguity.rstrip(" .")
+            text = ("{}. {} {}: {}. Can you confirm the applicable criteria and how "
+                    "conformance/acceptance will be verified?".format(i, tag, label, amb))
+        else:
+            # No stated ambiguity → fall back to the neutral phrasing (unchanged).
+            text = ('{}. {} Regarding "{}": can you confirm exactly what a bidder must submit or '
+                    "demonstrate to satisfy this requirement, and the acceptable form of proof?"
+                    .format(i, tag, label))
         lines.append(text)
-        questions.append({"n": i, "requirement": label, "rfp_citation": cite, "text": text})
+        questions.append({"n": i, "requirement": label, "rfp_citation": cite,
+                          "ambiguity": ambiguity, "text": text})
 
     lines.append("")
     lines.append("Thank you. We will incorporate your response into our submission.")
