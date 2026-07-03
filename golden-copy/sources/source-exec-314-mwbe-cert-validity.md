@@ -20,7 +20,11 @@
 
 ## STATE TEXT (verbatim)
 
-With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years.
+** 5. (a) With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years.
+
+** NB Effective July 1, 2026
+
+* NB Repealed July 1, 2028
 
 ---
 
@@ -29,11 +33,8 @@ With the exception of provisional MWBE certification, as provided for in subdivi
 - sunset_watch: true
 - authorization_expires: 2028-07-01
 - authorizing_vehicle: Part KK FY2025-26 budget (signed 2025-05-08)
-- sunset_date_verified: pending
-- **⚠️ SUNSET DATE IS SECONDARY-SOURCED (law-firm alert + FY26 budget memo). NOT YET PRIMARY-VERIFIED.**
-  Confirm 2028-07-01 against the enacted Part KK budget bill text or the nysenate.gov Art. 15-A
-  effective-date boundary before treating the sunset date as golden. The 5-year VALIDITY rule IS
-  primary-verified; only the program-expiry date is pending.
+- sunset_date_verified: 2026-07-03
+- **Primary-verified 2026-07-03. Source: NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314 — the section page carries the statutory note '* NB Repealed July 1, 2028' directly. Repeal applies to all of Article 15-A (§§310–318); §314 five-year validity terminates with it. Now captured verbatim in STATE TEXT above.**
 - Why this matters: Article 15-A is a sunsetting authorization (orig. 1988), periodically renewed
   (→2024-12-31 →2025-07-01 →2028-07-01). If it lapses without renewal, the entire MWBE rule set
   (including this 5-year validity) is DEAD, not merely stale. A verbatim-correct rule can still be
