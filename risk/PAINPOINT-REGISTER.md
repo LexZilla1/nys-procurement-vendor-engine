@@ -1,4 +1,4 @@
-# LEXZILLA PAIN-POINT REGISTER (evidence layer)
+# NYS PROCUREMENT VENDOR ENGINE — PAIN-POINT REGISTER (evidence layer)
 
 **Purpose.** This is the EVIDENCE layer. Every practitioner pain-point that informs a product feature
 is recorded here first, with its sources, before it is allowed into RISK-MAP.md. Same discipline as the

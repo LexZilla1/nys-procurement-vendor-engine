@@ -1,4 +1,4 @@
-# LEXZILLA RISK MAP (rule-to-risk / production-spec layer)
+# NYS PROCUREMENT VENDOR ENGINE — RISK MAP (rule-to-risk / production-spec layer)
 
 **Purpose.** This is the layer that makes the SaaS better than a human reviewer. The golden copy says
 what each rule SAYS; this map says what GOES WRONG at each rule, what the product should CHECK, and which
