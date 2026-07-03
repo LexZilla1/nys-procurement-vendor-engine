@@ -31,3 +31,50 @@
   (OpenBook NY / NYSCR / data.ny.gov). PREREQUISITE: verify programmatic
   access terms — data.ny.gov Socrata API (clean) vs OpenBook UI (terms
   unverified). No credentials/scraping/auto-send.
+
+## Website / delivery layer — design decisions (not yet built)
+
+- [ ] CURATED PRIMARY-SOURCE DIRECTORY: website hosts a maintained index of
+  links to primary NY procurement sources (osc.ny.gov, ogs.ny.gov,
+  esd.ny.gov, nyscr.ny.gov), each tagged by topic (e.g. "discretionary
+  thresholds," "restricted period list," "MWBE certification," "Contractor
+  Financing Program"). Solves staleness: we maintain the INDEX, not
+  paraphrased content — the live source stays current on its own.
+
+- [ ] BOUNDED QUESTION HAND-OFF (not an open chat box): from a directory
+  entry, user can send a SPECIFIC, PRE-SCOPED question tied to that named
+  primary source into Claude (e.g. "Ask about: NY discretionary purchase
+  thresholds" -> scoped prompt against a named source). Explicitly NOT a
+  general "ask me anything about NY procurement" interface.
+  RATIONALE: open-ended Q&A risks UPL/scope drift (e.g. "should I structure
+  my business as an MWBE," "how do I dispute a non-responsibility finding").
+  Link-scoped questions keep answers bounded to a named, verifiable source.
+
+- [ ] SPECIALIZED CLAUDE CONFIGURATION (delivery layer, not a new product):
+  the bounded hand-off is served by a Claude instance/skill set scoped to
+  our verified golden copy — answers ONLY from cited golden-copy entries,
+  refuses/redirects questions outside that scope. This is the retrieval +
+  reasoning layer over the existing golden copy (46 verified sources) and
+  verification methodology (Tier 1/2, attorney-gated) — NOT a standalone
+  "NYS Tenders Copilot" product. Rejected as a separate initiative because:
+  (a) duplicates the golden copy instead of exposing it, (b) competes on
+  the crowded generic-Q&A layer (see GovWin's "Ask Dela"), (c) open-ended
+  scope increases UPL risk vs. per-tender bounded checks.
+
+## Golden-copy-adjacent — referral content (informational only, not advice)
+
+- [ ] NY CONTRACTOR FINANCING PROGRAM (verified, source: esd.ny.gov):
+  $37M SSBCI-funded loan-loss-reserve program; participating CDFIs/community
+  lenders extend lines of credit (up to $500k) to NY government contractors
+  (revenue <=$5M, <100 employees) to bridge payment-timing gaps. EXCLUDES
+  nonprofits. Named lenders: BOC Capital, Carver Federal Savings, Cooperative
+  Federal, Greater Jamaica Development Corp, Lendistry, Ponce Bank, Pursuit,
+  TruFund. Free SSBCI Technical Assistance (legal/accounting/financial
+  advisory) also available.
+  USE: surface as informational context at Step 8 (post-award/payment) when
+  a payment-delay or prompt-pay-interest situation is flagged. Link only,
+  no lending recommendation (keeps clear of FINRA/advisory exposure).
+  VERIFY BEFORE USE: confirm current program status (funding remaining,
+  active enrollment) at esd.ny.gov before citing as active.
+  GTM NOTE: named lenders + TA providers already reach this exact ICP —
+  potential co-marketing/referral partners, separate from core product build.
