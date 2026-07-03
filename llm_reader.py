@@ -47,6 +47,10 @@ SYSTEM = (
     "- SDVOB participation goals WITH their percentages (separate entry)\n"
     "- Bonding / bid-deposit requirements with amounts\n"
     "- Submission deadline(s), method, and number of copies\n"
+    "- The QUESTION-SUBMISSION instructions bidders use to ask the agency "
+    "clarifying questions: the designated contact (email/address), the question "
+    "deadline (distinct from the bid deadline), any required form/format, and any "
+    "citation requirement — all captured verbatim into question_submission below\n"
     "- Pre-bid / pre-proposal conferences (mandatory or optional) with date/time\n"
     "- References, experience, and staffing / key-personnel requirements\n"
     "- Any disqualification / non-responsiveness triggers and post-award "
@@ -76,6 +80,21 @@ SYSTEM = (
     "{\n"
     '  "tender_title": string|null,\n'
     '  "submission_deadline": string|null,\n'
+    '  "question_submission": {              // how bidders submit clarifying '
+    "questions to the agency; the WHOLE object is null if the tender has no such "
+    "block. Every field verbatim from the solicitation; null if that field isn't "
+    "stated.\n"
+    '    "contact": string|null,             // designated contact email/address, '
+    "as printed\n"
+    '    "deadline": string|null,            // question deadline, as printed '
+    "(distinct from the bid submission_deadline)\n"
+    '    "format": string|null,              // required form/format (e.g. '
+    '"Exhibit 1 Bidder Questions form"); null if none stated\n'
+    '    "citation_requirement": string|null,// e.g. "cite page, section, '
+    'paragraph"; null if none stated\n'
+    '    "source_citation": string|null      // the RFP section this was read from '
+    '(e.g. "§3.1")\n'
+    "  },\n"
     '  "requirements": [\n'
     "    {\n"
     '      "category": string,            // MUST be one of: "certifications", '
