@@ -349,7 +349,7 @@ The two document types have very different privacy needs, so they get different 
   → **Phase 3 reading = LLM on controlled infra (no-retention / self-hosted).**
 
 ### "Your machine" = the company's controlled infrastructure, not the vendor's device
-Privacy is protected by the COMPANY (LexZilla) processing uploads on infrastructure IT controls and
+Privacy is protected by the COMPANY processing uploads on infrastructure IT controls and
 NOT forwarding them to any third-party AI service — not by requiring the model to run on the vendor's
 laptop (impractical for capable models). Trust story to vendors: "Your documents are processed on our
 secured systems and are never sent to any outside AI service or used to train anyone's model." This
