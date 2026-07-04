@@ -268,3 +268,29 @@ Remaining open questions (golden-copy/connectors legal):
   aggregator ToS gates above). Per-vendor transient processing only.
 - Metadata rows, retain freely -> all NYC/NYS Socrata datasets and Checkbook
   (open reuse; contain no documents anyway).
+
+## Payment-clock features (RM-2 reframe, 2026-07-04)
+
+- [ ] PROPER-INVOICE PRE-FLIGHT is the flagship payment feature. Already BUILT
+  as RM-5 (proper-invoice required-field check, grounded in GFO XII.4.F +
+  §109 vendor certificate). Promote it in product framing — this is the
+  headline payment capability, not a secondary check.
+- [ ] VOUCHER-REJECTION TRIAGE using the XII.7.B 66 denial codes (the golden
+  copy already holds them). Map each denial code -> plain-language fix so a
+  vendor whose voucher was denied knows exactly what to correct.
+- [ ] 15-DAY SMALL BUSINESS CERTIFICATION CHECK at vendor onboarding (SFL
+  §179-f). Vendor self-certifies in the SFS portal; criteria: NY-based,
+  independently owned, <=200 employees, e-invoice required. Surface the check
+  and the 15-day window at onboarding.
+- [ ] MIR-DATE + QUARTER-RATE AUDIT of auto-paid prompt-payment interest — audit
+  whether the interest the State auto-paid matches the correct quarter's rate
+  from the MIR (Merchandise/Invoice Received) date. Uses nysinterestrates.csv.
+- [ ] DELAY-COST QUANTIFICATION — information only; NO financing advice
+  (FINRA-safe boundary per PHASE2 spec §1.5). Quantify the cost of a payment
+  delay for the vendor's awareness; never recommend a financing product.
+- NOTE: RM-2 recovery framing is DEPRECATED — vendor-side interest is auto-paid
+  by SFS (GFO XIV.13.A); NFP Article 11-B interest averages ~$883/contract. The
+  attorney gate on RM-2 output wording remains in force.
+- [ ] STEP 6 FILL: all 5 forms verified AcroForm (212 / 193 / 217 / 176 / 21
+  fields). Client-side fill; no TIN/DOB persistence. AC 3237-S is the first
+  module (brief to follow separately).
