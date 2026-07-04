@@ -32,10 +32,10 @@ NOTICE = ("Draft for vendor review — signature and Part V certification must b
 SAMPLE_PROFILE = {
     "legal_business_name": "Acme Widgets LLC",
     "dba": "Acme",
-    "entity_type": "Limited Liability Co.",         # radio -> unfilled (unconfirmed)
+    "entity_type": "Limited Liability Co.",         # radio -> /3 (confirmed map)
     "entity_type_other": "",
     "tin": "000000000",                              # placeholder, never a real TIN
-    "tin_type": "EIN",                               # radio -> unfilled (unconfirmed)
+    "tin_type": "EIN",                               # radio -> /0 (confirmed map)
     "remittance_address_street": "100 Example St, Suite 2",
     "remittance_address_csz": "Albany, NY 12207-0000",
     "ordering_address_street": "100 Example St, Suite 2",
@@ -53,17 +53,55 @@ SAMPLE_PROFILE = {
 def _write_pdf(pdf_path, values):
     """Best-effort filled draft via pypdf. Returns output path or a reason string."""
     try:
-        from pypdf import PdfReader, PdfWriter
+        import pdfrw
     except Exception as exc:
-        return "pypdf unavailable (%s) — report printed, no PDF written" % type(exc).__name__
-    reader = PdfReader(pdf_path)
-    writer = PdfWriter()
-    writer.append(reader)
-    for page in writer.pages:
-        writer.update_page_form_field_values(page, values)
+        return "pdfrw unavailable (%s) — report printed, no PDF written" % type(exc).__name__
+
+    def _txt(x):
+        s = str(x) if x is not None else None
+        return s[1:-1] if s and s.startswith("(") and s.endswith(")") else s
+
+    def _fq(field):
+        parts, n = [], field
+        while n is not None:
+            t = _txt(n.T)
+            if t:
+                parts.append(t)
+            n = n.Parent
+        return ".".join(reversed(parts))
+
+    def _terminals(fields):
+        for f in fields or []:
+            kids = f.Kids or []
+            # a kid is a terminal field if it has its own /T (name); pure widget
+            # kids (radio options) have no /T and belong to their parent.
+            named_kids = [k for k in kids if _txt(k.T)]
+            if named_kids:
+                for k in named_kids:
+                    yield k
+            else:
+                yield f
+
+    tpl = pdfrw.PdfReader(pdf_path)
+    for f in _terminals(tpl.Root.AcroForm.Fields):
+        name = _fq(f)
+        if name not in values:
+            continue
+        val = values[name]
+        ft = str(f.FT) if f.FT else None
+        if ft == "/Btn":                                   # radio: set /V + kid /AS
+            st = pdfrw.PdfName(val.lstrip("/"))
+            f.V = st
+            for k in (f.Kids or [f]):
+                ap = k.AP.N if k.AP else None
+                keys = [str(s) for s in (ap.keys() if ap else [])]
+                k.AS = st if ("/" + val.lstrip("/")) in keys else pdfrw.PdfName("Off")
+        else:                                              # text
+            f.V = pdfrw.PdfString.encode(val)
+    # ask viewers to render appearances for the values we set
+    tpl.Root.AcroForm.update(pdfrw.PdfDict(NeedAppearances=pdfrw.PdfObject("true")))
     out = os.path.join(tempfile.gettempdir(), "ac3237s-draft.pdf")
-    with open(out, "wb") as fh:
-        writer.write(fh)
+    pdfrw.PdfWriter().write(out, tpl)
     return out
 
 

@@ -30,23 +30,51 @@ ATTESTATION_FIELDS = {
 # (a) config completeness — config covers EXACTLY the real 21 AcroForm fields
 # --------------------------------------------------------------------------
 
+PDF_FIXTURE = os.path.join("tests", "fixtures", "ac3237s.pdf")
+
+
+def _real_field_names():
+    """Prefer LIVE extraction from the committed PDF (pdfrw); fall back to the
+    committed inventory (itself PDF-generated) if pdfrw isn't installed."""
+    try:
+        sys.path.insert(0, "scripts")
+        from extract_acroform_fields import extract
+        return [f["name"] for f in extract(PDF_FIXTURE)["fields"]], "live-PDF"
+    except Exception:
+        inv = json.load(open(FIELDS_FIXTURE, encoding="utf-8"))
+        return [f["name"] for f in inv["fields"]], "committed-inventory"
+
+
 def test_config_covers_exactly_the_real_field_inventory():
-    """Tradeoff: the PDF binary was unavailable in the build session, so the
-    authoritative pikepdf field dump is committed as the fixture and the config
-    is asserted against it (swap to live PDF extraction once the PDF is added)."""
-    inv = json.load(open(FIELDS_FIXTURE, encoding="utf-8"))
-    real_names = [f["name"] for f in inv["fields"]]
-    assert len(real_names) == 21 and inv["field_count"] == 21
-    assert len(real_names) == len(set(real_names)), "duplicate names in inventory"
+    """Config must cover EXACTLY the 21 real AcroForm fields, each once. Primary
+    source is live extraction from the committed PDF (tests/fixtures/ac3237s.pdf);
+    the committed inventory is the offline fallback."""
+    real_names, source = _real_field_names()
+    assert len(real_names) == 21, (source, len(real_names))
+    assert len(real_names) == len(set(real_names)), "duplicate names in %s" % source
 
     cfg_names = list(CONFIG["fields"].keys())
     assert len(cfg_names) == len(set(cfg_names)), "a field appears twice in the config"
-    # Every real field appears exactly once; no invented fields.
     assert set(cfg_names) == set(real_names), {
+        "source": source,
         "missing_from_config": sorted(set(real_names) - set(cfg_names)),
         "extra_in_config": sorted(set(cfg_names) - set(real_names)),
     }
     assert CONFIG["field_count"] == 21
+
+
+def test_committed_inventory_matches_the_committed_pdf():
+    """The committed inventory fixture must equal a fresh extraction from the
+    committed PDF (guards against a stale fixture). Skips only if pdfrw absent."""
+    try:
+        sys.path.insert(0, "scripts")
+        from extract_acroform_fields import extract
+    except Exception:
+        return
+    live = {f["name"] for f in extract(PDF_FIXTURE)["fields"]}
+    committed = {f["name"] for f in json.load(open(FIELDS_FIXTURE, encoding="utf-8"))["fields"]}
+    assert live == committed, {"only_live": sorted(live - committed),
+                               "only_committed": sorted(committed - live)}
 
 
 def test_config_types_match_the_real_pdf():
@@ -111,32 +139,45 @@ def test_partial_profile_produces_correct_unfilled_list():
     assert r["values"] == {"1. Legal Business Name": "Acme Widgets LLC",
                            "TIN": "000000000"}
     unfilled = {u["field"] for u in r["unfilled"]}
-    # every other factual field is unfilled, incl. the two unconfirmed radios
+    # every other factual field is unfilled, incl. the radios (no value supplied)
     assert "2. DBA" in unfilled and "Email Address" in unfilled
     assert "Entity Type" in unfilled and "Taxpayer ID Type" in unfilled
     # attestation fields are NOT in unfilled (they're skipped, not "to fill by data")
     assert not (ATTESTATION_FIELDS & unfilled)
-    # radios carry the "select by hand" reason
+    # missing-data reason (not a radio-confirmation reason)
     ent = next(u for u in r["unfilled"] if u["field"] == "Entity Type")
-    assert "by hand" in ent["reason"]
+    assert "no value for profile key" in ent["reason"]
 
 
-def test_unconfirmed_radio_is_unfilled_even_when_value_present():
-    profile = {"entity_type": "Corporation", "tin_type": "EIN"}
-    r = build_fill_values(CONFIG, profile)
-    assert "Entity Type" not in r["values"]        # never a guessed checkbox state
-    assert "Taxpayer ID Type" not in r["values"]
+def test_confirmed_radios_fill_from_the_real_config():
+    """Both radio groups are confirmed against the PDF widgets, so a supplied
+    value maps to the correct export state."""
+    r = build_fill_values(CONFIG, {"entity_type": "Corporation", "tin_type": "EIN"})
+    assert r["values"]["Entity Type"] == "/4"          # Corporation
+    assert r["values"]["Taxpayer ID Type"] == "/0"     # EIN
+    r2 = build_fill_values(CONFIG, {"entity_type": "Limited Liability Co."})
+    assert r2["values"]["Entity Type"] == "/3"
+
+
+def test_radio_value_not_in_map_routes_to_unfilled():
+    # "Other" has no radio state (vendor uses the Other Entity Type text field).
+    r = build_fill_values(CONFIG, {"entity_type": "Other"})
+    assert "Entity Type" not in r["values"]            # never a guessed state
     unfilled = {u["field"] for u in r["unfilled"]}
-    assert {"Entity Type", "Taxpayer ID Type"} <= unfilled
+    assert "Entity Type" in unfilled
+    ent = next(u for u in r["unfilled"] if u["field"] == "Entity Type")
+    assert "not in value_map" in ent["reason"]
 
 
-def test_confirmed_radio_fills_from_value_map():
-    # Prove the engine WILL fill a radio once the mapping is confirmed.
+def test_unconfirmed_radio_still_routes_to_unfilled():
+    # Regression guard: flip a radio back to unconfirmed -> unfilled with the
+    # by-hand reason, even when a value is present.
     cfg = json.loads(json.dumps(CONFIG))
-    cfg["fields"]["Taxpayer ID Type"]["value_map"] = {"EIN": "/0", "SSN": "/1"}
-    cfg["fields"]["Taxpayer ID Type"]["value_map_confirmed"] = True
+    cfg["fields"]["Taxpayer ID Type"]["value_map_confirmed"] = False
     r = build_fill_values(cfg, {"tin_type": "EIN"})
-    assert r["values"]["Taxpayer ID Type"] == "/0"
+    assert "Taxpayer ID Type" not in r["values"]
+    tid = next(u for u in r["unfilled"] if u["field"] == "Taxpayer ID Type")
+    assert "by hand" in tid["reason"]
 
 
 def test_fill_report_shape():
