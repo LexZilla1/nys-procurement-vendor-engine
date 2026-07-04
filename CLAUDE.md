@@ -45,7 +45,7 @@ STOP and wait for Randi's "merge" (or requested changes).
 Exception — auto-merge allowed ONLY for: freshness-clean automation PRs,
 and typo/doc-comment-only changes touching no code, no golden copy, no
 config. Everything else waits.
-Note: PRs #29–#32 were merged under prompts that pre-authorized squash-merge;
+Note: PRs #29–#34 were merged under prompts that pre-authorized squash-merge;
 this policy applies from this PR forward.
 
 ## Compliance wording check
