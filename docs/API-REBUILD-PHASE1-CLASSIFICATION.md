@@ -1,6 +1,13 @@
 # Golden-Copy Full-Text Rebuild via Open Legislation API — Phase 1 Report
 
-**Status: Phase 1 (classify) COMPLETE — Phases 2–4 BLOCKED in this
+**UPDATE 2026-07-03: Phases 2–5 are now COMPLETE** using authoritative live
+API texts the user supplied as an upload (`openlegfulltext20260703.zip`). See
+`API-REBUILD-PHASE5-REPORT.md` for verdicts, actions, and verification. The
+original Phase-1 blocker note is retained below for provenance.
+
+---
+
+**Status (original run): Phase 1 (classify) COMPLETE — Phases 2–4 BLOCKED in this
 environment.** Two independent blockers, verified at run time:
 
 1. `NYSLEG_API_KEY` is not set in this session's environment.

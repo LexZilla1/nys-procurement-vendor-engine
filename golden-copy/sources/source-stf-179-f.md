@@ -5,6 +5,9 @@
 - **Issued by:** New York State Legislature; published via NY State Senate Open Legislation (STF Chapter 56, Article 11-A)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/179-F
 - **Copied exactly on:** 2026-06-29
+- **API activeDate:** 2017-04-14
+- **Capture method:** openleg-api-v3
+- **Covers:** full section
 
 > Source captured as a print-to-PDF of the live NY Open Legislation page (footer timestamp 6/29/26,
 > URL and page numbers intact). The page's narrow print column wrapped some words across lines

@@ -5,6 +5,9 @@
 - **Issued by:** New York State Legislature; published via NY State Senate Open Legislation (STF Chapter 56, Article 11)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/163
 - **Copied exactly on:** 2026-06-29
+- **API activeDate:** 2026-06-19
+- **Capture method:** openleg-api-v3
+- **Covers:** full section
 
 > Everything below the line is the statute text, copied word-for-word from NY Open Legislation
 > (pasted raw, then diff-verified). The leading asterisk (*) before the section heading and the

@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC)
 - **Link (permanent identifier):** https://www.osc.ny.gov/files/vendors/2017-11/vendor-form-ac3237s-fe.pdf
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC form — verbatim certification clause (manual capture)
 
 > Everything below the line is the State's own form text and instructions, extracted word-for-word
 > from the official PDF. This is a fillable form; blank fill-in lines are represented plainly. The

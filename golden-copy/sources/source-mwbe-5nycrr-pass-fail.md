@@ -7,6 +7,7 @@
   - Live per-section NYCRR (cross-check source): https://www.law.cornell.edu/regulations/new-york/5-NYCRR-142.6 (and sibling §§ 140.1, 142.4, 142.7, 142.8, 142.12)
   - Statutory parent: NY Executive Law Article 15-A (§§ 310–316)
 - **Copied exactly on:** 2026-06-29
+- **Covers:** regulation excerpt (5 NYCRR Parts 140–145) — manual capture
 
 > **Scope of this file.** This is a TARGETED capture: only the provisions of 5 NYCRR Parts 140–145
 > that determine whether a bidding/contracting vendor's submission is accepted or rejected. The full

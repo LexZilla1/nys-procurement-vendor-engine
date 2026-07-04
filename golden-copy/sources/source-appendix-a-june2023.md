@@ -5,6 +5,7 @@
 - **Issued by:** New York State Department of Law (Attorney General); published via NYS Office of General Services (OGS)
 - **Link (permanent identifier):** https://ogs.ny.gov/procurement/appendix  (June 2023 live PDF example: https://grantsmanagement.ny.gov/system/files/documents/2024/04/april_2024_appendix_a.pdf)
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OGS Appendix A standard clauses — full document (manual capture)
 
 > Everything below the line is the State's own text — the 27 standard clauses — copied
 > word-for-word from the official June 2023 Appendix A. This is the only Appendix A text the system

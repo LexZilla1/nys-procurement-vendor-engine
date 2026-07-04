@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), Guide to Financial Operations
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-agencies/gfo/chapter-xii/xii5i-prompt-payment-interest
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. This page is structured as
 > a parent overview plus two expandable sub-panels ("Prompt Payment Interest Eligibility" and "Prompt

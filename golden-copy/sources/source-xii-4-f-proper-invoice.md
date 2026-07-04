@@ -9,6 +9,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), Guide to Financial Operations
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-agencies/gfo/chapter-xii/xii4f-proper-invoice
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. Nothing here is
 > reworded. Citations to other laws (e.g. "§ 179-f(3)(b)") appear exactly as the State wrote

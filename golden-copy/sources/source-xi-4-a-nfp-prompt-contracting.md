@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), Guide to Financial Operations
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-agencies/gfo/chapter-xi/xi4a-not-profit-prompt-contracting
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word, including the full
 > time-frame table, the six-part interest test, and all six worked examples. Nothing here is

@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), State Vendors
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-vendors/vendrep/vendor-responsibility-forms
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OSC forms-index page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. This page is an index of
 > forms; the linked form documents (CCA-2, AC 3273-S, etc.) are separate files. Nothing here is
