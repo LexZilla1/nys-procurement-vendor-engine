@@ -1,0 +1,54 @@
+{
+  "_schema": {
+    "purpose": "Language-agnostic field-mapping config for a fillable NYS AcroForm. Directly consumable by the Python reference engine (pipeline/form_fill.py) and, later, the pdf-lib browser client. See data/config/forms/README.md for the full schema.",
+    "field_entry": {
+      "class": "'factual' (auto-fillable from the vendor profile) or 'attestation' (NEVER auto-filled — a person must complete it).",
+      "type": "AcroForm field type as extracted: '/Tx' (text) or '/Btn' (checkbox/radio).",
+      "profile_key": "factual only — the vendor-profile dict key this field maps from.",
+      "value_map": "radio /Btn only — {profile value -> export state}. Used to fill a radio ONLY when value_map_confirmed is true.",
+      "value_map_confirmed": "radio /Btn only — false means the export-state<->label order was NOT confirmed from the real PDF widgets, so the engine must route the field to the UNFILLED list (never guess a checkbox state)."
+    }
+  },
+  "form_id": "ac3237s",
+  "form_name": "AC 3237-S — NYS Substitute Form W-9",
+  "revision": "Rev. 1/17",
+  "source_url": "https://www.osc.ny.gov/files/vendors/2017-11/vendor-form-ac3237s-fe.pdf",
+  "field_count": 21,
+  "extraction": "AcroForm field names extracted via pikepdf from the canonical OSC PDF (17 /Tx + 4 /Btn). Verified against the golden-copy text capture source-ac3237s-substitute-w9.md for layout. Inventory: tests/fixtures/ac3237s_fields.json.",
+  "fields": {
+    "1. Legal Business Name": {"class": "factual", "type": "/Tx", "profile_key": "legal_business_name"},
+    "2. DBA": {"class": "factual", "type": "/Tx", "profile_key": "dba"},
+    "Other Entity Type": {"class": "factual", "type": "/Tx", "profile_key": "entity_type_other"},
+    "TIN": {"class": "factual", "type": "/Tx", "profile_key": "tin"},
+    "1 Street Address": {"class": "factual", "type": "/Tx", "profile_key": "remittance_address_street"},
+    "1 City State and Nine Digit Zip Code or Country": {"class": "factual", "type": "/Tx", "profile_key": "remittance_address_csz"},
+    "2 Street Address": {"class": "factual", "type": "/Tx", "profile_key": "ordering_address_street"},
+    "2 City State and Nine Digit Zip Code or Country_2": {"class": "factual", "type": "/Tx", "profile_key": "ordering_address_csz"},
+    "Email Address": {"class": "factual", "type": "/Tx", "profile_key": "business_email"},
+    "Primary Contact Name": {"class": "factual", "type": "/Tx", "profile_key": "primary_contact_name"},
+    "Primary Title": {"class": "factual", "type": "/Tx", "profile_key": "primary_contact_title"},
+    "Primary Email Address": {"class": "factual", "type": "/Tx", "profile_key": "primary_contact_email"},
+    "phone number": {"class": "factual", "type": "/Tx", "profile_key": "primary_contact_phone"},
+
+    "Entity Type": {
+      "class": "factual", "type": "/Btn", "profile_key": "entity_type",
+      "value_map": null,
+      "value_map_confirmed": false,
+      "note": "Part I item 3 radio, export states /0-/9 (10) but the form shows 11 visual labels (Individual … Other). The export-state<->label binding could NOT be confirmed from the field dump (10 vs 11), so the engine routes this to UNFILLED — the vendor checks the box by hand. Confirm each widget's export value against its Rect/label from the PDF, then populate value_map and set value_map_confirmed:true."
+    },
+    "Taxpayer ID Type": {
+      "class": "factual", "type": "/Btn", "profile_key": "tin_type",
+      "value_map_provisional": {"EIN": "/0", "SSN": "/1", "ITIN": "/2", "N/A": "/3"},
+      "value_map": null,
+      "value_map_confirmed": false,
+      "note": "Part II radio, export states /0-/3 = EIN/SSN/ITIN/N-A per the form text. Provisional order recorded but NOT confirmed against the PDF widgets, so the engine routes this to UNFILLED until confirmed."
+    },
+
+    "Subject to Backup Witholding": {"class": "attestation", "type": "/Btn", "note": "Part V certification radio. Field name kept verbatim incl. OSC's 'Witholding' typo. Never auto-filled."},
+    "Exempt Payee": {"class": "attestation", "type": "/Btn", "note": "Tax-status claim the vendor must decide — not the engine. Never auto-filled."},
+    "Certification Date": {"class": "attestation", "type": "/Tx", "note": "Signed by a person; never auto-filled."},
+    "Print Preparer's Name": {"class": "attestation", "type": "/Tx", "note": "Preparer block; never auto-filled."},
+    "Preparer's Phone Number": {"class": "attestation", "type": "/Tx", "note": "Preparer block; never auto-filled."},
+    "Preparer's Email Address": {"class": "attestation", "type": "/Tx", "note": "Preparer block; never auto-filled."}
+  }
+}
