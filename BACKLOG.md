@@ -55,6 +55,11 @@
 - Step 1 Triage: classify NYSCR ad from metadata (open IFB / sole-source /
   award-notice / RFI); flag the ~8% non-biddable. Pure rules, smallest build.
 
+## Step 1 Triage — follow-ups
+- [ ] Consider adding `citations_to_ad_text` to the LLM fallback (Step 4) output
+  for auditability. Requires a deliberate prompt revision + test update. Not
+  urgent — the current contract is `{triage_class, confidence, reason}`.
+
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
   Primary-verified against NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314:
