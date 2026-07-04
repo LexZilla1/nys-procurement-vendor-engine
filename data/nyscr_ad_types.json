@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "purpose": "NYSCR ad-type label -> triage class config table (Step 3). Config, not code constants.",
+    "provisional_note": "EVERY label is provisional:true. The label set was verified via 2x live fetch of nyscr.ny.gov, NOT yet dual-model cross-checked. Consuming code MUST check the provisional flag: a provisional label may only produce a confident (high) BIDDABLE/NON_BIDDABLE via an exact rule match; a provisional label with low confidence must fall through to HUMAN_REVIEW (never-green invariant).",
+    "discretionary_note": "The five discretionary bands and their dollar thresholds are provisional and NOT dual-verified against SFL 163(6)/OGS guidance; treat the thresholds as descriptive, not authoritative.",
+    "count": 12,
+    "classes": {"BIDDABLE": 7, "NON_BIDDABLE": 4, "EDGE": 1}
+  },
+  "labels": [
+    {"label": "General", "aliases": ["General Solicitation", "Regular"], "class": "BIDDABLE", "provisional": true, "reason": "open competitive solicitation available to all responsive bidders", "citation_id": "SFL-ART-11"},
+    {"label": "Discretionary Purchase — general (up to $50,000)", "aliases": ["Discretionary General", "Discretionary Band 1"], "class": "BIDDABLE", "provisional": true, "reason": "discretionary competitive band (provisional threshold) — open for quotes", "citation_id": "SFL-163-6"},
+    {"label": "Discretionary Purchase — NYS small business (up to $200,000)", "aliases": ["Discretionary Small Business", "Discretionary Band 2"], "class": "BIDDABLE", "provisional": true, "reason": "discretionary band for NYS small business (provisional threshold) — biddable", "citation_id": "SFL-163-6"},
+    {"label": "Discretionary Purchase — certified MWBE (up to $200,000)", "aliases": ["Discretionary MWBE", "Discretionary Band 3"], "class": "BIDDABLE", "provisional": true, "reason": "discretionary band for NYS-certified MWBE (provisional threshold) — biddable", "citation_id": "SFL-163-6"},
+    {"label": "Discretionary Purchase — certified SDVOB (up to $200,000)", "aliases": ["Discretionary SDVOB", "Discretionary Band 4"], "class": "BIDDABLE", "provisional": true, "reason": "discretionary band for NYS-certified SDVOB (provisional threshold) — biddable", "citation_id": "SFL-163-6"},
+    {"label": "Discretionary Purchase — recycled/remanufactured (up to $200,000)", "aliases": ["Discretionary Recycled", "Discretionary Band 5"], "class": "BIDDABLE", "provisional": true, "reason": "discretionary band for recycled/remanufactured commodities (provisional threshold) — biddable", "citation_id": "SFL-163-6"},
+    {"label": "Continuous Procurement Solicitation", "aliases": ["Continuous Recruitment", "Continuous Solicitation"], "class": "BIDDABLE", "provisional": true, "reason": "continuously open solicitation accepting responses on a rolling basis", "citation_id": "SFL-ART-11"},
+
+    {"label": "Single/Sole Source Notice", "aliases": ["Sole Source", "Single Source", "Sole/Single Source", "Exempt Notice"], "class": "NON_BIDDABLE", "provisional": true, "reason": "award/exemption notice, not open solicitation", "citation_id": "SFL-163-10"},
+    {"label": "Request for Information", "aliases": ["RFI", "RFC", "Request for Comment", "Request for Information/Comment"], "class": "NON_BIDDABLE", "provisional": true, "reason": "RFI/RFC — information gathering, not a solicitation for award", "citation_id": null},
+    {"label": "Surplus Property", "aliases": ["Surplus", "Surplus/Auction", "Asset Disposal"], "class": "NON_BIDDABLE", "provisional": true, "reason": "surplus-property disposal/auction, not a procurement of goods or services", "citation_id": null},
+    {"label": "Contractor Ads", "aliases": ["Contractor Advertisement", "Subcontractor Opportunity", "Contractor Notice"], "class": "NON_BIDDABLE", "provisional": true, "reason": "contractor advertisement, not an agency solicitation", "citation_id": null},
+
+    {"label": "Grant / Notice of Funds Availability", "aliases": ["Grant Opportunity", "NOFA", "Notice of Funding Availability", "Grant"], "class": "EDGE", "provisional": true, "route": "grant_flow", "reason": "grant / notice of funds availability — tagged for grant_flow (route not yet built; no downstream call)", "citation_id": null}
+  ],
+  "sole_source_triggers": [
+    "sole source", "single source", "sole-source", "single-source",
+    "notice of award", "award notice", "intent to award", "contract award",
+    "exempt from competitive", "exemption from competitive bidding",
+    "only one responsible", "proprietary to"
+  ]
+}

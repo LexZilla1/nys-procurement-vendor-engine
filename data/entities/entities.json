@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "purpose": "Authoritative issuer lookup for the Step 1 Triage jurisdiction gate.",
+    "matching": "normalized exact match + explicit alias table ONLY. No fuzzy/keyword matching: the bare token 'Authority' in a name proves nothing. Unmatched issuer -> AMBIGUOUS -> HUMAN_REVIEW.",
+    "snapshot_note": "Static, hand-curated snapshot committed to the repo (offline; no runtime network). This is a REPRESENTATIVE subset, not the full ABO/agency rosters; refresh + expand via scripts/refresh_entities.py against the data.ny.gov ABO datasets. Each row carries its own list_source + list_capture_date.",
+    "types": ["STATE_AGENCY", "AUTHORITY", "SUNY_CUNY"]
+  },
+  "entities": [
+    {"name": "Office of General Services", "type": "STATE_AGENCY", "aliases": ["OGS", "NYS OGS", "Office of General Services (OGS)"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Transportation", "type": "STATE_AGENCY", "aliases": ["DOT", "NYSDOT", "NYS DOT", "New York State Department of Transportation"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Health", "type": "STATE_AGENCY", "aliases": ["DOH", "NYSDOH", "New York State Department of Health"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Environmental Conservation", "type": "STATE_AGENCY", "aliases": ["DEC", "NYSDEC"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Taxation and Finance", "type": "STATE_AGENCY", "aliases": ["Tax and Finance", "DTF", "Department of Tax and Finance"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Office of Children and Family Services", "type": "STATE_AGENCY", "aliases": ["OCFS"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Corrections and Community Supervision", "type": "STATE_AGENCY", "aliases": ["DOCCS"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Office of Information Technology Services", "type": "STATE_AGENCY", "aliases": ["ITS", "NYS ITS"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Department of Labor", "type": "STATE_AGENCY", "aliases": ["DOL", "NYSDOL"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Office of Mental Health", "type": "STATE_AGENCY", "aliases": ["OMH"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+    {"name": "Division of State Police", "type": "STATE_AGENCY", "aliases": ["State Police", "NYSP"], "list_source": "https://www.ny.gov/agencies", "list_capture_date": "2026-07-04"},
+
+    {"name": "Metropolitan Transportation Authority", "type": "AUTHORITY", "aliases": ["MTA", "MTA New York City Transit", "NYCT"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset, ehig-g5x3 issuer roster)", "list_capture_date": "2026-07-04"},
+    {"name": "Empire State Development", "type": "AUTHORITY", "aliases": ["ESD", "ESDC", "Empire State Development Corporation", "Urban Development Corporation", "UDC", "New York State Urban Development Corporation"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "Dormitory Authority of the State of New York", "type": "AUTHORITY", "aliases": ["DASNY", "Dormitory Authority"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "New York State Thruway Authority", "type": "AUTHORITY", "aliases": ["Thruway Authority", "NYSTA"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "New York Power Authority", "type": "AUTHORITY", "aliases": ["NYPA", "Power Authority", "Power Authority of the State of New York"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "New York State Energy Research and Development Authority", "type": "AUTHORITY", "aliases": ["NYSERDA"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "Port Authority of New York and New Jersey", "type": "AUTHORITY", "aliases": ["Port Authority", "PANYNJ", "PA NY NJ"], "list_source": "https://data.ny.gov/ (ABO — bi-state compact authority)", "list_capture_date": "2026-07-04"},
+    {"name": "Long Island Power Authority", "type": "AUTHORITY", "aliases": ["LIPA"], "list_source": "https://data.ny.gov/ (ABO State Authorities dataset)", "list_capture_date": "2026-07-04"},
+    {"name": "Erie County Industrial Development Agency", "type": "AUTHORITY", "aliases": ["Erie County IDA", "ECIDA"], "list_source": "https://data.ny.gov/ (ABO Local Authorities dataset — IDAs)", "list_capture_date": "2026-07-04"},
+    {"name": "Monroe County Industrial Development Corporation", "type": "AUTHORITY", "aliases": ["Monroe County IDC", "MCIDC"], "list_source": "https://data.ny.gov/ (ABO Local Authorities dataset — LDCs)", "list_capture_date": "2026-07-04"},
+
+    {"name": "State University of New York", "type": "SUNY_CUNY", "aliases": ["SUNY", "SUNY System", "State University of New York System"], "list_source": "https://www.suny.edu/campuses/", "list_capture_date": "2026-07-04"},
+    {"name": "City University of New York", "type": "SUNY_CUNY", "aliases": ["CUNY", "CUNY System"], "list_source": "https://www.cuny.edu/about/colleges-schools/", "list_capture_date": "2026-07-04"},
+    {"name": "University at Buffalo", "type": "SUNY_CUNY", "aliases": ["SUNY Buffalo", "UB", "University at Buffalo (SUNY)"], "list_source": "https://www.suny.edu/campuses/", "list_capture_date": "2026-07-04"},
+    {"name": "Stony Brook University", "type": "SUNY_CUNY", "aliases": ["SUNY Stony Brook", "Stony Brook (SUNY)"], "list_source": "https://www.suny.edu/campuses/", "list_capture_date": "2026-07-04"}
+  ]
+}

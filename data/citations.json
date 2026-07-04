@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "purpose": "Citation-ID -> human description map for Step 1 Triage. Per the architecture assessment, golden-copy references use STABLE citation IDs, never hardcoded source filenames (which would deepen filename coupling). This map deliberately does NOT point to source-*.md paths; a future citation index can resolve IDs -> files in one place.",
+    "convention": "IDs are jurisdiction/law-anchored (e.g. SFL-ART-11 = State Finance Law Article 11). Non-golden-copy laws (PAL, GML, EDN) are included so jurisdiction-gate reasons can cite WHY a matter is out of the golden copy without inventing coverage."
+  },
+  "citations": {
+    "SFL-ART-11": "State Finance Law Article 11 — State purchasing/contracting (the golden-copy-verified STATE-agency framework).",
+    "SFL-163": "State Finance Law §163 — Purchasing services and commodities.",
+    "SFL-163-6": "State Finance Law §163(6) — discretionary purchasing authority and thresholds (provisional in this build).",
+    "SFL-163-10": "State Finance Law §163(10) — single/sole-source and exemption determinations.",
+    "PAL-2879": "Public Authorities Law §2879 — public-authority procurement contract guidelines (NOT in the golden copy).",
+    "GML": "General Municipal Law — municipal (city/town/village/county/school district) bidding (NOT in the golden copy).",
+    "EDN-SUNY-CUNY": "Education Law — SUNY/CUNY procurement authority (coverage unverified; NOT in the golden copy)."
+  }
+}
