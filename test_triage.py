@@ -306,6 +306,88 @@ def test_classifier_high_confidence_class_passes_through():
     assert r == {"triage_class": BIDDABLE, "confidence": HIGH, "reason": "clear"}
 
 
+# ---- retry / timeout policy (injected transport; no real network) ----------
+
+import contextlib
+
+
+@contextlib.contextmanager
+def _dummy_key():
+    """Provide a non-placeholder key so classify() proceeds to the (injected)
+    transport instead of short-circuiting on the missing key. Never used to call
+    a real API — every test here injects a fake transport."""
+    saved = os.environ.get("ANTHROPIC_API_KEY")
+    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-dummy-not-used"
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+        else:
+            os.environ["ANTHROPIC_API_KEY"] = saved
+
+
+class _FakeBlock:
+    def __init__(self, text):
+        self.type = "text"
+        self.text = text
+
+
+class _FakeMsg:
+    def __init__(self, text, stop_reason=None):
+        self.content = [_FakeBlock(text)]
+        self.stop_reason = stop_reason
+
+
+class _Transport:
+    """Injected transport spy. `script` is a list of outcomes to yield per call:
+    an Exception instance is raised; anything else is returned."""
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls = 0
+
+    def __call__(self, key, model, max_tokens, system, user, timeout):
+        self.calls += 1
+        out = self.script[min(self.calls - 1, len(self.script) - 1)]
+        if isinstance(out, Exception):
+            raise out
+        return out
+
+
+def test_classifier_timeout_retries_then_human_review():
+    # Timeout on every attempt -> 1 + MAX_RETRIES attempts, then HUMAN_REVIEW.
+    t = _Transport([TimeoutError("simulated timeout")])
+    with _dummy_key():
+        r = C.classify("some ad text", transport=t)
+    assert t.calls == C.MAX_RETRIES + 1                 # 3 attempts (2 retries)
+    assert r["triage_class"] == HUMAN_REVIEW and r["confidence"] == LOW
+    assert "attempt" in r["reason"] and "transient" in r["reason"]
+
+
+def test_classifier_transient_then_success_recovers():
+    good = _FakeMsg('{"triage_class":"BIDDABLE","confidence":"high","reason":"open bid"}')
+    t = _Transport([TimeoutError("x"), TimeoutError("x"), good])  # fail twice, then ok
+    with _dummy_key():
+        r = C.classify("ad", transport=t)
+    assert t.calls == 3
+    assert r["triage_class"] == BIDDABLE and r["confidence"] == HIGH
+
+
+def test_classifier_non_transient_error_does_not_retry():
+    t = _Transport([ValueError("bad request")])         # non-transient
+    with _dummy_key():
+        r = C.classify("ad", transport=t)
+    assert t.calls == 1                                 # no retry
+    assert r["triage_class"] == HUMAN_REVIEW and "non-transient" in r["reason"]
+
+
+def test_classifier_refusal_is_human_review_no_retry():
+    t = _Transport([_FakeMsg("", stop_reason="refusal")])
+    with _dummy_key():
+        r = C.classify("ad", transport=t)
+    assert t.calls == 1 and r["triage_class"] == HUMAN_REVIEW
+
+
 def test_default_llm_used_when_no_spy_injected_offline():
     # No spy + no key -> the wired default classifier returns HUMAN_REVIEW, so a
     # STATE non-nyscr opportunity is safely routed (never silently green).

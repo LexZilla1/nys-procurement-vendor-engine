@@ -41,6 +41,24 @@ _ALLOWED = {BIDDABLE, NON_BIDDABLE, EDGE, HUMAN_REVIEW}
 
 MODEL = "claude-sonnet-4-6"
 _MAX_TOKENS = 256
+_TIMEOUT_S = 30            # per-attempt request timeout
+MAX_RETRIES = 2           # retries on TRANSIENT failures only (3 attempts max)
+
+# Transient failure classes worth retrying (timeout / connection / 5xx / 429).
+# Matched by isinstance for the stdlib bases and by class name for the anthropic
+# SDK's exceptions (so we don't hard-depend on importing them here).
+_TRANSIENT_NAMES = frozenset({
+    "APITimeoutError", "APIConnectionError", "RateLimitError",
+    "InternalServerError", "ServiceUnavailableError", "OverloadedError",
+    "APIStatusError",
+})
+
+
+def _is_transient(exc):
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    return type(exc).__name__ in _TRANSIENT_NAMES
+
 
 SYSTEM = (
     "You are a procurement triage classifier for New York State opportunities. "
@@ -51,6 +69,17 @@ SYSTEM = (
     "assess confidence as high or low. Respond in JSON only: "
     "{triage_class, confidence, reason}."
 )
+
+
+def _default_transport(key, model, max_tokens, system, user, timeout):
+    """One real API attempt. Raises on any SDK/network error (the caller's retry
+    loop decides whether to retry). Returns the message object."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=key)
+    return client.messages.create(
+        model=model, max_tokens=max_tokens, system=system, timeout=timeout,
+        messages=[{"role": "user", "content": user}],
+    )
 
 
 def _human(reason, confidence=LOW):
@@ -88,9 +117,17 @@ def _coerce(parsed):
     return {"triage_class": tclass, "confidence": HIGH, "reason": reason}
 
 
-def classify(text, model=MODEL, max_tokens=_MAX_TOKENS):
+def classify(text, model=MODEL, max_tokens=_MAX_TOKENS, timeout=_TIMEOUT_S,
+             max_retries=MAX_RETRIES, transport=None):
     """Classify opportunity metadata/text via claude-sonnet-4-6. Returns the
-    contract dict. Never raises: every failure path resolves to HUMAN_REVIEW."""
+    contract dict {triage_class, confidence, reason}. Never raises: every failure
+    path resolves to HUMAN_REVIEW.
+
+    Retry policy: up to `max_retries` (default 2) retries on TRANSIENT failures
+    (timeout / connection / 5xx / 429) — at most 3 attempts total; then
+    HUMAN_REVIEW with the reason logged. Non-transient failures (malformed JSON,
+    refusal, missing SDK) do NOT retry. `transport` is injectable for tests so
+    the real API is never called in CI."""
     # Key from env (never hardcoded). Missing key -> no network call.
     try:
         from llm_config import get_anthropic_api_key
@@ -100,28 +137,37 @@ def classify(text, model=MODEL, max_tokens=_MAX_TOKENS):
     if not key:
         return _human("no API key configured — human review.")
 
-    try:
-        import anthropic
-    except ImportError:
-        return _human("anthropic SDK unavailable — human review.")
+    call = transport or _default_transport
+    user = "Classify this NYS procurement notice.\n\n" + (text or "")
 
-    try:
-        client = anthropic.Anthropic(api_key=key)
-        msg = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=SYSTEM,
-            messages=[{"role": "user", "content":
-                       "Classify this NYS procurement notice.\n\n" + (text or "")}],
-        )
+    last_exc = None
+    attempts = 0
+    total = max_retries + 1
+    while attempts < total:
+        attempts += 1
+        try:
+            msg = call(key, model, max_tokens, SYSTEM, user, timeout)
+        except ImportError:
+            return _human("anthropic SDK unavailable — human review.")
+        except Exception as exc:                       # network/API failure
+            last_exc = exc
+            if _is_transient(exc) and attempts < total:
+                continue                               # retry transient
+            # non-transient, or retries exhausted -> stop
+            kind = "transient" if _is_transient(exc) else "non-transient"
+            return _human("LLM call failed (%s %s) after %d attempt(s) — human "
+                          "review." % (kind, type(exc).__name__, attempts))
+        # -- success: validate the response --------------------------------
         if getattr(msg, "stop_reason", None) == "refusal":
             return _human("model refused to classify — human review.")
-        raw = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
-    except Exception as exc:
-        return _human("LLM call failed (%s) — human review." % type(exc).__name__)
+        raw = "".join(b.text for b in msg.content
+                      if getattr(b, "type", None) == "text")
+        try:
+            parsed = _parse_json(raw)
+        except Exception:
+            return _human("malformed LLM JSON — human review.")   # no retry
+        return _coerce(parsed)
 
-    try:
-        parsed = _parse_json(raw)
-    except Exception:
-        return _human("malformed LLM JSON — human review.")
-    return _coerce(parsed)
+    # loop only exits via return above; this guards against exhaustion.
+    return _human("LLM call failed (%s) after %d attempt(s) — human review."
+                  % (type(last_exc).__name__ if last_exc else "unknown", attempts))
