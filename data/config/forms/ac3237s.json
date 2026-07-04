@@ -14,7 +14,7 @@
   "revision": "Rev. 1/17",
   "source_url": "https://www.osc.ny.gov/files/vendors/2017-11/vendor-form-ac3237s-fe.pdf",
   "field_count": 21,
-  "extraction": "AcroForm field names extracted via pikepdf from the canonical OSC PDF (17 /Tx + 4 /Btn). Verified against the golden-copy text capture source-ac3237s-substitute-w9.md for layout. Inventory: tests/fixtures/ac3237s_fields.json.",
+  "extraction": "AcroForm field names extracted from the committed PDF tests/fixtures/ac3237s.pdf via pdfrw (17 /Tx + 4 /Btn); regenerable with scripts/extract_acroform_fields.py. Radio value maps confirmed from widget /Rect reading order cross-checked against the golden-copy text capture source-ac3237s-substitute-w9.md. Inventory: tests/fixtures/ac3237s_fields.json. NB: the blank form ships sentinel 'unselected' defaults on its buttons (Entity Type /10, Taxpayer ID Type /4, Subject to Backup Witholding /2) — out-of-range values meaning nothing is checked; the engine only overrides the two factual radios and never touches the attestation button.",
   "fields": {
     "1. Legal Business Name": {"class": "factual", "type": "/Tx", "profile_key": "legal_business_name"},
     "2. DBA": {"class": "factual", "type": "/Tx", "profile_key": "dba"},
@@ -32,16 +32,26 @@
 
     "Entity Type": {
       "class": "factual", "type": "/Btn", "profile_key": "entity_type",
-      "value_map": null,
-      "value_map_confirmed": false,
-      "note": "Part I item 3 radio, export states /0-/9 (10) but the form shows 11 visual labels (Individual … Other). The export-state<->label binding could NOT be confirmed from the field dump (10 vs 11), so the engine routes this to UNFILLED — the vendor checks the box by hand. Confirm each widget's export value against its Rect/label from the PDF, then populate value_map and set value_map_confirmed:true."
+      "value_map": {
+        "Individual": "/0",
+        "Sole Proprietor": "/1",
+        "Partnership": "/2",
+        "Limited Liability Co.": "/3",
+        "Corporation": "/4",
+        "Not For Profit": "/5",
+        "Trusts/Estates": "/6",
+        "Federal, State or Local Government": "/7",
+        "Public Authority": "/8",
+        "Disregarded Entity": "/9"
+      },
+      "value_map_confirmed": true,
+      "note": "Part I item 3 radio. Export states /0-/9 bound to labels by widget /Rect reading order (top->bottom, left->right: /0 x34.8 y594 … /9 x34.8 y566) cross-checked against the golden-copy label sequence (Individual…Disregarded Entity). 'Other' has NO radio state — the vendor uses the 'Other Entity Type' text field, so profile entity_type='Other' correctly routes to unfilled."
     },
     "Taxpayer ID Type": {
       "class": "factual", "type": "/Btn", "profile_key": "tin_type",
-      "value_map_provisional": {"EIN": "/0", "SSN": "/1", "ITIN": "/2", "N/A": "/3"},
-      "value_map": null,
-      "value_map_confirmed": false,
-      "note": "Part II radio, export states /0-/3 = EIN/SSN/ITIN/N-A per the form text. Provisional order recorded but NOT confirmed against the PDF widgets, so the engine routes this to UNFILLED until confirmed."
+      "value_map": {"EIN": "/0", "SSN": "/1", "ITIN": "/2", "N/A": "/3"},
+      "value_map_confirmed": true,
+      "note": "Part II radio. Export states /0-/3 bound to EIN/SSN/ITIN/N-A by widget /Rect left-to-right order (/0 x33.7 … /3 x397.2, single row y486) cross-checked against the golden-copy label sequence."
     },
 
     "Subject to Backup Witholding": {"class": "attestation", "type": "/Btn", "note": "Part V certification radio. Field name kept verbatim incl. OSC's 'Witholding' typo. Never auto-filled."},

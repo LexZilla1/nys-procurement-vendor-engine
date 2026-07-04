@@ -1,28 +1,120 @@
 {
-  "_source": "AcroForm field dump extracted via pikepdf from the canonical OSC PDF AC 3237-S (Rev. 1/17): https://www.osc.ny.gov/files/vendors/2017-11/vendor-form-ac3237s-fe.pdf",
-  "_note": "Authoritative field inventory: 21 fields (17 /Tx text + 4 /Btn button). The config-completeness test asserts data/config/forms/ac3237s.json covers exactly these names. Committed instead of the PDF binary because the PDF was not available in the build session; swap to live PDF extraction once the PDF is committed.",
+  "_source": "AcroForm field dump extracted via pdfrw from the committed PDF tests/fixtures/ac3237s.pdf (canonical OSC form). Regenerate with scripts/extract_acroform_fields.py.",
+  "_note": "Authoritative field inventory used by the config-completeness test. Radio 'states' are ordered by widget reading position (top->bottom, left->right); /Off last.",
   "field_count": 21,
   "fields": [
-    {"name": "Entity Type", "type": "/Btn", "states": ["/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/Off"]},
-    {"name": "Taxpayer ID Type", "type": "/Btn", "states": ["/0", "/1", "/2", "/3", "/Off"]},
-    {"name": "2. DBA", "type": "/Tx"},
-    {"name": "1. Legal Business Name", "type": "/Tx"},
-    {"name": "TIN", "type": "/Tx"},
-    {"name": "Other Entity Type", "type": "/Tx"},
-    {"name": "1 Street Address", "type": "/Tx"},
-    {"name": "2 Street Address", "type": "/Tx"},
-    {"name": "2 City State and Nine Digit Zip Code or Country_2", "type": "/Tx"},
-    {"name": "Certification Date", "type": "/Tx"},
-    {"name": "Preparer's Phone Number", "type": "/Tx"},
-    {"name": "Preparer's Email Address", "type": "/Tx"},
-    {"name": "Subject to Backup Witholding", "type": "/Btn", "states": ["/0", "/1", "/Off"]},
-    {"name": "Exempt Payee", "type": "/Btn", "states": ["/Off", "/On"]},
-    {"name": "1 City State and Nine Digit Zip Code or Country", "type": "/Tx"},
-    {"name": "Email Address", "type": "/Tx"},
-    {"name": "Primary Contact Name", "type": "/Tx"},
-    {"name": "Primary Email Address", "type": "/Tx"},
-    {"name": "Print Preparer's Name", "type": "/Tx"},
-    {"name": "Primary Title", "type": "/Tx"},
-    {"name": "phone number", "type": "/Tx"}
+    {
+      "name": "Entity Type",
+      "type": "/Btn",
+      "states": [
+        "/0",
+        "/1",
+        "/2",
+        "/3",
+        "/4",
+        "/5",
+        "/6",
+        "/7",
+        "/8",
+        "/9",
+        "/Off"
+      ]
+    },
+    {
+      "name": "Taxpayer ID Type",
+      "type": "/Btn",
+      "states": [
+        "/0",
+        "/1",
+        "/2",
+        "/3",
+        "/Off"
+      ]
+    },
+    {
+      "name": "2. DBA",
+      "type": "/Tx"
+    },
+    {
+      "name": "1. Legal Business Name",
+      "type": "/Tx"
+    },
+    {
+      "name": "TIN",
+      "type": "/Tx"
+    },
+    {
+      "name": "Other Entity Type",
+      "type": "/Tx"
+    },
+    {
+      "name": "1 Street Address",
+      "type": "/Tx"
+    },
+    {
+      "name": "2 Street Address",
+      "type": "/Tx"
+    },
+    {
+      "name": "2 City State and Nine Digit Zip Code or Country_2",
+      "type": "/Tx"
+    },
+    {
+      "name": "Certification Date",
+      "type": "/Tx"
+    },
+    {
+      "name": "Preparer's Phone Number",
+      "type": "/Tx"
+    },
+    {
+      "name": "Preparer's Email Address",
+      "type": "/Tx"
+    },
+    {
+      "name": "Subject to Backup Witholding",
+      "type": "/Btn",
+      "states": [
+        "/0",
+        "/1",
+        "/Off"
+      ]
+    },
+    {
+      "name": "Exempt Payee",
+      "type": "/Btn",
+      "states": [
+        "/On",
+        "/Off"
+      ]
+    },
+    {
+      "name": "1 City State and Nine Digit Zip Code or Country",
+      "type": "/Tx"
+    },
+    {
+      "name": "Email Address",
+      "type": "/Tx"
+    },
+    {
+      "name": "Primary Contact Name",
+      "type": "/Tx"
+    },
+    {
+      "name": "Primary Email Address",
+      "type": "/Tx"
+    },
+    {
+      "name": "Print Preparer's Name",
+      "type": "/Tx"
+    },
+    {
+      "name": "Primary Title",
+      "type": "/Tx"
+    },
+    {
+      "name": "phone number",
+      "type": "/Tx"
+    }
   ]
 }

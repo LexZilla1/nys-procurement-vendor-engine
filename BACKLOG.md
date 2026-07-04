@@ -64,14 +64,27 @@
 - [ ] Browser port (pdf-lib) with the UI: consume data/config/forms/*.json
   unchanged; same attestation-exclusion + unfilled-list semantics as
   pipeline/form_fill.py.
-- [ ] Confirm the two AC 3237-S radio value maps against the real PDF widgets
+- [x] Confirm the two AC 3237-S radio value maps against the real PDF widgets
   (Entity Type /0-/9 — note 10 export states vs 11 visual labels; Taxpayer ID
   Type /0-/3). Populate value_map + set value_map_confirmed:true so the engine
   fills them instead of routing to unfilled. Commit the blank PDF to
   tests/fixtures/ and upgrade the completeness test to live-extract from it
-  (currently asserts against the committed pikepdf field dump).
+  (currently asserts against the committed pikepdf field dump). — DONE: the
+  canonical OSC PDF is committed at tests/fixtures/ac3237s.pdf; both radios are
+  confirmed (value_map_confirmed:true) with export states bound to labels from
+  widget /Rect reading order cross-checked against the golden-copy label
+  sequence (Entity Type /0-/9, Taxpayer ID Type /0-/3 = EIN/SSN/ITIN/N-A);
+  scripts/extract_acroform_fields.py regenerates the inventory from the PDF
+  (pure-Python pdfrw, no native crypto); the completeness test now live-extracts
+  from the committed PDF with the committed inventory as the offline fallback.
 - [ ] VendRep forms AC 3290-S..3293-S mapping configs (same schema).
 - [ ] Flatten-on-export decision (lock filled draft vs keep editable).
+
+## Freshness automation — follow-ups
+- [ ] Extend the monthly freshness Action to form fixtures: re-download each
+  committed form PDF from its canonical OSC URL, diff the AcroForm field
+  inventory against tests/fixtures/, open a freshness-drift PR on mismatch —
+  same pattern as statute drift.
 
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
