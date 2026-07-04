@@ -6,3 +6,6 @@
 #   pip install -r requirements.txt
 python-dotenv>=1.0
 anthropic>=0.40
+
+# Step 6 form-fill (scripts/fill_ac3237s.py) — PDF AcroForm read/write
+pypdf>=4.0
