@@ -271,19 +271,17 @@ def has_sole_source_language(text):
 
 
 def _default_llm(payload):
-    """Real Step-4 classifier (claude-sonnet-4-6). Import-guarded so the module
-    loads offline; if the dependency/credentials are unavailable it returns LOW
-    confidence, which the pipeline routes to HUMAN_REVIEW (never silently green)."""
+    """Default Step-4 classifier: the live claude-sonnet-4-6 wrapper in
+    pipeline/llm_classifier.py. Import-guarded so this module still loads if that
+    package (or the anthropic SDK) is unavailable — in which case, and whenever
+    ANTHROPIC_API_KEY is unset, the wrapper itself returns HUMAN_REVIEW (never a
+    silent green). Tests inject a spy and never reach this path."""
     try:
-        import anthropic  # noqa: F401
-        from llm_config import get_anthropic_api_key  # noqa: F401
+        from pipeline.llm_classifier import classify
     except Exception:
         return {"triage_class": HUMAN_REVIEW, "confidence": LOW,
-                "reason": "LLM unavailable offline — routed to human review."}
-    # Intentionally not wired to a live call in this build; callers inject a
-    # classifier in tests and production. Conservative default until wired:
-    return {"triage_class": HUMAN_REVIEW, "confidence": LOW,
-            "reason": "Step-4 LLM not yet wired to a live model — human review."}
+                "reason": "Step-4 classifier unavailable — routed to human review."}
+    return classify(payload)
 
 
 def _run_llm(opp, source_type, jurisdiction, jurisdiction_match, llm, why):

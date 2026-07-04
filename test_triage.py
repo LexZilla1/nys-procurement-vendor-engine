@@ -2,6 +2,7 @@
 """Tests for Step 1 Triage. Runnable as `python3 test_triage.py` or under pytest."""
 
 import json
+import os
 import sys
 
 import step1_triage as T
@@ -9,6 +10,30 @@ from step1_triage import (BIDDABLE, NON_BIDDABLE, EDGE, HUMAN_REVIEW,
                           OUT_OF_SCOPE, J_STATE, HIGH, LOW)
 
 AD_TYPES = json.load(open("data/nyscr_ad_types.json", encoding="utf-8"))["labels"]
+
+
+class _Skip(Exception):
+    """Raised to skip an env-gated integration test cleanly (standalone runner
+    prints [SKIP]; under pytest we defer to pytest.skip)."""
+
+
+def _skip(reason):
+    try:
+        import pytest
+        pytest.skip(reason)
+    except ImportError:
+        raise _Skip(reason)
+
+
+def _require_live_llm():
+    """Skip unless a real ANTHROPIC_API_KEY and the anthropic SDK are present —
+    same env-skip discipline as the llm_reader regression suite."""
+    if not (os.environ.get("ANTHROPIC_API_KEY") or "").strip():
+        _skip("ANTHROPIC_API_KEY not set — live Step-4 LLM test skipped")
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        _skip("anthropic SDK not installed — live Step-4 LLM test skipped")
 
 
 # --------------------------------------------------------------------------
@@ -240,13 +265,99 @@ def test_citations_are_ids_not_filenames():
 
 
 # --------------------------------------------------------------------------
+# Classifier guard rails (offline — exercise _coerce / no-key, no network)
+# --------------------------------------------------------------------------
+
+from pipeline import llm_classifier as C
+
+
+def test_classifier_no_key_is_human_review_no_network():
+    # With no key the wrapper must NOT call the API and must return HUMAN_REVIEW.
+    import os
+    saved = os.environ.pop("ANTHROPIC_API_KEY", None)
+    try:
+        r = C.classify("Sealed competitive bids are invited for services.")
+    finally:
+        if saved is not None:
+            os.environ["ANTHROPIC_API_KEY"] = saved
+    assert r["triage_class"] == HUMAN_REVIEW and r["confidence"] == LOW
+    assert "no API key" in r["reason"]
+
+
+def test_classifier_malformed_json_is_human_review():
+    assert C._coerce("not-an-object")["triage_class"] == HUMAN_REVIEW
+
+
+def test_classifier_low_confidence_forced_human_review():
+    r = C._coerce({"triage_class": "BIDDABLE", "confidence": "low", "reason": "x"})
+    assert r["triage_class"] == HUMAN_REVIEW
+
+
+def test_classifier_never_returns_out_of_scope_or_jurisdiction():
+    # The model may not decide OUT_OF_SCOPE / jurisdiction — coerced to HUMAN_REVIEW.
+    assert C._coerce({"triage_class": "OUT_OF_SCOPE", "confidence": "high",
+                      "reason": "x"})["triage_class"] == HUMAN_REVIEW
+    assert C._coerce({"triage_class": "STATE", "confidence": "high",
+                      "reason": "x"})["triage_class"] == HUMAN_REVIEW
+
+
+def test_classifier_high_confidence_class_passes_through():
+    r = C._coerce({"triage_class": "biddable", "confidence": "high", "reason": "clear"})
+    assert r == {"triage_class": BIDDABLE, "confidence": HIGH, "reason": "clear"}
+
+
+def test_default_llm_used_when_no_spy_injected_offline():
+    # No spy + no key -> the wired default classifier returns HUMAN_REVIEW, so a
+    # STATE non-nyscr opportunity is safely routed (never silently green).
+    import os
+    saved = os.environ.pop("ANTHROPIC_API_KEY", None)
+    try:
+        r = T.triage({"issuer": "Department of Labor",
+                      "text": "Sealed bids invited for janitorial services."})
+    finally:
+        if saved is not None:
+            os.environ["ANTHROPIC_API_KEY"] = saved
+    assert r["source_field"] == "llm"
+    assert r["triage_class"] == HUMAN_REVIEW            # no key -> safe default
+
+
+# --------------------------------------------------------------------------
+# Live Step-4 integration tests (env-skipped without ANTHROPIC_API_KEY)
+# These exercise the REAL claude-sonnet-4-6 wrapper: no spy injected, so
+# T.triage falls through to pipeline.llm_classifier.classify.
+# --------------------------------------------------------------------------
+
+def test_live_llm_clear_bid_language_is_biddable():
+    _require_live_llm()
+    opp = {"issuer": "Office of General Services",
+           "text": ("NOTICE TO BIDDERS. The Office of General Services invites "
+                    "sealed competitive bids for janitorial services at state "
+                    "facilities. Responsive bids will be publicly opened. See the "
+                    "solicitation for submission requirements and the bid due date.")}
+    r = T.triage(opp)                                   # no llm injected -> live
+    _schema_ok(r)
+    assert r["jurisdiction"] == J_STATE                 # gate confirmed STATE first
+    assert r["source_field"] == "llm"
+    assert r["triage_class"] == BIDDABLE and r["confidence"] == HIGH
+
+
+def test_live_llm_ambiguous_text_is_human_review():
+    _require_live_llm()
+    opp = {"issuer": "Department of Health",
+           "text": "Posting regarding an upcoming matter. Details to follow."}
+    r = T.triage(opp)                                   # no llm injected -> live
+    _schema_ok(r)
+    assert r["triage_class"] == HUMAN_REVIEW            # uncertain -> safe default
+
+
+# --------------------------------------------------------------------------
 # Runner
 # --------------------------------------------------------------------------
 
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]
-    passed = failed = 0
+    passed = failed = skipped = 0
     print("=" * 74)
     print("STEP 1 TRIAGE — TEST SUITE ({} tests)".format(len(tests)))
     print("=" * 74)
@@ -255,11 +366,14 @@ def _run():
             fn()
             print("  [PASS] {}".format(name))
             passed += 1
+        except _Skip as exc:
+            print("  [SKIP] {} :: {}".format(name, exc))
+            skipped += 1
         except Exception as exc:
             print("  [FAIL] {} :: {}: {}".format(name, type(exc).__name__, exc))
             failed += 1
     print("-" * 74)
-    print("Totals: {} passed, {} failed".format(passed, failed))
+    print("Totals: {} passed, {} failed, {} skipped".format(passed, failed, skipped))
     print("=" * 74)
     return 0 if failed == 0 else 1
 
