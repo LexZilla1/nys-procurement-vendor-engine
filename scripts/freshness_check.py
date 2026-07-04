@@ -87,9 +87,33 @@ MARK = re.compile(
     r'^\s*(\*+\s*)?(\d+(-[a-z])?\.\s|\([0-9a-z]+\)\s|[a-z]\.\s|[ivxlc]+\.\s|§|NB\b)', re.I)
 
 
+def unescape_api_text(text):
+    """Normalize the RAW Open Legislation API `text` field to plain text.
+
+    CONFIRMED LIVE quirk (the bug behind the 22/22 false DIVERGENT): the API's
+    JSON `text` value carries *literal* escape sequences — after json.loads the
+    string still contains two-character `\\n` / `\\r\\n` / `\\t` runs (and NBSP),
+    not real whitespace. The offline echo-back test never exercised this because
+    it fed already-clean golden text back as the mock response, so reflow was a
+    no-op. Convert those literal escapes to real whitespace BEFORE reflow, or the
+    residual `\\n` characters survive normalization and every section diverges.
+
+    Idempotent on already-clean text (golden captures contain no literal escapes),
+    so it is safe to run on both live and injected inputs.
+    """
+    if not text:
+        return text or ""
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    text = text.replace("\\t", " ")
+    text = text.replace(" ", " ")   # non-breaking space -> normal space
+    return text
+
+
 def reflow(text):
     """Join hard-wrapped API lines into the golden one-line-per-subdivision
-    style (words untouched); keep subdivision/annotation markers as line starts."""
+    style (words untouched); keep subdivision/annotation markers as line starts.
+    Unescapes the raw API text first (see unescape_api_text)."""
+    text = unescape_api_text(text)
     out, cur = [], ""
     for ln in text.replace("\r", "").split("\n"):
         s = ln.strip()
@@ -110,7 +134,10 @@ def reflow(text):
 
 
 def norm(s):
-    """Whitespace-insensitive, annotation-star-insensitive comparison key."""
+    """Whitespace-insensitive, annotation-star-insensitive comparison key.
+    Defensively strips any residual literal escape runs too (belt-and-suspenders
+    with unescape_api_text), so a stray `\\n` can never reach the comparison."""
+    s = unescape_api_text(s)
     s = re.sub(r"[*]+", " ", s)
     return re.sub(r"\s+", " ", s).strip().lower()
 
@@ -352,11 +379,30 @@ def _selftest():
     # and rendering a report over the sparse rows must not crash either:
     render_report(sparse + ss + empty, "2026-07-04")
 
+    # RAW-FORMAT FIXTURE (regression for the 22/22 false-DIVERGENT bug):
+    # a captured-shape API response whose JSON `text` carries LITERAL escaped
+    # newlines (two-char \n runs surviving json.loads), hard-wrapped with leading
+    # spaces and NBSP — exactly the live format the echo-back never exercised. An
+    # unchanged section MUST classify FULL-MATCH against its golden file.
+    fixture_path = os.path.join(REPO_ROOT, "tests", "fixtures",
+                                "openleg_raw_stf-179-g.json")
+    with open(fixture_path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    decoded = payload["result"]["text"]
+    assert "\\n" in decoded and "\n" not in decoded, \
+        "fixture must carry LITERAL escaped newlines (the live quirk)"
+    raw_row = run(lambda law, loc: payload["result"],
+                  sources={"source-stf-179-g.md": ("STF", "179-G")})
+    assert raw_row[0]["verdict"] == "FULL-MATCH", \
+        "raw escaped-newline response must diff FULL-MATCH after unescape+reflow"
+    assert has_drift(raw_row) is False
+
     rep = render_report(results, "2026-07-04")
     assert "DRIFT DETECTED" in rep and "DIVERGENT" in rep
     print("SELF-TEST: ALL PASS")
     print("  FULL-MATCH x2, DIVERGENT detected, sunset mismatch detected,")
-    print("  missing-field responses (no repealed/repealedDate/activeDate) handled,")
+    print("  missing-field responses handled, RAW escaped-newline fixture => "
+          "FULL-MATCH,")
     print("  clean run => no drift, report renders.")
     return 0
 
