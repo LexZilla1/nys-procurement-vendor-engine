@@ -30,18 +30,25 @@ Run it offline (no key, no network) to exercise the diff/classify/report logic:
 python3 scripts/freshness_check.py --selftest
 ```
 
-### What triggers a PR vs a silent pass
+### What each run does
 
 The workflow `.github/workflows/freshness-check.yml` runs on the **1st of each
-month** (and on demand via *Run workflow*):
+month** (and on demand via *Run workflow*). `main` is branch-protected and
+requires PRs, so **every** run delivers its report as a pull request — never a
+direct push:
 
-- **All FULL-MATCH, no sunset mismatch → silent pass.** The dated report is
-  committed straight to `main`; no PR is opened.
-- **Any DIVERGENT verdict OR any sunset mismatch → drift.** A **draft** pull
-  request is opened, labeled **`freshness-drift`**, containing the report and the
-  new report file. It is **never auto-merged**, and the golden-copy source files
-  are **never rewritten automatically** — a human reviews and decides whether to
-  re-capture (a Phase-3-style rebuild) or update the sunset records.
+- **All FULL-MATCH, no sunset mismatch → clean.** A **ready-for-review** PR is
+  opened, labeled **`freshness-clean`**, containing the dated report. Merge it to
+  file the month's report; nothing else changed.
+- **Any DIVERGENT verdict OR any sunset mismatch → drift.** A **draft** PR is
+  opened, labeled **`freshness-drift`**, containing the report. It is **never
+  auto-merged**, and the golden-copy source files are **never rewritten
+  automatically** — a human reviews and decides whether to re-capture (a
+  Phase-3-style rebuild) or update the sunset records.
+
+Both labels (`freshness-clean`, `freshness-drift`) should exist in the repo
+(**Issues → Labels**); if a label is missing GitHub still opens the PR, just
+untagged.
 
 ### Adding the `NYSLEG_API_KEY` secret
 
