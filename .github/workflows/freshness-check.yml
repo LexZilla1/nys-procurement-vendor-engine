@@ -1,0 +1,67 @@
+name: Monthly Golden-Copy Freshness Check
+
+# Runs on the 1st of each month. Fetches the 22 statute-class sources from the
+# NY Open Legislation API and diffs them against the golden copy.
+#   * all FULL-MATCH  -> commit the dated report to main, no PR.
+#   * any DIVERGENT or sunset mismatch -> open a draft PR labeled
+#     "freshness-drift" with the report. NEVER auto-merges, NEVER rewrites
+#     golden-copy source files.
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"   # 06:00 UTC, 1st of each month
+  workflow_dispatch: {}    # allow manual runs
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: freshness-check
+  cancel-in-progress: false
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run freshness check
+        id: check
+        env:
+          NYSLEG_API_KEY: ${{ secrets.NYSLEG_API_KEY }}
+        run: python3 scripts/freshness_check.py
+
+      # ---- No drift: commit the report directly to the default branch. -------
+      - name: Commit report (no drift)
+        if: steps.check.outputs.drift == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/freshness/
+          if git diff --cached --quiet; then
+            echo "No report changes to commit."
+          else
+            git commit -m "freshness: monthly report ${{ steps.check.outputs.date }} (all FULL-MATCH)"
+            git push
+          fi
+
+      # ---- Drift: open a labeled draft PR with the report. Never auto-merge. --
+      - name: Open freshness-drift PR
+        if: steps.check.outputs.drift == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: docs/freshness/
+          branch: freshness-drift/${{ steps.check.outputs.date }}
+          base: main
+          title: "Freshness drift detected — ${{ steps.check.outputs.date }}"
+          body-path: ${{ steps.check.outputs.report }}
+          labels: freshness-drift
+          draft: true
+          commit-message: "freshness: drift report ${{ steps.check.outputs.date }}"
