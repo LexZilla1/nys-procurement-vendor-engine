@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), State Vendors
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-vendors/sdvob
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OSC program page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. Nothing here is
 > reworded. Before relying on this in production, re-open the link above and confirm the text still

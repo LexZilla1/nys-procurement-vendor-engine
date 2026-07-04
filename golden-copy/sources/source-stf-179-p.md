@@ -5,6 +5,9 @@
 - **Issued by:** New York State Legislature; published via NY State Senate Open Legislation (STF Chapter 56, Article 11-A)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/179-P
 - **Copied exactly on:** 2026-07-01
+- **API activeDate:** 2014-09-22
+- **Capture method:** openleg-api-v3
+- **Covers:** full section
 
 > Captured verbatim 2026-07-01 from the NY Open Legislation primary source (revision 2014-09-22).
 > All six inapplicability clauses are reproduced word-for-word. This file lists the payment types

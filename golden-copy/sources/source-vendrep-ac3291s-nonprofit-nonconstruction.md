@@ -9,6 +9,7 @@
   - Instructions: https://www.osc.ny.gov/files/state-vendors/vendrep/pdf/vendor-questionnaire-instructions.pdf
   - Definitions List: https://www.osc.ny.gov/files/state-vendors/vendrep/pdf/vendor-questionnaire-definitions.pdf
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC form — verbatim certification clause (manual capture)
 
 > Captured directly from the official OSC PDF (fetched from the primary source above, extracted to
 > text). Fillable PDF FORM (7 pages). Question wording is verbatim; fill-in field labels and

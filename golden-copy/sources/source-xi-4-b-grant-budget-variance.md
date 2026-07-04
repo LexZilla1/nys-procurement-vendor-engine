@@ -8,6 +8,7 @@
   - DOB Grants Management Budget Bulletin (H-1032): https://www.budget.ny.gov/guide/bprm/h/h-1032.html
   - Master Grant Contract: https://grantsmanagement.ny.gov/state-agency-resources
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > **Why this file exists (pain-point grounding).** Practitioner reporting (OSC NFP prompt-contracting
 > audits; nonprofit-sector field reports) identifies a payment failure that occurs AFTER a contract is

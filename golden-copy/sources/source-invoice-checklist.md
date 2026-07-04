@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC)
 - **Link (permanent identifier):** https://www.osc.ny.gov/files/state-agencies/pdf/xii-4-f-att.pdf
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC attachment (XII.4.F) — manual capture
 
 > Everything below the line is the State's own text, extracted word-for-word from the official
 > one-page PDF. The PDF is a sample invoice image annotated with 11 numbered callouts; the callout

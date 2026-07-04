@@ -30,10 +30,18 @@ import sys
 
 EXPECTED_COUNT = 45
 
-# The four required header labels plus the copy stamp. "Link" is matched by a
-# prefix because the source files carry several verbatim variants of the label
-# (e.g. "Link (permanent identifier)", "Link (PDF)", "Link (primary)").
-REQUIRED_FIELDS = ["Name", "Date", "Issued by", "Link", "Copied exactly on"]
+# The four required header labels plus the copy stamp, plus "Covers" (added in
+# the 2026-07-03 full-text rebuild: every record must declare what its capture
+# spans). "Link" and "Covers" are matched by prefix because the source files
+# carry verbatim variants (e.g. "Link (permanent identifier)", "Link (PDF)";
+# "Covers", "API activeDate (statute §109)").
+REQUIRED_FIELDS = ["Name", "Date", "Issued by", "Link", "Copied exactly on", "Covers"]
+
+# A record whose Covers value is exactly "full section" is a complete statute
+# capture; its STATE TEXT must begin at the section heading ("§ ..."), allowing
+# a leading annotation marker (e.g. "* § 314"). This is a structural sanity
+# check, not a semantic one.
+FULL_SECTION = "full section"
 
 # Structural section heading markers. These bound the verbatim body. They are
 # matched as exact heading prefixes so that web-page subheadings copied *inside*
@@ -132,8 +140,13 @@ def parse_source_file(path):
             parts.append(nxt.strip())
             j += 1
         value = "\n".join(p for p in parts if p).strip()
-        # Normalise the variable "Link (...)" label to the canonical "Link".
-        key = "Link" if label.startswith("Link") else label
+        # Normalise the variable "Link (...)" / "Covers (...)" labels to canonical.
+        if label.startswith("Link"):
+            key = "Link"
+        elif label.startswith("Covers"):
+            key = "Covers"
+        else:
+            key = label
         # Keep the first occurrence; do not let later lines clobber it.
         fields.setdefault(key, value)
         i = j
@@ -156,6 +169,18 @@ def parse_source_file(path):
     body = "\n".join(lines[idx_state + 1:body_end]).strip()
     if not body:
         raise ParseFailure("'## STATE TEXT (verbatim)' body is empty")
+
+    # -- Structural check: a "full section" capture must begin at the § heading.
+    # Strip any leading annotation marker ("* ", "** ") and whitespace first, so
+    # a starred section like "* § 314 ..." still passes. Semantic completeness is
+    # NOT asserted here — only that a full-section record opens at a section sign.
+    if fields.get("Covers", "").strip() == FULL_SECTION:
+        first = body.lstrip()
+        first = re.sub(r"^\*+\s*", "", first)
+        if not first.startswith("§"):
+            raise ParseFailure(
+                "Covers='full section' but STATE TEXT does not begin at a "
+                "section heading ('§ ...'): starts {!r}".format(first[:40]))
 
     # -- CITATIONS section (verbatim, heading through end of file) ---------
     citations = "\n".join(lines[idx_citations:]).strip()

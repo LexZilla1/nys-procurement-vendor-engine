@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), Guide to Financial Operations
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-agencies/gfo/chapter-xii/xii4b1-supporting-information
 - **Copied exactly on:** 2026-06-29
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. NOTE: the live page
 > contains a few of its own typographical errors — "NYCRRand" (missing space) and a malformed link

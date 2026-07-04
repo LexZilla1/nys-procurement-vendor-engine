@@ -5,6 +5,9 @@
 - **Issued by:** New York State Legislature; published via NY State Senate Open Legislation (STF Chapter 56, Article 7)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/112
 - **Copied exactly on:** 2026-06-29
+- **API activeDate:** 2023-03-10
+- **Capture method:** openleg-api-v3
+- **Covers:** full section
 
 > Everything below the line is the statute text, copied word-for-word from NY Open Legislation.
 > Nothing here is reworded. NY Open Legislation shows prior revisions (2023-01-06, 2021-07-30,

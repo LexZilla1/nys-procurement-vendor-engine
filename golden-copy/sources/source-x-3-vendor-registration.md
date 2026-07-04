@@ -5,6 +5,7 @@
 - **Issued by:** New York State Office of the State Comptroller (OSC), Guide to Financial Operations
 - **Link (permanent identifier):** https://www.osc.ny.gov/state-agencies/gfo/chapter-x/x3-overview
 - **Copied exactly on:** 2026-06-28
+- **Covers:** OSC GFO section — full page (manual capture)
 
 > Everything below the line is the State's own text, copied word-for-word. Nothing here is
 > reworded. The NYS Substitute Form W-9 (AC 3237-S) referenced by this chapter is a separate form
