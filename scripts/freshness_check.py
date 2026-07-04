@@ -193,19 +193,23 @@ def run(fetch, sources=None):
                "repealed": live.get("repealed"),
                "repealedDate": live.get("repealedDate"),
                "sunset_flags": []}
-        # sunset cross-check
+        # sunset cross-check. Bind every API field via .get() with a safe
+        # default first — the Open Legislation API omits repealed/repealedDate
+        # on some sections (confirmed live: a direct d["repealed"] KeyErrors).
         exp = SUNSET_EXPECT.get(fn)
         if exp is not None:
             nb = nb_repeal_iso(live_text)
-            if live.get("repealed") is True:
+            repealed = live.get("repealed")
+            repealed_date = live.get("repealedDate")
+            if repealed is True:
                 row["sunset_flags"].append("API reports section ALREADY repealed")
-            if live.get("repealedDate") and live["repealedDate"] != exp:
+            if repealed_date and repealed_date != exp:
                 row["sunset_flags"].append(
-                    "API repealedDate %s != record %s" % (live["repealedDate"], exp))
+                    "API repealedDate %s != record %s" % (repealed_date, exp))
             if nb and nb != exp:
                 row["sunset_flags"].append(
                     "in-text NB Repealed %s != record %s" % (nb, exp))
-            if nb is None and not live.get("repealedDate"):
+            if nb is None and not repealed_date:
                 row["sunset_flags"].append(
                     "no NB-repeal date found in live text (record expects %s)" % exp)
         results.append(row)
@@ -327,11 +331,33 @@ def _selftest():
         "activeDate": "2099-01-01", "repealed": False, "repealedDate": None},
         sources={g: STATUTE_SOURCES[g] for g in good})
     assert has_drift(clean) is False
+
+    # Fixture: the API OMITS repealed/repealedDate/activeDate entirely on some
+    # sections (confirmed live). A response missing those keys must not crash.
+    # (a) a non-sunset section returning ONLY {"text": ...}:
+    sparse = run(lambda law, loc: {"text": golden_as_live("source-stf-179-g.md")},
+                 sources={"source-stf-179-g.md": ("STF", "179-G")})
+    assert sparse[0]["verdict"] == "FULL-MATCH"
+    assert sparse[0]["repealed"] is None and sparse[0]["repealedDate"] is None
+    assert sparse[0]["activeDate"] is None and sparse[0]["sunset_flags"] == []
+    # (b) a SUNSET section missing repealed/repealedDate but whose text carries
+    # the NB-repeal line: cross-check still works off the in-text date, no crash,
+    # no false flag (NB date matches the record):
+    ss = run(lambda law, loc: {"text": golden_as_live("source-stf-163.md")},
+             sources={"source-stf-163.md": ("STF", "163")})
+    assert ss[0]["sunset_flags"] == [], ss[0]["sunset_flags"]
+    # (c) a completely empty response {} (every field absent) must not crash:
+    empty = run(lambda law, loc: {}, sources={"source-stf-179-g.md": ("STF", "179-G")})
+    assert empty[0]["verdict"] in ("DIVERGENT", "EMPTY-STORED")
+    # and rendering a report over the sparse rows must not crash either:
+    render_report(sparse + ss + empty, "2026-07-04")
+
     rep = render_report(results, "2026-07-04")
     assert "DRIFT DETECTED" in rep and "DIVERGENT" in rep
     print("SELF-TEST: ALL PASS")
-    print("  FULL-MATCH x2, DIVERGENT detected, sunset mismatch detected, "
-          "clean run => no drift, report renders.")
+    print("  FULL-MATCH x2, DIVERGENT detected, sunset mismatch detected,")
+    print("  missing-field responses (no repealed/repealedDate/activeDate) handled,")
+    print("  clean run => no drift, report renders.")
     return 0
 
 
