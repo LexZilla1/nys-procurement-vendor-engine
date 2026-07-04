@@ -2,7 +2,7 @@
 
 - **Name:** State Finance Law §139-h — Participation in an international boycott prohibited
 - **Date:** Current as of January 01, 2026
-- **Issued by:** New York State Legislature (FindLaw codification; also in Appendix A clause 8)
+- **Issued by:** New York State Legislature; via NY Senate Open Legislation (openleg-api-v3; also in Appendix A clause 8)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/STF/139-H
 - **Copied exactly on:** 2026-07-03
 - **API activeDate:** 2014-09-22
@@ -22,8 +22,8 @@
 
 ## ANNOTATIONS (engine commentary — not part of the rule)
 
-> Everything below the line is the statute text, copied word-for-word from the FindLaw codification.
-> Nothing here is reworded. SCOPE: applies to state contracts/specifications over $5,000. The
+> The STATE TEXT above is the full STF §139-h section, captured word-for-word from NY Open
+> Legislation (openleg-api-v3). Nothing here is reworded. SCOPE: applies to state contracts/specifications over $5,000. The
 > consequence is a material contract condition whose breach renders the contract forfeit and void on
 > a later boycott conviction — it is NOT a bid-rejection / non-responsiveness rule. Before relying on
 > this in production, re-open the link above and confirm the text and revision still match.

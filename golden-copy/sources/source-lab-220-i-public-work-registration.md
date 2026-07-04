@@ -2,7 +2,7 @@
 
 - **Name:** Labor Law §220-i — Registration system for contractors and subcontractors
 - **Date:** 2025 (effective Dec 30, 2024)
-- **Issued by:** New York State Legislature (Justia codification of NY Labor Law)
+- **Issued by:** New York State Legislature; via NY Senate Open Legislation (openleg-api-v3)
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/LAB/220-I
 - **Copied exactly on:** 2026-07-03
 - **API activeDate:** 2025-01-03
@@ -46,8 +46,8 @@ d. A registration pursuant to this section is not necessary for a bid or work on
 
 ## ANNOTATIONS (engine commentary — not part of the rule)
 
-> Everything below the line is the statute text, copied word-for-word from the Justia codification
-> of NY Labor Law. Nothing here is reworded. SCOPE: this section applies to public-work / Article-8
+> The STATE TEXT above is the full LAB §220-i section, captured word-for-word from NY Open
+> Legislation (openleg-api-v3, activeDate 2025-01-03). Nothing here is reworded. SCOPE: this section applies to public-work / Article-8
 > covered construction projects — NOT to every commodity or service bid. The certificate of
 > registration is valid for two years and renews 90 days before expiry (relevant to the Part B
 > recertification module). Recently effective (Dec 30, 2024) — high freshness priority; re-open the

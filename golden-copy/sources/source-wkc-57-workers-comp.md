@@ -20,8 +20,8 @@
 
 ## ANNOTATIONS (engine commentary — not part of the rule)
 
-> Everything below the line is the statute text, copied word-for-word from NY Open Legislation.
-> Nothing here is reworded. The disability-benefits parallel is Workers' Compensation Law §220(8);
+> The STATE TEXT above is the full section, captured word-for-word from NY Open Legislation
+> (openleg-api-v3). Nothing here is reworded. The disability-benefits parallel is Workers' Compensation Law §220(8);
 > agency guidance is OSC GFO XI.18.G. Before relying on this in production, re-open the link above
 > and confirm the text and the revision still match (freshness contract).
 
