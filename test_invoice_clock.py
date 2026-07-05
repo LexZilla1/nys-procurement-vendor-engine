@@ -86,26 +86,59 @@ def test_branch_30_standard():
     assert cite.source_id == ic.STF179F
 
 
-def test_branch_15_small_business_requires_both_conjuncts():
-    b, days, cite, _ = ic.net_due_branch(
-        {"sb_15day_certified": True, "submitted_electronically": True})
+def _sb15(**over):
+    """A fully-qualifying 15-day small-business invoice; override to break a conjunct."""
+    inv = {"sb_15day_certified": True, "expedited_payment_identified": True,
+           "electronic_channel": ic.CHANNEL_SFS}
+    inv.update(over)
+    return inv
+
+
+def test_branch_15_requires_all_three_conjuncts():
+    b, days, cite, _ = ic.net_due_branch(_sb15())
     assert b == ic.BRANCH_15_SB and days == 15
-    # the citation IS the conjunctive verbatim anchor
-    assert cite.quote == ic.NET_DUE_15_SB_QUOTE
-    GoldenCopy().cite(ic.STF179F, cite.quote)   # verbatim
+    assert cite.quote == ic.NET_DUE_15_SB_QUOTE   # §179-f conjunctive anchor
+    GoldenCopy().cite(ic.STF179F, cite.quote)     # verbatim
 
 
-def test_branch_15_falls_back_without_electronic():
-    """Missing the electronic-submission conjunct must NOT yield a 15-day clock."""
-    b, days, _, note = ic.net_due_branch({"sb_15day_certified": True})
+def test_branch_15_accepts_sfs_channel():
+    b, days, _, _ = ic.net_due_branch(_sb15(electronic_channel=ic.CHANNEL_SFS))
+    assert b == ic.BRANCH_15_SB and days == 15
+
+
+def test_branch_15_accepts_designated_system_channel():
+    b, days, _, _ = ic.net_due_branch(_sb15(electronic_channel=ic.CHANNEL_DESIGNATED))
+    assert b == ic.BRANCH_15_SB and days == 15
+
+
+def test_branch_15_rejects_other_channel():
+    """OTHER (or non-electronic) channel must NOT yield a 15-day clock."""
+    b, days, _, note = ic.net_due_branch(_sb15(electronic_channel=ic.CHANNEL_OTHER))
     assert b == ic.BRANCH_30 and days == 30
-    assert "electronic" in note.lower()
+    assert "electronic submission" in note.lower()
+
+
+def test_branch_15_rejects_absent_channel():
+    b, days, _, _ = ic.net_due_branch(_sb15(electronic_channel=None))
+    assert b == ic.BRANCH_30 and days == 30
+
+
+def test_branch_15_falls_back_without_expedited_identification():
+    """Missing the '...identifies that it is seeking expedited payment...' conjunct
+    must NOT yield a 15-day clock."""
+    b, days, _, note = ic.net_due_branch(_sb15(expedited_payment_identified=False))
+    assert b == ic.BRANCH_30 and days == 30
+    assert "expedited" in note.lower()
 
 
 def test_branch_15_falls_back_without_certification():
-    b, days, _, note = ic.net_due_branch({"submitted_electronically": True})
+    b, days, _, note = ic.net_due_branch(_sb15(sb_15day_certified=False))
     assert b == ic.BRANCH_30 and days == 30
     assert "certification" in note.lower()
+
+
+def test_channel_anchor_is_verbatim_xii5i():
+    GoldenCopy().cite(ic.XII5I, ic.NET_DUE_15_CHANNEL_QUOTE)
 
 
 def test_branch_75_highway_final_payment():
@@ -128,7 +161,8 @@ def test_all_branches_inherit_holiday_gate():
     invoices = [
         {"id": "a", "invoice_received_date": "2026-06-10", "goods_received_date": "2026-06-15"},
         {"id": "b", "invoice_received_date": "2026-06-10", "goods_received_date": "2026-06-15",
-         "sb_15day_certified": True, "submitted_electronically": True},
+         "sb_15day_certified": True, "expedited_payment_identified": True,
+         "electronic_channel": ic.CHANNEL_SFS},
     ]
     for inv in invoices:
         assert ic.required_payment_date(inv, clock=GATED).status == VERIFY
@@ -325,9 +359,9 @@ def test_never_green_new_invoice_fields_have_no_score_tokens():
             assert tok not in low, "score-like field %r in invoice schema" % name
     # the new clock/cert fields are all categorical/date/bool — assert presence
     for f in ("invoice_received_date", "goods_received_date", "sb_15day_certified",
-              "submitted_electronically", "highway_final_payment", "status",
-              "cert_just_true_correct", "cert_not_previously_paid",
-              "cert_actually_due_owing"):
+              "expedited_payment_identified", "electronic_channel",
+              "highway_final_payment", "status", "cert_just_true_correct",
+              "cert_not_previously_paid", "cert_actually_due_owing"):
         assert f in schema["properties"]
 
 
@@ -365,6 +399,7 @@ def test_all_anchor_quotes_are_verbatim():
     g.cite(ic.STF179E, ic.MIR_LATER_OF_QUOTE)
     for q in (ic.NET_DUE_30_QUOTE, ic.NET_DUE_15_SB_QUOTE, ic.NET_DUE_75_HWY_QUOTE):
         g.cite(ic.STF179F, q)
+    g.cite(ic.XII5I, ic.NET_DUE_15_CHANNEL_QUOTE)   # two allowed electronic channels
     for q in ist.CONCEPT_ANCHORS.values():
         g.cite(ist.STF109, q)
 

@@ -29,11 +29,16 @@
     },
     "sb_15day_certified": {
       "type": ["boolean", "null"],
-      "description": "§179-f(2): the vendor is a small business AND identifies that it is seeking expedited payment as a small business. Necessary but NOT sufficient for the 15-day clock — electronic submission is also required (conjunctive)."
+      "description": "§179-f(2) / GFO XII.5.I: the vendor is a qualified small business self-certified for 15-day payment. Conjunct (i) of the 15-day clock — necessary but NOT sufficient."
     },
-    "submitted_electronically": {
+    "expedited_payment_identified": {
       "type": ["boolean", "null"],
-      "description": "§179-f(2): the invoice was submitted electronically in conformance with the state accounting/financial-management system. The second required conjunct of the 15-day small-business clock."
+      "description": "§179-f(2): the small business 'identifies that it is seeking expedited payment as a small business'. Conjunct (ii) of the 15-day clock."
+    },
+    "electronic_channel": {
+      "type": ["string", "null"],
+      "enum": ["SFS_ELECTRONIC", "DESIGNATED_SYSTEM", "OTHER", null],
+      "description": "GFO XII.5.I: the invoice's electronic-submission channel. Conjunct (iii) of the 15-day clock — only SFS_ELECTRONIC or DESIGNATED_SYSTEM (an OSC-designated electronic system) qualify; OTHER/null fall back to the 30-day branch."
     },
     "highway_final_payment": {
       "type": ["boolean", "null"],

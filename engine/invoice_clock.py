@@ -51,6 +51,22 @@ STF179E = "source-stf-179-e.md"
 XII5I = "source-xii-5-i-prompt-payment-interest.md"
 STF179F_CAPTURED = "2026-06-29"
 STF179E_CAPTURED = "2026-06-29"
+XII5I_CAPTURED = "2026-06-29"
+
+# GFO XII.5.I — the two allowed electronic channels for the 15-day clock.
+NET_DUE_15_CHANNEL_QUOTE = ("it must be submitted by the qualified Small Business "
+                            "vendor electronically either through the SFS or an "
+                            "electronic system designated by the Office of the "
+                            "State Comptroller")
+
+# Allowed electronic-submission channels for the 15-day small-business clock
+# (GFO XII.5.I): the SFS, or an OSC-designated electronic system. Anything else
+# (or none) does NOT qualify for 15-day and falls back to the 30-day branch.
+CHANNEL_SFS = "SFS_ELECTRONIC"
+CHANNEL_DESIGNATED = "DESIGNATED_SYSTEM"
+CHANNEL_OTHER = "OTHER"
+ELECTRONIC_CHANNELS = (CHANNEL_SFS, CHANNEL_DESIGNATED, CHANNEL_OTHER)
+QUALIFYING_15DAY_CHANNELS = frozenset({CHANNEL_SFS, CHANNEL_DESIGNATED})
 
 # §179-e(6) — receipt-of-invoice later-of (MIR).
 MIR_LATER_OF_QUOTE = (
@@ -158,32 +174,49 @@ def mir_date_check(invoice):
 
 def net_due_branch(invoice):
     """Select the required-payment-date branch (categorical) + its calendar-day
-    count + verbatim citation. CONJUNCTIVE 15-day rule: a small business gets the
-    15-day clock ONLY if it is expedited-certified AND submits electronically
-    (§179-f(2)); missing either conjunct falls back to the 30-day branch so no
-    false 15-day clock is ever produced. Highway final payments -> 75 days.
+    count + verbatim citation.
+
+    CONJUNCTIVE 15-day rule — a small business gets the 15-day clock ONLY if ALL
+    THREE conditions hold (§179-f(2) + GFO XII.5.I):
+      (i)   sb_15day_certified        — qualified small-business self-certification;
+      (ii)  expedited_payment_identified — "identifies that it is seeking expedited
+            payment as a small business" (§179-f(2));
+      (iii) electronic_channel in {SFS_ELECTRONIC, DESIGNATED_SYSTEM} — submitted
+            electronically "either through the SFS or an electronic system
+            designated by the Office of the State Comptroller" (GFO XII.5.I).
+    Any missing/false condition (incl. an OTHER/absent channel) falls back to the
+    30-day branch, so no false 15-day clock is ever produced. Highway final
+    payments -> 75 days.
 
     Returns (branch, days, citation, note)."""
     if invoice.get("highway_final_payment"):
         return (BRANCH_75_HWY, 75, _branch_citation(BRANCH_75_HWY),
                 "Final payment on a highway construction contract: 75 calendar "
                 "days, excluding legal holidays (§179-f(2)).")
+
     sb_cert = bool(invoice.get("sb_15day_certified"))
-    electronic = bool(invoice.get("submitted_electronically"))
-    if sb_cert and electronic:
+    expedited = bool(invoice.get("expedited_payment_identified"))
+    channel = invoice.get("electronic_channel")
+    channel_ok = channel in QUALIFYING_15DAY_CHANNELS
+
+    if sb_cert and expedited and channel_ok:
         return (BRANCH_15_SB, 15, _branch_citation(BRANCH_15_SB),
-                "Small business seeking expedited payment AND submitting "
-                "electronically: 15 calendar days, excluding legal holidays "
-                "(§179-f(2), conjunctive).")
-    # Small business but a conjunct is missing -> 30-day (never a false 15-day).
-    note = "Standard 30 calendar days, excluding legal holidays (§179-f(2))."
-    if sb_cert and not electronic:
-        note += (" 15-day small-business clock NOT applied: §179-f(2) requires "
-                 "electronic submission in addition to expedited certification.")
-    elif electronic and not sb_cert:
-        note += (" 15-day small-business clock NOT applied: §179-f(2) requires "
-                 "expedited small-business certification in addition to "
-                 "electronic submission.")
+                "15 calendar days, excluding legal holidays (§179-f(2), "
+                "conjunctive): qualified small business + identifies expedited "
+                "payment + electronic submission via %s (GFO XII.5.I)." % channel)
+
+    # A conjunct is missing -> 30-day (never a false 15-day). Enumerate why.
+    reasons = []
+    if not sb_cert:
+        reasons.append("qualified small-business certification")
+    if not expedited:
+        reasons.append("expedited-payment identification (§179-f(2))")
+    if not channel_ok:
+        reasons.append("electronic submission via SFS or an OSC-designated "
+                       "system (GFO XII.5.I; channel=%r)" % channel)
+    note = ("Standard 30 calendar days, excluding legal holidays (§179-f(2)). "
+            "15-day small-business clock NOT applied — missing: %s."
+            % "; ".join(reasons))
     return (BRANCH_30, 30, _branch_citation(BRANCH_30), note)
 
 
