@@ -70,6 +70,20 @@ Header: State of New York — CLAIM FOR PAYMENT. Vendor Information: Vendor Name
 
 ---
 
+## PROVISION ELIGIBILITY (engine metadata — citation-eligibility, not part of the rule)
+
+<!-- This is a MIXED capture (SFL §109 statute + OSC XII.4.A guidance + AC 3253-S
+     form layers), so its whole-file status is PARTIAL_CAPTURE. The interim gate
+     below lets the verbatim §109 statute layer be cited into VERIFY / attorney-
+     gated outputs only, pending a clean §109 recapture. It edits no STATE TEXT. -->
+
+- eligibility: INTERIM_VERIFY
+  scope: source
+  provision: SFL §109 statute layer (per-claim vendor certificate)
+  note: INTERIM measure. The §109 statute layer is verbatim from OpenLegislation (statute activeDate 2014-09-22), but this file mixes statute + guidance + form layers and is not yet a clean VERIFIED source. Citable ONLY into VERIFY / attorney-gated outputs (never confident) until a clean §109 recapture lands via the sanctioned statute-capture workflow (.github/workflows/statute-capture.yml). Consumed by validator RM-5 (§109) and engine/invoice_status (§109 semantic pre-flight).
+
+---
+
 ## CITATIONS THIS TEXT POINTS TO (tagged for traceability — not part of the rule)
 
 - SFL §109-A "Alternative proofs authorized for audit by the comptroller" (companion to §109; alternative-proof mechanism): https://www.nysenate.gov/legislation/laws/STF/109-A

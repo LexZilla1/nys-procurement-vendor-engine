@@ -118,18 +118,82 @@ def test_cite_verified_allowed_in_confident():
     assert g.cite("source-stf-179-g.md", q, output_context=gs.OUTPUT_CONFIDENT) == q
 
 
-def test_cite_partial_not_citable_in_any_context():
+def test_cite_partial_with_no_marker_not_citable_in_any_context():
+    # A PARTIAL capture with NO provision-eligibility marker is not citable in any
+    # context. (The real stf-109 / mwbe files now carry an INTERIM_VERIFY marker;
+    # this invariant is proven on a synthetic marker-free PARTIAL source.)
+    with tempfile.TemporaryDirectory() as tmp:
+        _write_source(tmp, "source-part.md", body_marker="This is a MIXED capture with form layers.")
+        g = GoldenCopy(sources_dir=tmp)
+        assert g.status_of("source-part.md") == gs.PARTIAL_CAPTURE
+        q = "§ 1. Synthetic body."
+        for ctx in (gs.OUTPUT_CONFIDENT, gs.OUTPUT_VERIFY, gs.OUTPUT_ATTORNEY_GATED):
+            try:
+                g.cite("source-part.md", q, output_context=ctx)
+            except GoldenEligibilityError as e:
+                assert e.status == gs.PARTIAL_CAPTURE
+            else:
+                raise AssertionError("marker-free PARTIAL must not be citable in %s" % ctx)
+
+
+def test_exc314_5a_confident_but_presumption_gated():
+    """Per-provision markers: the mechanical § 314(5)(a) five-year sentence is
+    confident-eligible; the (5)(b)-(c) presumption stays gated (VERIFY/attorney
+    only). The confident marker must not bleed to the presumption."""
     g = GoldenCopy()
-    # a verbatim quote from the §109 statute layer of the (PARTIAL) mixed file
-    body = g.body("source-stf-109-vendor-certificate.md")
-    q = body.split("\n", 1)[0][:40]   # a real verbatim prefix
-    for ctx in (gs.OUTPUT_CONFIDENT, gs.OUTPUT_VERIFY, gs.OUTPUT_ATTORNEY_GATED):
+    exc = "source-exec-314-mwbe-cert-validity.md"
+    five = ("all minority and women-owned business enterprise certifications "
+            "shall be valid for a period of five years")
+    pres = "there shall be a rebuttable presumption"
+    # 5(a): confident OK
+    assert g.cite(exc, five, output_context=gs.OUTPUT_CONFIDENT) == five
+    # 5(b)-(c): confident BLOCKED, but VERIFY / attorney-gated OK
+    try:
+        g.cite(exc, pres, output_context=gs.OUTPUT_CONFIDENT)
+        raise AssertionError("presumption must not be confident-eligible")
+    except GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+    assert g.cite(exc, pres, output_context=gs.OUTPUT_VERIFY) == pres
+
+
+def test_make_cert_expiry_quote_is_confident_eligible():
+    """The exact quote engine.dated_objects.make_cert_expiry cites must resolve to
+    a confident-eligible provision (so the future migration doesn't break it)."""
+    from engine.dated_objects import EXC314_SOURCE, EXC314_QUOTE
+    g = GoldenCopy()
+    assert g.cite(EXC314_SOURCE, EXC314_QUOTE,
+                  output_context=gs.OUTPUT_CONFIDENT) == EXC314_QUOTE
+
+
+def test_stf109_and_mwbe_are_interim_verify_gated():
+    """stf-109 and mwbe-5nycrr are downgraded to interim VERIFY: citable ONLY into
+    VERIFY / attorney-gated, never confident (they are still PARTIAL captures)."""
+    g = GoldenCopy()
+    for fn in ("source-stf-109-vendor-certificate.md", "source-mwbe-5nycrr-pass-fail.md"):
+        q = g.body(fn).strip().split("\n", 1)[0][:30]
         try:
-            g.cite("source-stf-109-vendor-certificate.md", q, output_context=ctx)
+            g.cite(fn, q, output_context=gs.OUTPUT_CONFIDENT)
+            raise AssertionError("%s must not be confident-eligible (interim)" % fn)
         except GoldenEligibilityError as e:
-            assert e.status == gs.PARTIAL_CAPTURE
-        else:
-            raise AssertionError("PARTIAL source must not be citable in %s" % ctx)
+            assert e.status == gs.INTERIM_VERIFY
+        assert g.cite(fn, q, output_context=gs.OUTPUT_VERIFY) == q
+        assert g.cite(fn, q, output_context=gs.OUTPUT_ATTORNEY_GATED) == q
+
+
+def test_audit_blocking_cleared_but_end_to_end_still_no():
+    """After the per-provision markers + interim gates, no engine cite is a hard
+    blocker; the four findings are cleared/downgraded. But end-to-end enforcement
+    stays NO because the call-site migration has not run."""
+    rep = ga.run()
+    assert rep["blocking_to_enforcement"] == [], rep["blocking_to_enforcement"]
+    files = lambda k: {e["file"] for e in rep[k]}
+    assert "source-exec-314-mwbe-cert-validity.md" in files("cleared_by_provision")
+    assert {"source-stf-109-vendor-certificate.md",
+            "source-mwbe-5nycrr-pass-fail.md"} <= files("interim_verify_gate")
+    assert "source-gcn-24-public-holidays.md" in files("gated_lgrade")
+    # migration not done -> end-to-end NO
+    assert rep["unmigrated_cite_sites"], "expected unmigrated bare cite() sites"
+    assert rep["enforcement_complete"] is False
 
 
 def test_cite_raises_on_pending_human_read():
@@ -247,14 +311,24 @@ def test_audit_reports_three_finding_classes():
         assert key in rep
 
 
-def test_engine_reach_is_blocking_to_enforcement_not_advisory():
-    """Engine citations to non-eligible sources must be labeled blocking-to-
-    enforcement (a distinct class), not folded into plain advisory findings."""
+def test_engine_reach_is_classified_by_disposition_not_folded_into_advisory():
+    """Engine citations to gated/non-citable sources are classified by enforcement
+    disposition — CLEARED_BY_PROVISION / INTERIM_VERIFY_GATE / GATED_LGRADE /
+    BLOCKING — a distinct axis from plain advisory metadata findings. After
+    Micro-PR A's markers, the four former blockers are cleared/downgraded (not
+    folded into advisory, and no longer hard blockers)."""
     rep = ga.run()
-    blocking = {e["file"] for e in rep["blocking_to_enforcement"]}
-    assert "source-stf-109-vendor-certificate.md" in blocking
-    assert "source-exec-314-mwbe-cert-validity.md" in blocking
-    assert rep["blocking_to_enforcement"], "expected blocking-to-enforcement findings"
+    for e in rep["engine_citation_reach"]:
+        assert e["disposition"] in ("CLEARED_BY_PROVISION", "INTERIM_VERIFY_GATE",
+                                    "GATED_LGRADE", "BLOCKING"), e
+    reached = {e["file"] for e in rep["engine_citation_reach"]}
+    # the four historically-flagged sources are all still tracked (reached)...
+    assert {"source-stf-109-vendor-certificate.md",
+            "source-exec-314-mwbe-cert-validity.md",
+            "source-mwbe-5nycrr-pass-fail.md",
+            "source-gcn-24-public-holidays.md"} <= reached
+    # ...but none remains a hard blocker after the markers/gates.
+    assert rep["blocking_to_enforcement"] == []
 
 
 def test_enforcement_not_complete_while_engine_bypasses():

@@ -92,6 +92,28 @@
 
 ---
 
+## PROVISION ELIGIBILITY (engine metadata — citation-eligibility, not part of the rule)
+
+<!-- Per-provision citation-eligibility for the guardrail (engine/golden_status.py
+     effective_status + validator.GoldenCopy.cite). Anchors are verbatim substrings
+     of the STATE TEXT body above; nothing here edits or reflows that body. The
+     whole-file status is L_GRADE_INTERPRETIVE, so anything NOT matched below stays
+     gated by default. -->
+
+- eligibility: VERIFIED_GOLDEN
+  scope: provision
+  provision: § 314(5)(a) five-year validity — a mechanical date rule (no interpretation)
+  anchor: "5. (a) With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years."
+  note: Confident-eligible. Anchored ONLY to the operative 5(a) five-year sentence; it does not extend to any other sentence or to 5(b)-(c). engine/dated_objects.make_cert_expiry cites the five-year clause within this anchor.
+
+- eligibility: L_GRADE_INTERPRETIVE
+  scope: provision
+  provision: § 314(5)(b)-(c) recertification rebuttable presumption
+  anchor: "there shall be a rebuttable presumption"
+  note: Legal-interpretive — conditions need attorney judgment. Citable only into VERIFY / attorney-gated outputs; never confident, never OK. Belt-and-suspenders (the whole-file status is already L_GRADE, so any 5(b)-(c) quote is gated even without this marker).
+
+---
+
 ## CITATIONS THIS TEXT POINTS TO (tagged for traceability — not part of the rule)
 
 - NY Executive Law § 310(23) — defines provisional MWBE certification (the stated exception to the 5-year rule)

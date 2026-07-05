@@ -259,7 +259,12 @@ class GoldenCopy:
                 "quote not found verbatim in {} STATE TEXT body: {!r}".format(
                     source_file, (quote or "")[:80]))
         if output_context is not None:
-            status = self.status_of(source_file)
+            # Provision-aware: a per-provision or source-scope eligibility marker
+            # can override the whole-file status for this specific quote (e.g.
+            # EXC/314 §314(5)(a) is confident while the rest of the L-graded file
+            # is gated; a mixed PARTIAL capture may be INTERIM_VERIFY-gated).
+            status = gs.effective_status(
+                self._raw.get(source_file, ""), quote, self.status_of(source_file))
             ok, why = gs.is_citable(status, output_context)
             if not ok:
                 raise GoldenEligibilityError(

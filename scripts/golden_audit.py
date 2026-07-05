@@ -174,10 +174,31 @@ def audit_source(fn, raw, in_index, in_report, freshness):
 
 # ---- static engine-citation reachability ----------------------------------
 
-def engine_citation_reach(status_by_file):
-    """Report golden sources referenced in engine/validator code whose status is
-    L-grade or non-citable — for human review of citation context. Heuristic
-    static scan of source-*.md literals in the code."""
+def _disposition(raw, status):
+    """How a gated/non-citable engine-reachable source is resolved for the
+    enforcement migration, from its PROVISION ELIGIBILITY markers:
+      CLEARED_BY_PROVISION — a confident per-provision marker exists (the engine's
+                             mechanical cite targets it), e.g. EXC/314 § 314(5)(a).
+      INTERIM_VERIFY_GATE  — an interim gate (mixed/PARTIAL capture citable only
+                             into VERIFY/attorney-gated pending clean recapture).
+      GATED_LGRADE         — an L-grade source; citable only into VERIFY/attorney-
+                             gated (a gating test should confirm the engine's use).
+      BLOCKING             — none of the above: a genuine blocker.
+    """
+    if gs.has_confident_provision(raw):
+        return "CLEARED_BY_PROVISION"
+    if gs.has_interim_verify_marker(raw):
+        return "INTERIM_VERIFY_GATE"
+    if status == gs.L_GRADE_INTERPRETIVE:
+        return "GATED_LGRADE"
+    return "BLOCKING"
+
+
+def engine_citation_reach(status_by_file, raw_by_file):
+    """Golden sources referenced in engine/validator code whose whole-file status
+    is L-grade or non-citable, each tagged with its enforcement disposition
+    (from PROVISION ELIGIBILITY markers). Heuristic static scan of source-*.md
+    literals in the code."""
     reach = {}
     for path in ENGINE_SCAN_FILES:
         try:
@@ -191,8 +212,28 @@ def engine_citation_reach(status_by_file):
         status = status_by_file.get(fn)
         if status in gs.CITABLE_GATED_ONLY or status in gs.NOT_CITABLE:
             flagged.append({"file": fn, "status": status,
-                            "referenced_in": sorted(files)})
+                            "referenced_in": sorted(files),
+                            "disposition": _disposition(raw_by_file.get(fn, ""), status)})
     return flagged
+
+
+def unmigrated_cite_sites():
+    """Runtime cite() call sites under engine/ + validator.py that do NOT pass an
+    output_context (so the runtime guardrail is bypassed). While any remain, the
+    enforcement migration is incomplete — end-to-end enforcement is NOT claimed.
+    Heuristic: a `.cite(` call with no `output_context` within the next 400 chars."""
+    sites = []
+    for path in ENGINE_SCAN_FILES:
+        try:
+            code = open(path, encoding="utf-8").read()
+        except OSError:
+            continue
+        for m in re.finditer(r"\.cite\(", code):
+            window = code[m.start():m.start() + 400].split("\n\n", 1)[0]
+            if "output_context" not in window:
+                sites.append({"file": os.path.relpath(path, REPO_ROOT),
+                              "line": code[:m.start()].count("\n") + 1})
+    return sites
 
 
 # ---- run ------------------------------------------------------------------
@@ -203,31 +244,44 @@ def run():
     freshness, fresh_report = load_latest_freshness()
     idx, rpt = index_files(), report_files()
     results = []
+    raw_by_file = {}
     for fn in files:
         raw = open(os.path.join(SOURCES_DIR, fn), encoding="utf-8").read()
+        raw_by_file[fn] = raw
         results.append(audit_source(fn, raw, fn in idx, fn in rpt, freshness))
     status_by_file = {r["file"]: r["status"] for r in results}
-    reach = engine_citation_reach(status_by_file)
+    reach = engine_citation_reach(status_by_file, raw_by_file)
 
-    # Three finding classes (audit contract):
+    # Finding classes (audit contract):
     #  * hard_failures        — block merge (unparseable / missing INDEX or
     #    REPORT row / no derivable status).
-    #  * blocking_to_enforcement — engine/validator citations reaching a
-    #    non-eligible source (PARTIAL/STALE/DIVERGENT/PENDING) or an L-grade
-    #    source (reachable today by bare cite()). These BLOCK the enforcement
-    #    migration; they are NOT merely advisory.
+    #  * blocking_to_enforcement — engine/validator citations reaching a source
+    #    that is NOT resolved for enforcement (disposition BLOCKING). A source
+    #    with a confident per-provision marker (CLEARED_BY_PROVISION), an interim
+    #    VERIFY gate (INTERIM_VERIFY_GATE), or L-grade gated use (GATED_LGRADE) is
+    #    NOT a blocker — those are tracked separately below.
     #  * advisory             — everything else (metadata gaps that don't block).
     hard_failures = [{"file": r["file"], "findings": r["findings"]}
                      for r in results if r["hard_fail"]]
-    blocking = list(reach)
-    blocking_files = {e["file"] for e in reach}
+    by_disp = lambda d: [e for e in reach if e["disposition"] == d]
+    blocking = by_disp("BLOCKING")
+    cleared_by_provision = by_disp("CLEARED_BY_PROVISION")
+    interim_verify_gate = by_disp("INTERIM_VERIFY_GATE")
+    gated_lgrade = by_disp("GATED_LGRADE")
+    reach_files = {e["file"] for e in reach}
     advisory = []
     for r in results:
         if r["hard_fail"]:
             continue
         for f in r["findings"]:
             advisory.append({"file": r["file"], "finding": f,
-                             "also_blocking_to_enforcement": r["file"] in blocking_files})
+                             "also_blocking_to_enforcement": r["file"] in
+                             {e["file"] for e in blocking}})
+
+    # End-to-end enforcement requires BOTH: no blocking findings AND every
+    # runtime cite() call site migrated to an output_context. Micro-PR A is
+    # source-structure only, so migration is deliberately still pending.
+    unmigrated = unmigrated_cite_sites()
     return {
         "discovered_count": len(files),
         "freshness_report_used": fresh_report,
@@ -235,8 +289,12 @@ def run():
         "engine_citation_reach": reach,
         "hard_failures": hard_failures,
         "blocking_to_enforcement": blocking,
+        "cleared_by_provision": cleared_by_provision,
+        "interim_verify_gate": interim_verify_gate,
+        "gated_lgrade": gated_lgrade,
         "advisory": advisory,
-        "enforcement_complete": len(blocking) == 0,
+        "unmigrated_cite_sites": unmigrated,
+        "enforcement_complete": len(blocking) == 0 and len(unmigrated) == 0,
     }
 
 
@@ -270,11 +328,23 @@ def render(report):
     L.append("  (1) HARD FAILURES (block merge): %d" % len(report["hard_failures"]))
     for h in report["hard_failures"]:
         L.append("      - %s: %s" % (h["file"], "; ".join(h["findings"])))
-    L.append("  (2) BLOCKING-TO-ENFORCEMENT (engine citations reaching "
-             "non-eligible sources — block the enforcement migration, NOT "
-             "advisory): %d" % len(report["blocking_to_enforcement"]))
+    L.append("  (2) BLOCKING-TO-ENFORCEMENT (engine citations reaching a source "
+             "NOT resolved for enforcement — block the migration, NOT advisory): "
+             "%d" % len(report["blocking_to_enforcement"]))
     for e in report["blocking_to_enforcement"]:
         L.append("      - %s (%s) reachable via bare cite() in %s"
+                 % (e["file"], e["status"], ", ".join(e["referenced_in"])))
+    L.append("  (2a) RESOLVED engine-reachable sources (tracked, not blocking):")
+    for e in report["cleared_by_provision"]:
+        L.append("      - CLEARED  %s (%s) — confident per-provision marker; %s"
+                 % (e["file"], e["status"], ", ".join(e["referenced_in"])))
+    for e in report["interim_verify_gate"]:
+        L.append("      - INTERIM  %s (%s) — interim VERIFY gate (VERIFY/attorney-"
+                 "gated only, pending clean recapture); %s"
+                 % (e["file"], e["status"], ", ".join(e["referenced_in"])))
+    for e in report["gated_lgrade"]:
+        L.append("      - GATED    %s (%s) — L-grade, cite only into VERIFY/attorney-"
+                 "gated (confirm with a gating test); %s"
                  % (e["file"], e["status"], ", ".join(e["referenced_in"])))
     L.append("  (3) ADVISORY (metadata gaps; do not block): %d"
              % len(report["advisory"]))
@@ -287,11 +357,19 @@ def render(report):
              "|   ADVISORY: %d"
              % (len(report["hard_failures"]), len(report["blocking_to_enforcement"]),
                 len(report["advisory"])))
+    unmig = report.get("unmigrated_cite_sites", [])
+    L.append("MIGRATION: %d runtime cite() site(s) still bypass the guardrail "
+             "(no output_context)%s"
+             % (len(unmig),
+                (": " + ", ".join("%s:%d" % (s["file"], s["line"]) for s in unmig))
+                if unmig else ""))
     L.append("CITATION ELIGIBILITY ENFORCED END-TO-END: %s"
              % ("YES" if report["enforcement_complete"] else
-                "NO — detectable but NOT enforced; legacy engine call sites still "
-                "bypass via bare cite(). Enforcement migration is a follow-up "
-                "(see BACKLOG), blocked on the listed findings."))
+                "NO — findings are now detectable and the four blockers are "
+                "cleared/downgraded (per-provision markers + interim VERIFY gates), "
+                "but the call-site migration has NOT run: %d runtime cite() site(s) "
+                "still bypass the guardrail via bare cite(). Migration is a "
+                "follow-up (see BACKLOG)." % len(unmig)))
     L.append("RESULT (merge gate = hard failures only): %s"
              % ("FAIL" if hard else "PASS"))
     L.append("=" * 78)
