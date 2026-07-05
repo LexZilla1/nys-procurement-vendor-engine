@@ -60,6 +60,30 @@ def test_confirmed_rules_cite_golden_copy():
     assert GC.cite(eeo.grounding["source_file"], eeo.grounding["citation_quote"])
 
 
+def test_eeo_mwbe_grounding_is_verify_gated_both_directions():
+    """The migrated bid_readiness cite: the EEO rule's grounding is mwbe-5nycrr, a
+    gated (INTERIM_VERIFY) source, cited with output_context=VERIFY. Both
+    directions on the ACTUAL bid_readiness path:
+      * forward — _build_rules produces the eeo grounding (the VERIFY floor admits
+        the gated source) and it is verbatim golden;
+      * reverse — the exact (source, quote) it grounds is BLOCKED in a CONFIDENT
+        context and ALLOWED in VERIFY / attorney-gated: a gated citation, never a
+        confident one."""
+    import engine.golden_status as gs
+    rules = BR._build_rules(GC)
+    eeo = rules["eeo"]["grounding"]
+    assert eeo is not None and eeo["source_file"] == "source-mwbe-5nycrr-pass-fail.md"
+    src, q = eeo["source_file"], eeo["citation_quote"]
+    assert q in GC.body(src)                                    # forward: attached + verbatim
+    try:
+        GC.cite(src, q, output_context=gs.OUTPUT_CONFIDENT)     # reverse: blocked confident
+        raise AssertionError("eeo mwbe grounding must not be confident-eligible")
+    except V.GoldenEligibilityError as e:
+        assert e.status == gs.INTERIM_VERIFY
+    assert GC.cite(src, q, output_context=gs.OUTPUT_VERIFY) == q            # allowed VERIFY
+    assert GC.cite(src, q, output_context=gs.OUTPUT_ATTORNEY_GATED) == q    # allowed attorney-gated
+
+
 def test_tender_excerpts_never_pass_through_cite():
     """A tender excerpt must NOT be citable as golden copy — proving we keep the
     provenance split. (If one happened to be verbatim, that would be an

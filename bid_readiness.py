@@ -32,6 +32,7 @@ import re
 import sys
 
 from validator import GoldenCopy, FAIL, WARN, PASS, INFO
+from engine import golden_status as gs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -200,7 +201,12 @@ def _build_rules(golden):
         if cand:
             src, quote = cand
             try:
-                golden.cite(src, quote)  # raises if not verbatim
+                # Vendor-facing readiness grounding. Gated at the VERIFY floor so a
+                # gated source (e.g. the EEO rule's mwbe-5nycrr INTERIM_VERIFY
+                # citation) is admitted only as a VERIFY/attorney-gated citation,
+                # never confident, and any source not citable at VERIFY is dropped
+                # (grounding=None) rather than shown — fail-soft, no false citation.
+                golden.cite(src, quote, output_context=gs.OUTPUT_VERIFY)
                 grounding = {"source_file": src, "citation_quote": quote}
             except Exception:
                 grounding = None

@@ -20,6 +20,8 @@ TEXT body, reusing the same choke-point the validator uses. This module does
 not paraphrase, reconstruct, or persist any tier-3 (TIN/SSN/DOB) data.
 """
 
+from engine import golden_status as gs
+
 GOLDEN_RULE = "golden_rule"
 SOLICITATION = "solicitation"
 USER_ENTERED = "user_entered"
@@ -71,18 +73,26 @@ class Citation:
     def is_golden(self):
         return self.source_type == GOLDEN_RULE
 
-    def verify_golden(self, golden):
+    def verify_golden(self, golden, output_context=gs.OUTPUT_CONFIDENT):
         """For a golden_rule citation, confirm `quote` is verbatim in the named
-        source's STATE TEXT body. `golden` is a validator.GoldenCopy-like object
-        exposing cite(source_id, quote). Raises CitationError on any mismatch.
-        No-op (returns True) for non-golden citations."""
+        source's STATE TEXT body AND that the source is citation-eligible for the
+        intended `output_context`. `golden` is a validator.GoldenCopy-like object
+        exposing cite(source_id, quote, output_context). Raises CitationError on
+        any mismatch. No-op (returns True) for non-golden citations.
+
+        `output_context` defaults to CONFIDENT: a daily-habit law-derived
+        obligation is a confident, dated assertion to the vendor, so its citation
+        must clear the confident-eligibility gate (e.g. EXC §314(5)(a)'s per-
+        provision confident marker). A caller whose obligation feeds a
+        VERIFY / attorney-gated output passes that context instead."""
         if not self.is_golden():
             return True
         try:
-            golden.cite(self.source_id, self.quote)
-        except Exception as exc:  # CitationError from GoldenCopy, or unknown source
+            golden.cite(self.source_id, self.quote, output_context=output_context)
+        except Exception as exc:  # CitationError / GoldenEligibilityError, or unknown source
             raise CitationError(
-                "golden citation not verbatim in %s: %s" % (self.source_id, exc))
+                "golden citation rejected for %s (%s): %s"
+                % (self.source_id, output_context, exc))
         return True
 
     def to_dict(self):

@@ -28,6 +28,7 @@ import sys
 import datetime
 
 from validator import GoldenCopy, parse_date, FAIL, WARN, PASS, INFO
+from engine import golden_status as gs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -116,8 +117,12 @@ def _window_status(days):
 
 def _mwbe_item(data, today, golden):
     expiry = parse_date(data.get("mwbe_cert_expiry"))
+    # EXC §314(5)(a) five-year validity is a confident statutory fact (its
+    # per-provision marker makes this quote confident-eligible); cite it into a
+    # CONFIDENT output so a non-confident-eligible quote would fail closed here.
     grounding = {"source_file": EXEC314,
-                 "citation_quote": golden.cite(EXEC314, EXEC314_QUOTE)}
+                 "citation_quote": golden.cite(
+                     EXEC314, EXEC314_QUOTE, output_context=gs.OUTPUT_CONFIDENT)}
     guidance = ("ESD recertification window opens {} days before expiry "
                 "(agency guidance, not statutory).".format(RENEWAL_WINDOW_DAYS))
     if expiry is None:
@@ -151,8 +156,11 @@ def _mwbe_item(data, today, golden):
 def _sdvob_item(data, today, golden):
     expiry = parse_date(data.get("sdvob_cert_expiry"))
     cycle = data.get("sdvob_cycle_years_user_provided")
+    # SDVOB good-faith-effort statement is VERIFIED_GOLDEN; cite it into a
+    # CONFIDENT output (the user-provided renewal CYCLE, gated below, is separate).
     grounding = {"source_file": SDVOB_SRC,
-                 "citation_quote": golden.cite(SDVOB_SRC, SDVOB_QUOTE)}
+                 "citation_quote": golden.cite(
+                     SDVOB_SRC, SDVOB_QUOTE, output_context=gs.OUTPUT_CONFIDENT)}
     not_conf = ("SDVOB certification cycle ({}) is USER-PROVIDED and not confirmed "
                 "against golden copy — verify the renewal cycle with NYS OGS."
                 .format("{} yr".format(cycle) if cycle else "unspecified"))

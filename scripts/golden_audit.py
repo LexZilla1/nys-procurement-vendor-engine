@@ -31,6 +31,7 @@ status).
 """
 
 import argparse
+import ast
 import glob
 import json
 import os
@@ -49,9 +50,37 @@ SOURCES_DIR = os.path.join(REPO_ROOT, "golden-copy", "sources")
 INDEX_PATH = os.path.join(REPO_ROOT, "golden-copy", "golden-copy-INDEX.md")
 REPORT_PATH = os.path.join(REPO_ROOT, "golden-copy", "VERIFICATION-REPORT.md")
 FRESHNESS_DIR = os.path.join(REPO_ROOT, "docs", "freshness")
+# Static source-*.md literal reach is scanned over the engine + validator code
+# (the "engine citation reach" advisory — which gated sources engine code names).
 ENGINE_SCAN_FILES = (
     glob.glob(os.path.join(REPO_ROOT, "engine", "*.py"))
     + [os.path.join(REPO_ROOT, "validator.py")])
+
+# --- classification-derived runtime citation surface (bare-cite ban) --------
+# Every repo .py file that INVOKES the guardrail (a real `.cite(` CALL, AST-
+# detected — docstring mentions like `GoldenCopy.cite()` do NOT count) is
+# classified below. RUNTIME files are vendor-facing citation paths and ARE
+# scanned for bare cites; every other cite-invoking file is excluded only WITH an
+# explicit reason. A cite-invoking file in NEITHER table is an UNCLASSIFIED
+# finding (fail-closed) — a new product citation path cannot silently escape the
+# ban by being absent from a handpicked list. Keys are repo-relative paths.
+RUNTIME_CITE_FILES = {
+    "validator.py":            "RM-1..RM-5 validator findings (vendor-facing)",
+    "bid_readiness.py":        "bid-readiness rule grounding (vendor-facing)",
+    "cert_renewal.py":         "MWBE/SDVOB cert-renewal grounding (vendor-facing)",
+    "gap_analysis.py":         "gap-catalog citations surfaced in verdicts (vendor-facing)",
+    "engine/citation.py":      "Citation.verify_golden choke-point (daily-habit backend)",
+    "engine/payment_clock.py": "payment-clock holiday anchor (vendor-facing deadline)",
+}
+NON_RUNTIME_CITE_EXCLUSIONS = {
+    "test_bid_readiness.py": "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_cert_renewal.py":  "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_gap_analysis.py":  "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_invoice_clock.py": "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_payment_clock.py": "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_validator.py":     "test suite — drives cite() directly for verbatim asserts; not product output",
+    "test_golden_audit.py":  "test suite — guardrail/audit tests; drives cite() directly",
+}
 
 _MONTHS = None  # unused; kept minimal
 
@@ -217,22 +246,76 @@ def engine_citation_reach(status_by_file, raw_by_file):
     return flagged
 
 
+# Per-line exact-enumeration escape hatch for a deliberately bare cite inside a
+# RUNTIME file (entries are "<relpath>:<line>", each needing a justification). The
+# migration left NONE — every runtime cite passes an explicit output_context — so
+# this is intentionally empty; a new bare runtime cite fails the ban unless added
+# here with a reason.
+BARE_CITE_ALLOWLIST = frozenset()
+
+
+def _cite_calls(path):
+    """AST-detected `.cite(...)` CALL sites in `path` -> [(lineno, has_output_context)].
+    Uses the AST, so docstring/comment mentions (e.g. a `GoldenCopy.cite()` note)
+    are NOT counted, multi-line and `Obj().cite(...)` / `self.gc.cite(...)` forms
+    are handled, and `def cite(...)` (a FunctionDef, not a Call) is ignored.
+    Unreadable/unparseable file -> []."""
+    try:
+        tree = ast.parse(open(path, encoding="utf-8").read())
+    except (OSError, SyntaxError):
+        return []
+    out = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "cite"):
+            has_oc = any(kw.arg == "output_context" for kw in node.keywords)
+            out.append((node.lineno, has_oc))
+    return out
+
+
+def _all_repo_py_files():
+    return sorted(
+        os.path.relpath(p, REPO_ROOT)
+        for p in glob.glob(os.path.join(REPO_ROOT, "**", "*.py"), recursive=True)
+        if "__pycache__" not in p)
+
+
+def classify_cite_surface():
+    """Partition every repo .py file that INVOKES the guardrail into
+      {"runtime": {relpath: reason}, "excluded": {relpath: reason},
+       "unclassified": [relpath, ...]}.
+    Table-driven (RUNTIME_CITE_FILES / NON_RUNTIME_CITE_EXCLUSIONS) but grounded
+    against the ACTUAL cite CALLS found by AST — so the runtime scan surface is
+    derived from classification, not a handpicked path list, and any cite-invoking
+    file missing from both tables surfaces as `unclassified` (a fail-closed finding)."""
+    runtime, excluded, unclassified = {}, {}, []
+    for rel in _all_repo_py_files():
+        if not _cite_calls(os.path.join(REPO_ROOT, rel)):
+            continue  # no guardrail invocation -> irrelevant to the ban
+        if rel in RUNTIME_CITE_FILES:
+            runtime[rel] = RUNTIME_CITE_FILES[rel]
+        elif rel in NON_RUNTIME_CITE_EXCLUSIONS:
+            excluded[rel] = NON_RUNTIME_CITE_EXCLUSIONS[rel]
+        else:
+            unclassified.append(rel)
+    return {"runtime": runtime, "excluded": excluded, "unclassified": unclassified}
+
+
 def unmigrated_cite_sites():
-    """Runtime cite() call sites under engine/ + validator.py that do NOT pass an
-    output_context (so the runtime guardrail is bypassed). While any remain, the
-    enforcement migration is incomplete — end-to-end enforcement is NOT claimed.
-    Heuristic: a `.cite(` call with no `output_context` within the next 400 chars."""
+    """Bare `.cite(` CALL sites (no output_context) in the classification-derived
+    RUNTIME surface, minus the enumerated BARE_CITE_ALLOWLIST. While any remain,
+    the migration is incomplete — end-to-end enforcement is NOT claimed. AST-based,
+    so docstring mentions never count and multi-line / attribute-chained calls are
+    handled precisely."""
+    surface = classify_cite_surface()["runtime"]
     sites = []
-    for path in ENGINE_SCAN_FILES:
-        try:
-            code = open(path, encoding="utf-8").read()
-        except OSError:
-            continue
-        for m in re.finditer(r"\.cite\(", code):
-            window = code[m.start():m.start() + 400].split("\n\n", 1)[0]
-            if "output_context" not in window:
-                sites.append({"file": os.path.relpath(path, REPO_ROOT),
-                              "line": code[:m.start()].count("\n") + 1})
+    for rel in sorted(surface):
+        for lineno, has_oc in _cite_calls(os.path.join(REPO_ROOT, rel)):
+            if has_oc:
+                continue
+            if ("%s:%d" % (rel, lineno)) in BARE_CITE_ALLOWLIST:
+                continue
+            sites.append({"file": rel, "line": lineno})
     return sites
 
 
@@ -278,9 +361,12 @@ def run():
                              "also_blocking_to_enforcement": r["file"] in
                              {e["file"] for e in blocking}})
 
-    # End-to-end enforcement requires BOTH: no blocking findings AND every
-    # runtime cite() call site migrated to an output_context. Micro-PR A is
-    # source-structure only, so migration is deliberately still pending.
+    # End-to-end enforcement requires ALL of: no blocking findings; every cite()
+    # CALL in the classification-derived RUNTIME surface migrated to an
+    # output_context; and no UNCLASSIFIED cite-invoking file (a product path that
+    # escaped classification). The runtime surface is derived from the
+    # classification tables, not a handpicked list.
+    surface = classify_cite_surface()
     unmigrated = unmigrated_cite_sites()
     return {
         "discovered_count": len(files),
@@ -293,8 +379,13 @@ def run():
         "interim_verify_gate": interim_verify_gate,
         "gated_lgrade": gated_lgrade,
         "advisory": advisory,
+        "cite_surface_runtime": surface["runtime"],
+        "cite_surface_excluded": surface["excluded"],
+        "cite_surface_unclassified": surface["unclassified"],
         "unmigrated_cite_sites": unmigrated,
-        "enforcement_complete": len(blocking) == 0 and len(unmigrated) == 0,
+        "bare_cite_allowlist": sorted(BARE_CITE_ALLOWLIST),
+        "enforcement_complete": (len(blocking) == 0 and len(unmigrated) == 0
+                                 and len(surface["unclassified"]) == 0),
     }
 
 
@@ -358,18 +449,40 @@ def render(report):
              % (len(report["hard_failures"]), len(report["blocking_to_enforcement"]),
                 len(report["advisory"])))
     unmig = report.get("unmigrated_cite_sites", [])
+    runtime = report.get("cite_surface_runtime", {})
+    excluded = report.get("cite_surface_excluded", {})
+    unclassified = report.get("cite_surface_unclassified", [])
+    L.append("")
+    L.append("RUNTIME CITATION SURFACE (classification-derived; every .py that "
+             "invokes cite() is classified):")
+    L.append("  RUNTIME/product paths scanned for bare cites (%d):" % len(runtime))
+    for f in sorted(runtime):
+        L.append("      - %-26s %s" % (f, runtime[f]))
+    L.append("  EXCLUDED cite-invoking paths (not product output) (%d):" % len(excluded))
+    for f in sorted(excluded):
+        L.append("      - %-26s %s" % (f, excluded[f]))
+    L.append("  UNCLASSIFIED cite-invoking paths (fail-closed finding) (%d)%s"
+             % (len(unclassified),
+                (": " + ", ".join(sorted(unclassified))) if unclassified else ""))
     L.append("MIGRATION: %d runtime cite() site(s) still bypass the guardrail "
              "(no output_context)%s"
              % (len(unmig),
                 (": " + ", ".join("%s:%d" % (s["file"], s["line"]) for s in unmig))
                 if unmig else ""))
     L.append("CITATION ELIGIBILITY ENFORCED END-TO-END: %s"
-             % ("YES" if report["enforcement_complete"] else
-                "NO — findings are now detectable and the four blockers are "
-                "cleared/downgraded (per-provision markers + interim VERIFY gates), "
-                "but the call-site migration has NOT run: %d runtime cite() site(s) "
-                "still bypass the guardrail via bare cite(). Migration is a "
-                "follow-up (see BACKLOG)." % len(unmig)))
+             % ("YES — no blocking-to-enforcement findings; every cite() call in the "
+                "%d classification-derived RUNTIME/product paths passes an explicit "
+                "output_context (bare-cite ban clean, enumerated exclusions: %d); and "
+                "no cite-invoking file is unclassified."
+                % (len(runtime), len(report.get("bare_cite_allowlist", [])))
+                if report["enforcement_complete"] else
+                "NO — %d runtime cite() site(s) still bypass the guardrail via bare "
+                "cite()%s%s."
+                % (len(unmig),
+                   (" [%s]" % ", ".join("%s:%d" % (s["file"], s["line"]) for s in unmig))
+                   if unmig else "",
+                   (" and %d unclassified cite-invoking file(s)" % len(unclassified))
+                   if unclassified else "")))
     L.append("RESULT (merge gate = hard failures only): %s"
              % ("FAIL" if hard else "PASS"))
     L.append("=" * 78)
