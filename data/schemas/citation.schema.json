@@ -5,7 +5,7 @@
   "description": "A grounded reference. No bare strings: every law-derived fact names its source and quotes the exact text. Mirrors engine/citation.py.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source_id", "source_type", "quote", "captured_at"],
+  "required": ["source_id", "source_type", "locator", "quote", "captured_at"],
   "properties": {
     "source_id": {
       "type": "string",

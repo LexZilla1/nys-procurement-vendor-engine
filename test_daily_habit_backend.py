@@ -187,6 +187,21 @@ def test_known_without_date_is_rejected():
         pass
 
 
+def test_direct_not_applicable_construction_raises():
+    # NOT_APPLICABLE is a factory-returns-None signal, never a live obligation.
+    # Constructing one directly is a programming error and must RAISE — it must
+    # never silently collapse to DONE (which would contaminate future
+    # outcome/defects-prevented counts).
+    try:
+        DatedObligation("o1", "bid_deadline", "t1",
+                        due_date="2026-09-01", date_status=NOT_APPLICABLE)
+        assert False, "date_status=NOT_APPLICABLE must raise on direct construction"
+    except ValueError as exc:
+        assert "NOT_APPLICABLE" in str(exc)
+    # the sanctioned inapplicable path (factory returns None) is unaffected
+    assert make_nfp_renewal_watch("w", "k", "2026-12-31", xi4a_covered=False) is None
+
+
 def test_date_math_pending_due_soon_overdue():
     far = DatedObligation("far", "bid_deadline", "t1",
                           due_date=(TODAY + datetime.timedelta(days=200)).isoformat())
@@ -485,6 +500,102 @@ def test_asked_questions_log():
     q = log.asked_questions[0]
     assert q.agency_answer is None       # unanswered until the agency replies
     assert q.to_dict()["question"] == "Is a site visit mandatory?"
+
+
+# ---------------------------------------------------------------------------
+# schema contracts — required fields must be present (presence vs. null is a
+# distinct, enforced contract that PRs 2-3 depend on). Dependency-free checker.
+# ---------------------------------------------------------------------------
+
+def _load_schema(name):
+    return json.load(open(os.path.join(SCHEMA_DIR, name), encoding="utf-8"))
+
+
+def _validate(instance, schema):
+    """Minimal, stdlib-only structural check: required-field presence,
+    additionalProperties:false, and top-level enum membership. Returns a list of
+    error strings (empty == valid). Enough to lock the presence-vs-null contract
+    without adding a jsonschema dependency."""
+    errors = []
+    props = schema.get("properties", {})
+    for r in schema.get("required", []):
+        if r not in instance:
+            errors.append("missing required field: %s" % r)
+    if schema.get("additionalProperties") is False:
+        for k in instance:
+            if k not in props:
+                errors.append("unexpected field: %s" % k)
+    for k, v in instance.items():
+        spec = props.get(k)
+        if isinstance(spec, dict) and "enum" in spec and v not in spec["enum"]:
+            errors.append("enum violation: %s=%r" % (k, v))
+    return errors
+
+
+def _assert_each_required_field_is_enforced(instance, schema, label):
+    """The valid instance passes; omitting ANY required field fails."""
+    assert _validate(instance, schema) == [], "%s: valid instance should pass" % label
+    for field in schema["required"]:
+        broken = dict(instance)
+        broken.pop(field)
+        errs = _validate(broken, schema)
+        assert any("missing required field: %s" % field == e for e in errs), \
+            "%s: omitting %r must fail validation" % (label, field)
+
+
+def test_dated_obligation_schema_requires_all_fields():
+    schema = _load_schema("dated_obligation.schema.json")
+    # a full, valid serialization (citation present, depends_on empty, due_date null)
+    obl = make_user_obligation("o", "bid_deadline", "t1", None)   # unknown date
+    inst = obl.to_dict(state="VERIFY")
+    assert inst["due_date"] is None and inst["depends_on"] == []
+    assert inst["citation"] is not None
+    assert set(schema["required"]) == {
+        "id", "kind", "source_object_id", "due_date", "date_status",
+        "lead_times", "citation", "depends_on", "state"}
+    _assert_each_required_field_is_enforced(inst, schema, "DatedObligation")
+
+
+def test_citation_schema_requires_locator():
+    schema = _load_schema("citation.schema.json")
+    assert "locator" in schema["required"]
+    # golden_rule: meaningful locator
+    golden = Citation("source-exec-314-mwbe-cert-validity.md", GOLDEN_RULE,
+                      "§ 314(5)(a)", "quote text", "2026-07-03").to_dict()
+    _assert_each_required_field_is_enforced(golden, schema, "Citation(golden)")
+    # user_entered: empty-string locator is allowed (present but blank)
+    ue = Citation("user_entered:t1", USER_ENTERED, "", "2026-09-01", "2026-07-05").to_dict()
+    assert ue["locator"] == ""
+    assert _validate(ue, schema) == []
+
+
+def test_transition_log_schema_requires_reason_and_citation():
+    schema = _load_schema("transition_log_entry.schema.json")
+    assert "reason" in schema["required"] and "citation" in schema["required"]
+    sm = TenderStateMachine("t1")
+    sm.transition(TRIAGED, "USER", "u1", "triaged", triage_verdict=BIDDABLE)
+    inst = sm.log[-1].to_dict()
+    assert inst["citation"] is None      # citation present, may be null
+    _assert_each_required_field_is_enforced(inst, schema, "TransitionLogEntry")
+
+
+def test_tender_and_contract_require_nullable_entity_id():
+    for name, inst in (
+        ("tender.schema.json",
+         {"id": "t1", "entity_id": None, "tender_state": "WATCHING"}),
+        ("contract.schema.json",
+         {"id": "c1", "tender_id": "t1", "entity_id": None}),
+    ):
+        schema = _load_schema(name)
+        assert "entity_id" in schema["required"], name
+        # entity_id is required AND nullable
+        assert schema["properties"]["entity_id"]["type"] == ["string", "null"], name
+        assert _validate(inst, schema) == [], "%s valid (entity_id=null) should pass" % name
+        broken = dict(inst)
+        broken.pop("entity_id")
+        assert any("missing required field: entity_id" == e
+                   for e in _validate(broken, schema)), \
+            "%s: omitting entity_id must fail" % name
 
 
 # ---------------------------------------------------------------------------

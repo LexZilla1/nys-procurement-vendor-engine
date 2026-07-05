@@ -5,7 +5,7 @@
   "description": "Spawned exactly once when a tender is AWARDED. PR 1 carries identity + obligations only; payment-clock logic is PR 2. entity_id nullable for future multi-entity support. No numeric confidence/risk scores.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "tender_id"],
+  "required": ["id", "tender_id", "entity_id"],
   "properties": {
     "id": {"type": "string"},
     "tender_id": {"type": "string"},

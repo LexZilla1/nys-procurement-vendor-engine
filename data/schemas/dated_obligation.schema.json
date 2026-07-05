@@ -5,7 +5,7 @@
   "description": "One thing with a clock. Categorical state only — no numeric confidence/risk scores. Mirrors engine/dated_objects.py. lead_times is an operational reminder cascade (a count of reminders), not a score.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "kind", "source_object_id", "date_status", "lead_times", "state"],
+  "required": ["id", "kind", "source_object_id", "due_date", "date_status", "lead_times", "citation", "depends_on", "state"],
   "properties": {
     "id": {"type": "string"},
     "kind": {

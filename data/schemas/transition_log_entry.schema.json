@@ -5,7 +5,7 @@
   "description": "One immutable record of a tender_state change. Mirrors engine/state_machine.py.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["actor_type", "actor_id", "timestamp", "from_state", "to_state"],
+  "required": ["actor_type", "actor_id", "timestamp", "from_state", "to_state", "reason", "citation"],
   "properties": {
     "actor_type": {"type": "string", "enum": ["USER", "SYSTEM", "ADMIN", "IMPORT"]},
     "actor_id": {"type": ["string", "null"]},

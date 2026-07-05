@@ -5,7 +5,7 @@
   "description": "A tracked solicitation moving through the lifecycle. Categorical state + triage verdict only; no numeric confidence/risk scores. entity_id is nullable for future multi-entity support.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "tender_state"],
+  "required": ["id", "entity_id", "tender_state"],
   "properties": {
     "id": {"type": "string"},
     "entity_id": {

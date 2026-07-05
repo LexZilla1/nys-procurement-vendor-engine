@@ -173,6 +173,17 @@ class DatedObligation:
                 date_status = VERIFY_AT_SOURCE     # no date known -> verify, never guessed
         if date_status not in DATE_STATUSES:
             raise ValueError("invalid date_status %r" % date_status)
+        # NOT_APPLICABLE is a factory signal, never a live obligation: the
+        # sanctioned way to represent an inapplicable obligation is for the
+        # factory to return None. Constructing one directly is a programming
+        # error and must raise — it must NEVER collapse to DONE, because DONE
+        # feeds future outcome / defects-prevented counts and an N/A item would
+        # contaminate them.
+        if date_status == NOT_APPLICABLE:
+            raise ValueError(
+                "date_status=NOT_APPLICABLE must not be constructed directly; "
+                "an inapplicable obligation is represented by the factory "
+                "returning None (see make_nfp_renewal_watch)")
         self.date_status = date_status
 
         # KNOWN must actually have a date; a KNOWN-without-date is incoherent.
@@ -267,11 +278,8 @@ class ObligationGraph:
 
         if obl.date_status == VERIFY_AT_SOURCE:
             return VERIFY
-        if obl.date_status == NOT_APPLICABLE:
-            # Inert: no clock applies. Surfaced nowhere as an action item.
-            # (Factories return None rather than build NA obligations; a directly
-            # constructed NA obligation collapses to DONE — see module notes.)
-            return DONE
+        # date_status is necessarily KNOWN here: NOT_APPLICABLE can never reach a
+        # live obligation (the constructor rejects it), so there is no NA branch.
 
         # KNOWN date -> pure calendar math against the lead-time cascade.
         delta = (obl.due_date - today).days
