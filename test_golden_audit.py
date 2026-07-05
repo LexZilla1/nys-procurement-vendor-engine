@@ -599,16 +599,23 @@ def test_excluded_test_paths_with_bare_cites_are_not_flagged():
 
 
 def test_unclassified_cite_invoking_file_fails_closed():
-    """A cite-invoking runtime file absent from BOTH classification tables surfaces
-    as UNCLASSIFIED and fail-closes enforcement — END-TO-END cannot be YES while a
-    product citation path escaped classification. (Simulated by dropping a known
-    runtime entry; the file is unchanged, only the classification table.)"""
+    """STANDING fail-closed guard: a cite-invoking file absent from BOTH
+    classification tables must (a) surface as UNCLASSIFIED (count > 0), (b) set
+    enforcement_complete False, and (c) render END-TO-END: NO listing the file.
+    This breaks CI if someone later drops the unclassified term from the YES gate.
+    (Simulated by dropping a known runtime entry; the FILE is unchanged, only the
+    in-memory classification table — restored in finally.)"""
     orig = dict(ga.RUNTIME_CITE_FILES)
     try:
         del ga.RUNTIME_CITE_FILES["bid_readiness.py"]               # now unclassified
         surface = ga.classify_cite_surface()
-        assert "bid_readiness.py" in surface["unclassified"], surface
-        assert ga.run()["enforcement_complete"] is False
+        assert "bid_readiness.py" in surface["unclassified"], surface   # (a) count > 0
+        rep = ga.run()
+        assert len(rep["cite_surface_unclassified"]) > 0
+        assert rep["enforcement_complete"] is False                     # (b) YES gate closed
+        out = ga.render(rep)                                            # (c) audit finding surfaced
+        assert "ENFORCED END-TO-END: NO" in out
+        assert "bid_readiness.py" in out
     finally:
         ga.RUNTIME_CITE_FILES.clear()
         ga.RUNTIME_CITE_FILES.update(orig)
