@@ -65,16 +65,15 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   blocked by a stale §314 capture**, and the payment-clock PR (PR 2) may proceed
   without relying on unverified §314 assumptions. Presumption is rebuttable and
   is NEVER rendered as credential_status OK.
-- [ ] **B: re-pull EXC/314 for the audit trail.** **Now serviced by the
-  sanctioned statute-capture workflow** (`.github/workflows/statute-capture.yml`,
-  EXC/314 registered as an `existing`/diff-only target). The FIRST successful
-  workflow run that includes EXC/314 (the default input does) CLOSES this item:
-  it re-pulls via the OpenLeg API from Actions (which holds `NYSLEG_API_KEY`),
-  diffs against the stored 2026-07-03 capture, and records the verdict in the
-  capture PR. **Expect FULL-MATCH**; the golden body is already the API capture
-  and is never rewritten on a match (report-only). A DIVERGENT result would open
-  a review-flagged PR instead of silently reconciling. This was not possible in
-  interactive sessions (key unset + egress 403); the workflow is the fix.
+- [x] **B: re-pull EXC/314 for the audit trail — CLOSED 2026-07-05.** The
+  sanctioned statute-capture workflow run (2026-07-05) re-pulled EXC/314 via the
+  OpenLeg API from Actions (`existing`/diff-only target) and diffed it against the
+  stored 2026-07-03 capture: result **FULL-MATCH** (subdivs 8/8, all three NB flags
+  present — `** NB Effective until July 1, 2026`, `** NB Effective July 1, 2026`,
+  `* NB Repealed July 1, 2028`). Golden body was **not** rewritten (report-only per
+  convention); the audit verdict is recorded in `docs/statute-capture/2026-07-05.md`
+  and VERIFICATION-REPORT row 38 context. This was impossible in interactive
+  sessions (key unset + egress 403); the workflow was the fix. No further action.
 
 ## Attorney-review list (legal-interpretive — needs licensed-attorney judgment before product logic asserts it)
 - [ ] **EXC §314(5)(b)-(c) recertification presumption (L-grade).** Product may
@@ -82,18 +81,29 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   "verify eligibility conditions"; never as a determination and never as OK. The
   presumption expires on final determination of the application (5)(c). Source:
   golden-copy/sources/source-exec-314-mwbe-cert-validity.md.
+- [ ] **GCN §24 "public holiday" ↔ GFO XII.5.I "legal holidays" mapping (L-grade).**
+  The payment clock treats the GCN §24 public-holiday list as the set of "legal
+  holidays" GFO XII.5.I uses to pause/suspend the clock. Standard reading, but an
+  interpretive mapping between differently-worded sources, not a mechanical
+  identity — needs attorney sign-off before the clock asserts it. Practical risk
+  is bounded by PR 2's fail-closed, source-backed, VERIFY-gated design. Also note
+  the dynamic President/Governor-appointed holidays (an open class) must be
+  handled, not omitted. Sources: golden-copy/sources/source-gcn-24-public-holidays.md,
+  golden-copy/sources/source-xii-5-i-prompt-payment-interest.md.
 - [ ] **PR 2 = payment clock.** HolidayCalendarProvider MUST be source-backed
   and fail closed — no embedded/hardcoded holiday lists; if the calendar source
   is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
   semantic-concept check -> PREFLIGHT_FLAG (categorical, never a numeric score).
   Fills the Invoice shell (data/schemas/invoice.schema.json) with clock logic.
-  **BLOCKED on the holiday source: PR 2 must not compute the payment clock until
-  GCN/24 (public holidays) is captured via the statute-capture workflow AND
-  human-reviewed as verified golden** (GCN/25-a — deadline extension to the next
-  business day — is the companion source; capture it in the same run). Both are
-  registered in `data/config/statute_capture_registry.json`. Until GCN/24 is
-  verified golden, the source-backed HolidayCalendarProvider has no golden
-  holiday source to read, so the clock stays fail-closed by design.
+  **HOLIDAY SOURCE NOW UNBLOCKED (2026-07-05).** GCN/24 (public holidays) and
+  GCN/25-a (deadline extension to the next succeeding business day; interest-
+  computation rule) were captured via the sanctioned statute-capture workflow and
+  **promoted to verified golden 2026-07-05** (owner read + two independent fetch
+  cross-checks; INDEX 4.14/4.15; VERIFICATION-REPORT rows 46–47). The source-backed
+  HolidayCalendarProvider now has its golden holiday + deadline sources. Remaining
+  gate before the clock asserts the mapping: the **L-grade attorney item** above
+  (GCN §24 "public holiday" ↔ GFO XII.5.I "legal holidays"). Design invariants
+  unchanged: no hardcoded holiday lists; fail-closed if a source is unavailable.
 - [ ] **PR 3 = morning-brief generator.** Locked section hierarchy +
   generated_at + data_quality counts (operational counts, not scores) +
   prompt_payment_note wording. Consumes the outcome_log records; no analytics

@@ -28,7 +28,9 @@ import sys
 # Configuration / constants
 # ---------------------------------------------------------------------------
 
-EXPECTED_COUNT = 45
+# 45 originals + 2 statute-capture additions (GCN §24, GCN §25-a) promoted to
+# golden on 2026-07-05 via the sanctioned statute-capture workflow.
+EXPECTED_COUNT = 47
 
 # The four required header labels plus the copy stamp, plus "Covers" (added in
 # the 2026-07-03 full-text rebuild: every record must declare what its capture

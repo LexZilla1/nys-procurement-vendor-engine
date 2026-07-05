@@ -84,6 +84,16 @@ LAW_ID_RE = re.compile(r"^[A-Z]{2,4}/[0-9]+(?:-[0-9A-Z]+)*$")
 # counted -- this measures section-level structure only.
 SUBDIV_RE = re.compile(r"^\s*(?:\*+\s*)?(\d+(?:-[a-z])?)\.\s", re.M | re.I)
 
+# Inline subdivision marker following the section-title sentence on the SAME
+# physical line, e.g. reflow puts subdivision 1 on the "§" heading line:
+#   "§ 25-a. Public holiday ... public holiday. 1. When any period ..."
+# The line-start SUBDIV_RE misses that "1." because it is mid-line. Require a
+# preceding sentence break (". " / "; ") and a following word so section
+# numbers ("§ 25-a.") and dates ("July 1, 2028") are not miscounted. Applied
+# ONLY to the section-heading line (see ordered_subdivisions), which bounds any
+# false positive to that one line.
+INLINE_SUBDIV_RE = re.compile(r"[.;]\s+(\d+(?:-[a-z])?)\.\s+[A-Za-z]")
+
 # An NB annotation line, e.g. "** NB Effective July 1, 2026" / "* NB Repealed
 # July 1, 2028". These carry the effective/repeal semantics and must survive
 # capture verbatim.
@@ -146,10 +156,24 @@ def load_registry():
 # ---------------------------------------------------------------------------
 
 def ordered_subdivisions(text):
-    """Distinct top-level subdivision markers, in document order."""
-    out, seen = [], set()
+    """Distinct top-level subdivision markers, in document order.
+
+    Counts line-start markers AND an inline marker that reflow parks on the
+    section-heading line (the "§ ... 1. When ..." case), so a section whose
+    subdivision 1 shares the heading line is not under-counted. The inline scan
+    is confined to the heading line to avoid matching numbers in body prose.
+    """
+    marks = []  # (position, key)
     for m in SUBDIV_RE.finditer(text):
-        k = m.group(1).lower()
+        marks.append((m.start(1), m.group(1).lower()))
+    stripped = text.lstrip()
+    first_line = stripped.split("\n", 1)[0]
+    if re.sub(r"^\*+\s*", "", first_line).startswith("§"):
+        base = text.find(first_line)
+        for m in INLINE_SUBDIV_RE.finditer(first_line):
+            marks.append((base + m.start(1), m.group(1).lower()))
+    out, seen = [], set()
+    for _pos, k in sorted(marks):
         if k not in seen:
             seen.add(k)
             out.append(k)
