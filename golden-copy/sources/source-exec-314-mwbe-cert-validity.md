@@ -7,7 +7,11 @@
 - **Copied exactly on:** 2026-07-03
 - **API activeDate:** 2026-02-20
 - **Capture method:** openleg-api-v3
-- **Covers:** full section
+- **Covers:** full section (subdivisions 1, 2, 2-a, 2-b, 2-c, 3, 4, 5 — subd. 5 dual-versioned)
+- **Operative version (as of 2026-07-01):** subd. **5 (a)-(c)** — the amended text carrying
+  "** NB Effective July 1, 2026". The prior single-paragraph "5." ("** NB Effective until
+  July 1, 2026") is superseded as of 2026-07-01 and must not be cited as current. Both
+  versions remain captured verbatim below because the section page prints both.
 
 ---
 
@@ -56,6 +60,21 @@
 > Prior capture note: a previous version of this file captured ONLY the current
 > 5.(a) clause; it now carries the complete section (openleg-api-v3, activeDate
 > 2026-02-20).
+
+> GRADE — subd. 5 (b)-(c) recertification presumption = **L (legal-interpretive).**
+> The presumption's conditions are attorney-judgment calls, not mechanical checks:
+> "no change in the ownership or capital contribution relied upon," "no material
+> change in the nature or management," a prior certification "approved within the
+> previous six years and six months," and the application being "compliant with 5
+> NYCRR 144." Whether these are satisfied cannot be decided by product logic.
+> PRODUCT RULE (binding): the engine may surface this ONLY as
+> credential_status = RECERT_PRESUMPTION_PENDING, paired with a citation to this
+> source and the phrase "verify eligibility conditions." It must NEVER assert that
+> the presumption applies, render it as a determination, or map it to
+> credential_status OK — per (5)(c) the presumption itself "shall expire upon the
+> final determination of an application for certification." On the attorney-review
+> list (BACKLOG). By contrast, subd. 5(a)'s five-year validity is mechanical (a date
+> subtraction) and is NOT L-graded.
 
 ## SUNSET / AUTHORIZATION (time-limited rule — § 314 is part of a sunsetting program)
 
