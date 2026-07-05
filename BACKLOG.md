@@ -90,12 +90,21 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   the dynamic President/Governor-appointed holidays (an open class) must be
   handled, not omitted. Sources: golden-copy/sources/source-gcn-24-public-holidays.md,
   golden-copy/sources/source-xii-5-i-prompt-payment-interest.md.
-- [ ] **PR 2 = payment clock.** HolidayCalendarProvider MUST be source-backed
-  and fail closed — no embedded/hardcoded holiday lists; if the calendar source
-  is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
-  semantic-concept check -> PREFLIGHT_FLAG (categorical, never a numeric score).
-  Fills the Invoice shell (data/schemas/invoice.schema.json) with clock logic.
-  **HOLIDAY SOURCE NOW UNBLOCKED (2026-07-05).** GCN/24 (public holidays) and
+  **CLOSING ACTION:** after attorney sign-off, flip
+  `HOLIDAY_MAPPING_ATTORNEY_APPROVED = True` in `engine/payment_clock.py` (single
+  gate; the confident holiday-adjusted path is already built and tested behind
+  it — no rework needed). Until then, holiday-dependent deadlines return VERIFY.
+- [~] **PR 2 = payment clock — deadline/holiday sources BUILT (engine/payment_clock.py).**
+  HolidayCalendarProvider is source-backed (parses the GCN §24 / §25-a golden
+  bodies via validator.GoldenCopy; no hardcoded holiday lists) and fails closed
+  (holiday-adjusted -> VERIFY if a source is unavailable). Attorney gate live:
+  holiday-dependent deadlines return VERIFY until
+  `HOLIDAY_MAPPING_ATTORNEY_APPROVED` is flipped (see the L-grade item above);
+  pure calendar day-count deadlines output normally. Fills the Invoice-shell
+  clock (`invoice_due_dates`). Tests: test_payment_clock.py (17). **Still TODO in
+  a later PR:** RM-5 §109 semantic-concept check -> PREFLIGHT_FLAG (categorical,
+  never a numeric score); prompt-payment interest wiring.
+  **HOLIDAY SOURCE UNBLOCKED (2026-07-05).** GCN/24 (public holidays) and
   GCN/25-a (deadline extension to the next succeeding business day; interest-
   computation rule) were captured via the sanctioned statute-capture workflow and
   **promoted to verified golden 2026-07-05** (owner read + two independent fetch
