@@ -39,37 +39,52 @@ describe this as "machine-enforced" until the enforcement migration below lands.
 - [ ] **Audit hard-fails** on engine citations to PARTIAL/STALE/DIVERGENT/PENDING
   sources, and on L_GRADE cited into a confident output (promote the current
   blocking-to-enforcement class to a hard failure once the findings below clear).
-- **Blocked on these four findings** (must resolve first, else migration would
-  break legitimate verbatim cites): stf-109 activeDate; per-provision F/L
-  granularity for EXC/314 (the §314(5)(a) mechanical sentence must be
-  confident-eligible); source-structure decision for stf-109 and mwbe-5nycrr
-  (split the statute/reg layer into its own VERIFIED source, or add a
-  per-provision eligibility marker); GCN/24 gating confirmation (payment_clock
-  must cite it only into VERIFY/attorney-gated). State any output that flips to
-  VERIFY as a result.
+- **The four blocking-to-enforcement findings are RESOLVED (Micro-PR A) — the
+  migration is now unblocked** (but NOT performed; audit still reports END-TO-END
+  NO, 3 unmigrated cite() sites). Per-provision eligibility markers (Option 1)
+  were added, without moving/editing any STATE TEXT:
+  - EXC/314 §314(5)(a): confident per-provision marker (anchored ONLY to the
+    five-year sentence) → make_cert_expiry's cite is now confident-eligible;
+    §314(5)(b)-(c) presumption stays L-gated (no bleed). CLEARED.
+  - stf-109 (mixed §109 statute + XII.4.A guidance + AC 3253-S form): source-scope
+    INTERIM_VERIFY marker → citable only into VERIFY/attorney-gated, never
+    confident, pending clean §109 recapture via the sanctioned statute-capture
+    workflow. DOWNGRADED (not confident-blessed).
+  - mwbe-5nycrr (targeted excerpt): source-scope INTERIM_VERIFY marker → same
+    interim gate; full official NYCRR capture is later coverage-ledger work.
+    DOWNGRADED.
+  - GCN/24 (L-grade): confirmed cited only into VERIFY/attorney-gated by a
+    locking test (test_payment_clock.test_gcn24_lgrade_is_cited_only_into_gated_
+    outputs); the holiday-dependent path is VERIFY until attorney-approved.
 - **This precedes the coverage ledger and PR 3.**
 
-### Audit follow-ups (substantive — reported, not auto-fixed this PR)
-- [ ] **stf-109 missing API activeDate.** The mixed §109 capture is flagged
-  API-captured (openleg-api-v3) but has no `API activeDate` line. Add the real
-  activeDate from a sanctioned capture/freshness pull — do NOT fabricate a date.
-- [ ] **PARTIAL sources cited by engine — reclassify or confirm.** stf-109
-  (mixed: §109 statute + XII.4.A guidance + AC 3253-S form) is cited by RM-5
-  (validator) and the §109 semantic preflight (engine/invoice_status); mwbe-5nycrr
-  (excerpt) is cited by validator. The cited quotes are verbatim from real
-  statute/reg layers, but the whole-file status is PARTIAL_CAPTURE. Decide:
-  split the statute layer into its own VERIFIED source, or add a per-provision
-  eligibility marker, so these confident cites are eligible under the guardrail.
-- [ ] **L-grade sources reachable by confident outputs.** EXC/314 (L-grade) is
-  cited by engine/dated_objects.make_cert_expiry (a confident cert_expiry date)
-  using the §314(5)(a) five-year sentence, which the file annotates as mechanical
-  / NOT L-graded. GCN/24 (L-grade) is cited by engine/payment_clock only into
-  VERIFY/attorney-gated outputs (correct). Resolve via per-provision granularity
-  (mark the mechanical 5(a) provision citable) so make_cert_expiry is eligible.
-- [ ] **Retrofit output_context at engine cite sites.** The guardrail is opt-in;
-  wire CONFIDENT/VERIFY/ATTORNEY_GATED at existing/engine citation points so the
-  runtime guardrail (not just the audit) enforces them. Depends on the two items
-  above (reclassification) to avoid breaking legitimate cites.
+### Audit follow-ups (substantive)
+- [ ] **stf-109 clean §109 recapture (interim VERIFY applied).** The §109 statute
+  layer carries an activeDate (2014-09-22) but under a parenthetical label
+  (`API activeDate (statute §109):`) the audit's strict regex does not read, and
+  the file mixes statute + XII.4.A guidance + AC 3253-S form layers. Micro-PR A
+  did NOT fabricate/normalize a date; it applied an INTERIM_VERIFY gate. Real fix:
+  recapture §109 as its own clean VERIFIED source via the sanctioned
+  statute-capture workflow (sets a canonical file-level activeDate), then lift the
+  interim gate. The "missing API activeDate" advisory remains until then.
+- [x] **PARTIAL sources cited by engine — resolved via per-provision markers
+  (Micro-PR A).** stf-109 and mwbe-5nycrr now carry source-scope INTERIM_VERIFY
+  markers (citable only into VERIFY/attorney-gated). NOT blessed to confident.
+  RM attribution (mechanically asserted, test_golden_audit.
+  test_rm_attribution_is_a_mechanically_asserted_invariant): **RM-5 →
+  stf-109** (§109 invoice certification, via check_invoice); **RM-4 →
+  mwbe-5nycrr** (MWBE cascade + §143.3(c) EEO, via check_bid). Full clean sources
+  (§109 recapture; official NYCRR capture) are still future work (coverage-ledger
+  / source-expansion).
+- [x] **L-grade sources reachable by confident outputs — resolved (Micro-PR A).**
+  EXC/314 §314(5)(a) now has a confident per-provision marker so
+  make_cert_expiry is confident-eligible; §314(5)(b)-(c) stays L-gated. GCN/24
+  stays L-grade with a locking test confirming payment_clock cites it only into
+  VERIFY/attorney-gated.
+- [ ] **Retrofit output_context at engine cite sites (the migration itself).**
+  Wire CONFIDENT/VERIFY/ATTORNEY_GATED at the 3 runtime bare-cite() sites
+  (engine/citation.py, engine/payment_clock.py, validator.py) + add the
+  ban-bare-cite() scan test. Now UNBLOCKED by the marker work above.
 
 ## Statute capture — sanctioned egress-blocked path (BUILT)
 The **manual statute-capture GitHub Actions workflow** is the sanctioned way to

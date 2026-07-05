@@ -164,6 +164,18 @@ golden copy never misattributes them to the regulation:
   the specific 60% number is ESD credit guidance, not reg text. Capture the actual ESD guidance page
   as its own document-grade file if a precise verbatim 60% rule is later needed.
 
+## PROVISION ELIGIBILITY (engine metadata — citation-eligibility, not part of the rule)
+
+<!-- This is a TARGETED excerpt of 5 NYCRR Parts 140–145 (pass/fail provisions only),
+     so its whole-file status is PARTIAL_CAPTURE. The interim gate below lets the
+     captured verbatim provisions be cited into VERIFY / attorney-gated outputs only,
+     pending a full official NYCRR capture. It edits no STATE TEXT. -->
+
+- eligibility: INTERIM_VERIFY
+  scope: source
+  provision: 5 NYCRR Parts 140–145 pass/fail provisions (targeted excerpt)
+  note: INTERIM measure. The captured provisions are verbatim from the ESD-published regulation, but this is a targeted excerpt (not the full official NYCRR), so the whole-file status is PARTIAL_CAPTURE. Citable ONLY into VERIFY / attorney-gated outputs (never confident) until a full official NYCRR capture lands in the coverage-ledger / source-expansion work. Consumed by validator RM-5.
+
 ## CITATIONS THIS TEXT POINTS TO (tagged for traceability — not part of the rule)
 
 - NY Executive Law Article 15-A (§§ 310–316) — the statutory parent (goal-setting §313; directory §311(3)(f); complaints/enforcement §316; certification §314)

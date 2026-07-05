@@ -200,6 +200,29 @@ def test_all_module_anchor_quotes_are_verbatim():
     golden.cite(GCN24_SOURCE, pc.GCN24_DYNAMIC_QUOTE)
 
 
+def test_gcn24_lgrade_is_cited_only_into_gated_outputs():
+    """GATED_LGRADE gating lock (Micro-PR A): GCN §24 is L-grade, so it must reach
+    the vendor only through a VERIFY / attorney-gated output — never a naked
+    confident one. The holiday-DEPENDENT path is VERIFY while the attorney gate is
+    off; it only becomes a confident KNOWN date once attorney-approved (a gated
+    context). The confident holiday-INDEPENDENT path carries no GCN §24 citation."""
+    import engine.golden_status as gs
+    golden = GoldenCopy()
+    # gate OFF (default): holiday-dependent output is VERIFY, not a confident date
+    off = PaymentClock(approved=False).net_due_adjusted("2026-06-15", 30)
+    assert off.status == VERIFY
+    # the confident (pure day-count) path does not depend on / cite GCN §24
+    pure = PaymentClock(approved=False).net_due_pure("2026-06-15", 30)
+    assert pure.status == KNOWN and pure.citation is None
+    # and the L-grade eligibility guardrail itself blocks a CONFIDENT GCN §24 cite
+    try:
+        golden.cite(GCN24_SOURCE, pc.GCN24_ANCHOR_QUOTE,
+                    output_context=gs.OUTPUT_CONFIDENT)
+        raise AssertionError("GCN §24 (L-grade) must not be confident-eligible")
+    except Exception as e:
+        assert getattr(e, "status", None) == gs.L_GRADE_INTERPRETIVE
+
+
 # --------------------------------------------------------------------------
 # ClockResult invariants
 # --------------------------------------------------------------------------
