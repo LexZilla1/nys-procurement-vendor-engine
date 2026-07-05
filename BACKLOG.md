@@ -8,8 +8,12 @@
   verbatim, citation-tagged, factual-only enforced by denylist test.
   Status: OPEN, ready to merge (draft PR #9, head 4420a58; mergeable_state clean).
 
-## Golden Copy Reliability Audit (BUILT)
-Machine-enforced citation eligibility over the golden corpus.
+## Golden Copy Reliability Audit (FOUNDATION BUILT — enforcement NOT complete)
+Citation eligibility is now **detectable** across the golden corpus, but **not
+yet enforced end-to-end**: legacy engine call sites still use bare
+GoldenCopy.cite() and bypass the guardrail. The audit reports engine citations
+to non-eligible sources as a distinct **blocking-to-enforcement** class. Do NOT
+describe this as "machine-enforced" until the enforcement migration below lands.
 - **Status model:** engine/golden_status.py derives a per-source status from
   EXISTING metadata (Tier / L-M grade / Covers / superseded markers / freshness):
   VERIFIED_GOLDEN, PENDING_HUMAN_READ, STALE_CHECK_REQUIRED, DIVERGENT_FROM_API,
@@ -23,6 +27,27 @@ Machine-enforced citation eligibility over the golden corpus.
   citable. GoldenEligibilityError(CitationError).
 - **Audit:** scripts/golden_audit.py (CI-runnable) checks every source and
   consumes the latest docs/freshness report; test_golden_audit.py (26).
+
+### Guardrail Enforcement Migration (REQUIRED to claim citation eligibility is enforced)
+- [ ] **Migrate all engine call sites to output_context-aware cite().** Runtime
+  bare-cite() sites today: engine/citation.py (Citation.verify_golden),
+  engine/payment_clock.py (GCN/24 anchor check), validator.py (RM-5 `_f`).
+  Give each an explicit CONFIDENT / VERIFY / ATTORNEY_GATED context.
+- [ ] **Ban bare cite() under engine/** with a CI/test scan** (a test that greps
+  engine/** + validator.py for `.cite(` calls lacking an output_context and
+  fails). Prevents new bypasses.
+- [ ] **Audit hard-fails** on engine citations to PARTIAL/STALE/DIVERGENT/PENDING
+  sources, and on L_GRADE cited into a confident output (promote the current
+  blocking-to-enforcement class to a hard failure once the findings below clear).
+- **Blocked on these four findings** (must resolve first, else migration would
+  break legitimate verbatim cites): stf-109 activeDate; per-provision F/L
+  granularity for EXC/314 (the §314(5)(a) mechanical sentence must be
+  confident-eligible); source-structure decision for stf-109 and mwbe-5nycrr
+  (split the statute/reg layer into its own VERIFIED source, or add a
+  per-provision eligibility marker); GCN/24 gating confirmation (payment_clock
+  must cite it only into VERIFY/attorney-gated). State any output that flips to
+  VERIFY as a result.
+- **This precedes the coverage ledger and PR 3.**
 
 ### Audit follow-ups (substantive — reported, not auto-fixed this PR)
 - [ ] **stf-109 missing API activeDate.** The mixed §109 capture is flagged

@@ -240,6 +240,36 @@ def test_audit_consumes_dated_freshness_report_not_readme():
     assert used != "README.md"
 
 
+def test_audit_reports_three_finding_classes():
+    rep = ga.run()
+    for key in ("hard_failures", "blocking_to_enforcement", "advisory",
+                "enforcement_complete"):
+        assert key in rep
+
+
+def test_engine_reach_is_blocking_to_enforcement_not_advisory():
+    """Engine citations to non-eligible sources must be labeled blocking-to-
+    enforcement (a distinct class), not folded into plain advisory findings."""
+    rep = ga.run()
+    blocking = {e["file"] for e in rep["blocking_to_enforcement"]}
+    assert "source-stf-109-vendor-certificate.md" in blocking
+    assert "source-exec-314-mwbe-cert-validity.md" in blocking
+    assert rep["blocking_to_enforcement"], "expected blocking-to-enforcement findings"
+
+
+def test_enforcement_not_complete_while_engine_bypasses():
+    """Honest status: enforcement is NOT complete while any engine call site can
+    reach a non-eligible source via bare cite()."""
+    rep = ga.run()
+    assert rep["enforcement_complete"] is False
+
+
+def test_render_states_enforcement_not_complete():
+    out = ga.render(ga.run())
+    assert "ENFORCED END-TO-END: NO" in out
+    assert "BLOCKING-TO-ENFORCEMENT" in out
+
+
 # ======================= runner ===========================================
 
 def _run():

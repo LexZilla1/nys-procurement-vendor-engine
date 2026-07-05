@@ -208,11 +208,35 @@ def run():
         results.append(audit_source(fn, raw, fn in idx, fn in rpt, freshness))
     status_by_file = {r["file"]: r["status"] for r in results}
     reach = engine_citation_reach(status_by_file)
+
+    # Three finding classes (audit contract):
+    #  * hard_failures        — block merge (unparseable / missing INDEX or
+    #    REPORT row / no derivable status).
+    #  * blocking_to_enforcement — engine/validator citations reaching a
+    #    non-eligible source (PARTIAL/STALE/DIVERGENT/PENDING) or an L-grade
+    #    source (reachable today by bare cite()). These BLOCK the enforcement
+    #    migration; they are NOT merely advisory.
+    #  * advisory             — everything else (metadata gaps that don't block).
+    hard_failures = [{"file": r["file"], "findings": r["findings"]}
+                     for r in results if r["hard_fail"]]
+    blocking = list(reach)
+    blocking_files = {e["file"] for e in reach}
+    advisory = []
+    for r in results:
+        if r["hard_fail"]:
+            continue
+        for f in r["findings"]:
+            advisory.append({"file": r["file"], "finding": f,
+                             "also_blocking_to_enforcement": r["file"] in blocking_files})
     return {
         "discovered_count": len(files),
         "freshness_report_used": fresh_report,
         "results": results,
         "engine_citation_reach": reach,
+        "hard_failures": hard_failures,
+        "blocking_to_enforcement": blocking,
+        "advisory": advisory,
+        "enforcement_complete": len(blocking) == 0,
     }
 
 
@@ -242,17 +266,34 @@ def render(report):
         for f in r["findings"]:
             L.append("        - %s" % f)
     L.append("")
-    if report["engine_citation_reach"]:
-        L.append("Engine/validator citations to L-grade or non-citable sources "
-                 "(review citation context):")
-        for e in report["engine_citation_reach"]:
-            L.append("  - %s (%s) referenced in %s"
-                     % (e["file"], e["status"], ", ".join(e["referenced_in"])))
-        L.append("")
+    L.append("Finding classes:")
+    L.append("  (1) HARD FAILURES (block merge): %d" % len(report["hard_failures"]))
+    for h in report["hard_failures"]:
+        L.append("      - %s: %s" % (h["file"], "; ".join(h["findings"])))
+    L.append("  (2) BLOCKING-TO-ENFORCEMENT (engine citations reaching "
+             "non-eligible sources — block the enforcement migration, NOT "
+             "advisory): %d" % len(report["blocking_to_enforcement"]))
+    for e in report["blocking_to_enforcement"]:
+        L.append("      - %s (%s) reachable via bare cite() in %s"
+                 % (e["file"], e["status"], ", ".join(e["referenced_in"])))
+    L.append("  (3) ADVISORY (metadata gaps; do not block): %d"
+             % len(report["advisory"]))
+    for a in report["advisory"]:
+        tag = " [also blocking-to-enforcement]" if a["also_blocking_to_enforcement"] else ""
+        L.append("      - %s: %s%s" % (a["file"], a["finding"], tag))
+    L.append("")
     L.append("-" * 78)
-    L.append("HARD FAILURES: %d   |   sources with findings: %d"
-             % (len(hard), len(findings)))
-    L.append("RESULT: %s" % ("FAIL" if hard else "PASS"))
+    L.append("HARD FAILURES: %d (merge gate)   |   BLOCKING-TO-ENFORCEMENT: %d   "
+             "|   ADVISORY: %d"
+             % (len(report["hard_failures"]), len(report["blocking_to_enforcement"]),
+                len(report["advisory"])))
+    L.append("CITATION ELIGIBILITY ENFORCED END-TO-END: %s"
+             % ("YES" if report["enforcement_complete"] else
+                "NO — detectable but NOT enforced; legacy engine call sites still "
+                "bypass via bare cite(). Enforcement migration is a follow-up "
+                "(see BACKLOG), blocked on the listed findings."))
+    L.append("RESULT (merge gate = hard failures only): %s"
+             % ("FAIL" if hard else "PASS"))
     L.append("=" * 78)
     return "\n".join(L)
 
