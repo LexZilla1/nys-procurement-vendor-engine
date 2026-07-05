@@ -33,6 +33,8 @@ import json
 import os
 import sys
 
+from engine import golden_status as gs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -163,6 +165,18 @@ class CitationError(Exception):
     paraphrased instead of quoting."""
 
 
+class GoldenEligibilityError(CitationError):
+    """Raised when a verbatim quote is cited into an output whose context is not
+    permitted by the source's citation-eligibility status (e.g. an L-grade source
+    cited by a confident output, or a PENDING/DIVERGENT/PARTIAL/STALE source cited
+    at all). Subclasses CitationError so existing `except CitationError` handlers
+    still catch it. Carries the offending status."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
 class GoldenCopy:
     """Loads the verbatim STATE TEXT bodies and gates every citation."""
 
@@ -170,7 +184,7 @@ class GoldenCopy:
     H_CITATIONS = "## CITATIONS"
     H_AGENCY_GUIDANCE = "## AGENCY GUIDANCE"
 
-    def __init__(self, sources_dir=None):
+    def __init__(self, sources_dir=None, freshness=None):
         self.sources_dir = sources_dir or os.path.join(HERE, "golden-copy", "sources")
         if not os.path.isdir(self.sources_dir):
             alt = os.path.join("/mnt/project", "golden-copy", "sources")
@@ -178,6 +192,10 @@ class GoldenCopy:
                 self.sources_dir = alt
         self._raw = {}     # file -> full file text
         self._body = {}    # file -> STATE TEXT body
+        # Optional freshness overlay {source_file: (verdict, sunset_stale)} — lets
+        # the status guardrail see DIVERGENT/STALE. Absent -> metadata-only status.
+        self._freshness = dict(freshness or {})
+        self._status = {}  # file -> derived status (cache)
         self._load()
 
     def _load(self):
@@ -212,16 +230,41 @@ class GoldenCopy:
     def body(self, source_file):
         return self._body.get(source_file, "")
 
-    def cite(self, source_file, quote):
-        """Return `quote` only if it is a verbatim substring of the source
-        file's STATE TEXT body. Otherwise raise CitationError. This is the
-        single choke-point that guarantees no finding can carry a paraphrase."""
+    def status_of(self, source_file):
+        """Derive the machine-readable citation-eligibility status for a source
+        (cached). Uses engine/golden_status over the source's existing metadata
+        plus any freshness overlay. Returns a status string or None (insufficient
+        metadata)."""
+        if source_file not in self._status:
+            raw = self._raw.get(source_file, "")
+            verdict, stale = self._freshness.get(source_file, (None, False))
+            self._status[source_file] = gs.derive_status(
+                raw, freshness_verdict=verdict, sunset_stale=stale)[0]
+        return self._status[source_file]
+
+    def cite(self, source_file, quote, output_context=None):
+        """Return `quote` only if it is a verbatim substring of the source file's
+        STATE TEXT body. Otherwise raise CitationError. This is the single
+        choke-point that guarantees no finding can carry a paraphrase.
+
+        Citation-eligibility guardrail (opt-in): when `output_context` is given
+        (CONFIDENT / VERIFY / ATTORNEY_GATED), the source's derived status must
+        also permit the citation, else GoldenEligibilityError is raised with the
+        status. A bare cite() (no context) keeps the historical verbatim-only
+        behavior, so existing callers and verify_golden() are unchanged."""
         if source_file not in self._raw:
             raise CitationError("unknown source file: {}".format(source_file))
         if not quote or quote not in self._body[source_file]:
             raise CitationError(
                 "quote not found verbatim in {} STATE TEXT body: {!r}".format(
                     source_file, (quote or "")[:80]))
+        if output_context is not None:
+            status = self.status_of(source_file)
+            ok, why = gs.is_citable(status, output_context)
+            if not ok:
+                raise GoldenEligibilityError(
+                    "citation blocked for {} (status={}): {}".format(
+                        source_file, status, why), status=status)
         return quote
 
 
