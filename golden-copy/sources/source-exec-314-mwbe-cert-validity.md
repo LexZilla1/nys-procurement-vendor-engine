@@ -76,6 +76,20 @@
 > list (BACKLOG). By contrast, subd. 5(a)'s five-year validity is mechanical (a date
 > subtraction) and is NOT L-graded.
 
+## PROVISION ELIGIBILITY (machine-readable — per-provision citation eligibility; not part of the rule)
+
+> The file-level status is L_GRADE_INTERPRETIVE (it carries the L-grade
+> recertification-presumption annotation above). These per-provision markers
+> refine citation eligibility at the provision level: the mechanical §314(5)(a)
+> five-year-validity sentence is F-grade / VERIFIED and citable into confident
+> outputs; the §314(5)(b)-(c) recertification presumption stays L-grade
+> (VERIFY / attorney-gated only). Markers are anchor-specific — each governs only
+> a citation whose text overlaps its verbatim anchor, so the F marker cannot
+> bless the L-grade provision. Parsed by engine/golden_status.resolve_status.
+
+- provision-eligibility: status=VERIFIED_GOLDEN grade=F locator="§ 314(5)(a)" anchor="all minority and women-owned business enterprise certifications shall be valid for a period of five years"
+- provision-eligibility: status=L_GRADE_INTERPRETIVE grade=L locator="§ 314(5)(b)-(c)" anchor="there shall be a rebuttable presumption"
+
 ## SUNSET / AUTHORIZATION (time-limited rule — § 314 is part of a sunsetting program)
 
 - sunset_watch: true

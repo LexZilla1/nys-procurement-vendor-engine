@@ -134,6 +134,53 @@ def lgrade_provisions(raw):
     return out
 
 
+def parse_provision_markers(raw):
+    """Parse machine-readable per-provision eligibility markers from a source's
+    ANNOTATIONS. One directive per line (documented format):
+
+        - provision-eligibility: status=<STATUS> grade=<F|L|M> locator="<loc>" anchor="<verbatim substring>"
+
+    Returns a list of {status, grade, locator, anchor}. Anchor-specific: a marker
+    governs a citation only when its verbatim anchor overlaps the cited quote, so
+    a VERIFIED marker for one provision cannot bless a different (e.g. L-grade)
+    provision in the same file."""
+    out = []
+    for m in re.finditer(r"^- provision-eligibility:\s*(.+)$", raw, re.M):
+        line = m.group(1)
+        sm = re.search(r"status=(\S+)", line)
+        am = re.search(r'anchor="([^"]+)"', line)
+        if not (sm and am):
+            continue
+        lm = re.search(r'locator="([^"]+)"', line)
+        gm = re.search(r"grade=(\S+)", line)
+        out.append({"status": sm.group(1), "anchor": am.group(1),
+                    "locator": lm.group(1) if lm else "",
+                    "grade": gm.group(1) if gm else ""})
+    return out
+
+
+# Restrictiveness order for picking a governing marker when >1 anchor overlaps.
+_RESTRICTIVENESS = {s: i for i, s in enumerate(
+    (PENDING_HUMAN_READ, DIVERGENT_FROM_API, PARTIAL_CAPTURE, STALE_CHECK_REQUIRED,
+     L_GRADE_INTERPRETIVE, SUPERSEDED_VERSION_PRESENT, VERIFIED_GOLDEN))}
+
+
+def resolve_status(raw, quote, freshness_verdict=None, sunset_stale=False):
+    """Status governing a SPECIFIC cited quote: a provision-level marker whose
+    anchor overlaps the quote wins (most-restrictive if several overlap); else the
+    file-level derive_status. Returns (status, reasons)."""
+    matched = []
+    for m in parse_provision_markers(raw):
+        a = m["anchor"]
+        if a and (a in quote or quote in a):
+            matched.append(m)
+    if matched:
+        gov = min(matched, key=lambda m: _RESTRICTIVENESS.get(m["status"], 0))
+        return gov["status"], ["provision-level marker %s (%s)"
+                               % (gov.get("locator", ""), gov["status"])]
+    return derive_status(raw, freshness_verdict, sunset_stale)
+
+
 def is_citable(status, output_context):
     """Eligibility rule for the cite() guardrail. Returns (ok, reason)."""
     if status in CITABLE_NORMALLY:

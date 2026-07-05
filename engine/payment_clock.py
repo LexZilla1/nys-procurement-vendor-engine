@@ -34,6 +34,7 @@ import datetime
 import re
 
 from engine.citation import Citation, GOLDEN_RULE
+from engine import golden_status as gs
 
 # ---------------------------------------------------------------------------
 # ATTORNEY GATE — single flag. See rule 2 above.
@@ -252,10 +253,15 @@ class HolidayCalendarProvider:
                 raise HolidaySourceUnavailable(
                     "required golden source missing: %s" % src)
             try:
-                golden.cite(src, anchor)   # verbatim anchor must be present
-            except Exception as exc:
+                # ATTORNEY_GATED context: this provider only ever feeds the
+                # holiday-adjusted path, which is itself attorney-gated. That lets
+                # the L-grade GCN §24 anchor be cited here (gated-eligible) while a
+                # confident cite of GCN §24 elsewhere stays blocked. GCN §25-a is
+                # VERIFIED and citable in any context.
+                golden.cite(src, anchor, output_context=gs.OUTPUT_ATTORNEY_GATED)
+            except Exception as exc:  # verbatim-absent OR eligibility failure
                 raise HolidaySourceUnavailable(
-                    "verbatim anchor absent in %s: %s" % (src, exc))
+                    "anchor unavailable/ineligible in %s: %s" % (src, exc))
         self._gcn24_body = golden.body(GCN24_SOURCE)
         self._rules = self._parse_holiday_rules(self._gcn24_body)
         if not self._rules:

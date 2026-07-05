@@ -270,6 +270,85 @@ def test_render_states_enforcement_not_complete():
     assert "BLOCKING-TO-ENFORCEMENT" in out
 
 
+# ======================= item 1: EXC/314 per-provision markers ============
+
+_EXC = "source-exec-314-mwbe-cert-validity.md"
+_FIVE_YEAR = ("all minority and women-owned business enterprise certifications "
+              "shall be valid for a period of five years")
+_RECERT = "there shall be a rebuttable presumption"
+_OTHER_EXC = ("The director shall promulgate rules and regulations providing for "
+              "the establishment of a statewide certification program")
+
+
+def test_provision_marker_allows_confident_cite_of_5a_mechanical_sentence():
+    g = GoldenCopy()
+    assert g.cite(_EXC, _FIVE_YEAR, output_context=gs.OUTPUT_CONFIDENT) == _FIVE_YEAR
+
+
+def test_provision_l_grade_recert_blocked_from_confident_allowed_gated():
+    g = GoldenCopy()
+    try:
+        g.cite(_EXC, _RECERT, output_context=gs.OUTPUT_CONFIDENT)
+    except GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+    else:
+        raise AssertionError("recertification presumption must be confident-blocked")
+    assert g.cite(_EXC, _RECERT, output_context=gs.OUTPUT_VERIFY) == _RECERT
+    assert g.cite(_EXC, _RECERT, output_context=gs.OUTPUT_ATTORNEY_GATED) == _RECERT
+
+
+def test_provision_marker_does_not_bless_file_wide():
+    """A non-marked EXC/314 quote falls back to the file-level L_GRADE status —
+    the F marker for 5(a) must not make the whole file confident-citable."""
+    g = GoldenCopy()
+    try:
+        g.cite(_EXC, _OTHER_EXC, output_context=gs.OUTPUT_CONFIDENT)
+    except GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+        return
+    raise AssertionError("non-provision quote must inherit file-level L_GRADE")
+
+
+def test_file_level_status_of_exc314_unchanged():
+    assert GoldenCopy().status_of(_EXC) == gs.L_GRADE_INTERPRETIVE
+
+
+def test_parse_provision_markers_format():
+    raw = open(os.path.join(ga.SOURCES_DIR, _EXC), encoding="utf-8").read()
+    markers = gs.parse_provision_markers(raw)
+    by_status = {m["status"] for m in markers}
+    assert gs.VERIFIED_GOLDEN in by_status and gs.L_GRADE_INTERPRETIVE in by_status
+    assert all(m["anchor"] for m in markers)
+
+
+# ======================= item 3: GCN/24 gated call site ===================
+
+def test_gcn24_cite_passes_attorney_gated_and_verify():
+    g = GoldenCopy()
+    q = "The term public holiday includes the following days in each year"
+    assert g.cite("source-gcn-24-public-holidays.md", q, output_context=gs.OUTPUT_ATTORNEY_GATED)
+    assert g.cite("source-gcn-24-public-holidays.md", q, output_context=gs.OUTPUT_VERIFY)
+
+
+def test_gcn24_cite_blocked_in_confident():
+    g = GoldenCopy()
+    q = "The term public holiday includes the following days in each year"
+    try:
+        g.cite("source-gcn-24-public-holidays.md", q, output_context=gs.OUTPUT_CONFIDENT)
+    except GoldenEligibilityError:
+        return
+    raise AssertionError("GCN/24 must be confident-blocked")
+
+
+def test_payment_clock_provider_builds_with_gated_anchor_check():
+    """The payment_clock call-site now cites the GCN anchors with ATTORNEY_GATED
+    context; the provider must still construct (GCN/24 L-grade passes gated)."""
+    from engine.payment_clock import PaymentClock
+    clk = PaymentClock(approved=True)
+    assert clk.calendar is not None
+    assert clk.net_due_adjusted("2026-06-15", 30).status == "KNOWN"
+
+
 # ======================= runner ===========================================
 
 def _run():
