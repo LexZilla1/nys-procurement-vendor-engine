@@ -483,9 +483,16 @@ class Validator:
         return finding
 
     def _f(self, *args, **kwargs):
-        """Build a Finding, gating its citation, and annotate freshness."""
+        """Build a Finding, gating its citation, and annotate freshness.
+
+        Citations are gated at the VERIFY floor: every source a validator finding
+        cites must be eligible into a VERIFY / attorney-gated output. This admits
+        VERIFIED_GOLDEN sources and the interim-gated PARTIAL captures the checks
+        legitimately rely on (stf-109 via RM-5, mwbe-5nycrr via RM-4), while
+        fail-closing on any source that is not citable at VERIFY (PENDING /
+        DIVERGENT / STALE / marker-free PARTIAL) — the end-to-end enforcement."""
         rule_id, source_file, quote = args[0], args[1], args[2]
-        verified = self.gc.cite(source_file, quote)
+        verified = self.gc.cite(source_file, quote, output_context=gs.OUTPUT_VERIFY)
         finding = Finding(rule_id, source_file, verified, *args[3:], **kwargs)
         return self._annotate_freshness(finding)
 

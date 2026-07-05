@@ -217,11 +217,24 @@ def engine_citation_reach(status_by_file, raw_by_file):
     return flagged
 
 
+# Enumerated exclusions for the bare-cite ban: runtime `.cite(` call sites under
+# engine/ + validator.py that are DELIBERATELY bare (no output_context) and are
+# therefore not counted as unmigrated. Each entry is "<relpath>:<line>" and MUST
+# carry a justification here — the ban is an allowlist, not a heuristic, so a new
+# bare cite fails the scan unless it is explicitly enumerated below. The
+# enforcement migration left NONE: all three former sites (engine/citation.py
+# verify_golden, engine/payment_clock.py holiday anchor, validator.py _f) now pass
+# an explicit output_context, so this allowlist is intentionally empty.
+BARE_CITE_ALLOWLIST = frozenset()
+
+
 def unmigrated_cite_sites():
     """Runtime cite() call sites under engine/ + validator.py that do NOT pass an
-    output_context (so the runtime guardrail is bypassed). While any remain, the
-    enforcement migration is incomplete — end-to-end enforcement is NOT claimed.
-    Heuristic: a `.cite(` call with no `output_context` within the next 400 chars."""
+    output_context (so the runtime guardrail is bypassed) AND are not in the
+    enumerated BARE_CITE_ALLOWLIST. While any remain, the enforcement migration is
+    incomplete — end-to-end enforcement is NOT claimed. Heuristic for the bare
+    call: a `.cite(` with no `output_context` within the next 400 chars; the
+    allowlist is the exact-enumeration escape hatch for a deliberately bare site."""
     sites = []
     for path in ENGINE_SCAN_FILES:
         try:
@@ -230,9 +243,13 @@ def unmigrated_cite_sites():
             continue
         for m in re.finditer(r"\.cite\(", code):
             window = code[m.start():m.start() + 400].split("\n\n", 1)[0]
-            if "output_context" not in window:
-                sites.append({"file": os.path.relpath(path, REPO_ROOT),
-                              "line": code[:m.start()].count("\n") + 1})
+            if "output_context" in window:
+                continue
+            relpath = os.path.relpath(path, REPO_ROOT)
+            line = code[:m.start()].count("\n") + 1
+            if ("%s:%d" % (relpath, line)) in BARE_CITE_ALLOWLIST:
+                continue
+            sites.append({"file": relpath, "line": line})
     return sites
 
 
@@ -294,6 +311,7 @@ def run():
         "gated_lgrade": gated_lgrade,
         "advisory": advisory,
         "unmigrated_cite_sites": unmigrated,
+        "bare_cite_allowlist": sorted(BARE_CITE_ALLOWLIST),
         "enforcement_complete": len(blocking) == 0 and len(unmigrated) == 0,
     }
 
@@ -364,7 +382,11 @@ def render(report):
                 (": " + ", ".join("%s:%d" % (s["file"], s["line"]) for s in unmig))
                 if unmig else ""))
     L.append("CITATION ELIGIBILITY ENFORCED END-TO-END: %s"
-             % ("YES" if report["enforcement_complete"] else
+             % ("YES — no blocking-to-enforcement findings AND the bare-cite scan "
+                "is clean (every runtime cite() site under engine/ + validator.py "
+                "passes an explicit output_context; enumerated bare-cite "
+                "exclusions: %d)." % len(report.get("bare_cite_allowlist", []))
+                if report["enforcement_complete"] else
                 "NO — findings are now detectable and the four blockers are "
                 "cleared/downgraded (per-provision markers + interim VERIFY gates), "
                 "but the call-site migration has NOT run: %d runtime cite() site(s) "

@@ -141,7 +141,9 @@ def test_pending_precedes_lgrade():
 
 def test_cite_bare_is_backward_compatible():
     """A bare cite() (no output_context) keeps verbatim-only behavior even for an
-    L-grade source — existing callers / verify_golden are unchanged."""
+    L-grade source — the guardrail stays opt-in for any direct caller that does
+    not pass a context. (The three engine/validator sites now DO pass one; see the
+    bare-cite scan tests.)"""
     g = GoldenCopy()
     q = "The term public holiday includes the following days in each year"
     assert g.cite("source-gcn-24-public-holidays.md", q) == q   # no raise
@@ -235,10 +237,11 @@ def test_stf109_and_mwbe_are_interim_verify_gated():
         assert g.cite(fn, q, output_context=gs.OUTPUT_ATTORNEY_GATED) == q
 
 
-def test_audit_blocking_cleared_but_end_to_end_still_no():
-    """After the per-provision markers + interim gates, no engine cite is a hard
-    blocker; the four findings are cleared/downgraded. But end-to-end enforcement
-    stays NO because the call-site migration has not run."""
+def test_audit_blocking_cleared_and_end_to_end_yes():
+    """After the per-provision markers + interim gates AND the call-site migration,
+    no engine cite is a hard blocker (the four findings stay cleared/downgraded)
+    AND every runtime cite() site passes an output_context, so end-to-end
+    enforcement is now YES."""
     rep = ga.run()
     assert rep["blocking_to_enforcement"] == [], rep["blocking_to_enforcement"]
     files = lambda k: {e["file"] for e in rep[k]}
@@ -246,9 +249,9 @@ def test_audit_blocking_cleared_but_end_to_end_still_no():
     assert {"source-stf-109-vendor-certificate.md",
             "source-mwbe-5nycrr-pass-fail.md"} <= files("interim_verify_gate")
     assert "source-gcn-24-public-holidays.md" in files("gated_lgrade")
-    # migration not done -> end-to-end NO
-    assert rep["unmigrated_cite_sites"], "expected unmigrated bare cite() sites"
-    assert rep["enforcement_complete"] is False
+    # migration done -> no bare cite() sites remain -> end-to-end YES
+    assert rep["unmigrated_cite_sites"] == [], rep["unmigrated_cite_sites"]
+    assert rep["enforcement_complete"] is True
 
 
 def test_exc314_confident_marker_does_not_bleed_to_other_sentences():
@@ -338,6 +341,85 @@ def test_mwbe_both_directions_through_the_actual_check_bid_path():
             assert e.status == gs.INTERIM_VERIFY
         assert g.cite(V.MWBE, q, output_context=gs.OUTPUT_VERIFY) == q
         assert g.cite(V.MWBE, q, output_context=gs.OUTPUT_ATTORNEY_GATED) == q
+
+
+# ============ both-directions tests per migrated gated cite site ==========
+# One test per migrated runtime site, each exercising the REAL migrated code
+# path in BOTH directions: the legitimate citation is admitted at the site's
+# chosen context, and an ineligible source is fail-closed there.
+
+def test_migrated_site_verify_golden_both_directions():
+    """Site engine/citation.py::Citation.verify_golden (CONFIDENT default).
+    Forward: a confident-eligible obligation citation (make_cert_expiry, EXC
+    §314(5)(a)) verifies through the default confident gate. Reverse: a citation on
+    a gated-only source (stf-109, interim) is REJECTED at the confident default and
+    ACCEPTED once the caller passes a VERIFY context."""
+    from engine.dated_objects import make_cert_expiry
+    from engine.citation import Citation, GOLDEN_RULE
+    from engine.citation import CitationError as EngineCitationError
+    g = GoldenCopy()
+    # forward: confident obligation verifies via the default output_context=CONFIDENT
+    assert make_cert_expiry("c", "cred", "2027-01-01").citation.verify_golden(g) is True
+    # reverse: an interim (stf-109) citation is blocked at the confident default...
+    q = g.body(V.STF109).strip().split("\n", 1)[0][:30]
+    gated = Citation(source_id=V.STF109, source_type=GOLDEN_RULE, locator="§ 109",
+                     quote=q, captured_at="2026-07-05")
+    try:
+        gated.verify_golden(g)                       # default CONFIDENT -> rejected
+        raise AssertionError("interim source must not verify at the confident default")
+    except EngineCitationError:
+        pass
+    # ...and admitted when the caller declares a VERIFY / attorney-gated output.
+    assert gated.verify_golden(g, output_context=gs.OUTPUT_VERIFY) is True
+    assert gated.verify_golden(g, output_context=gs.OUTPUT_ATTORNEY_GATED) is True
+
+
+def test_migrated_site_payment_clock_anchor_both_directions():
+    """Site engine/payment_clock.py HolidayCalendarProvider anchor cite (VERIFY,
+    gated). Forward: the provider builds — the L-grade GCN §24 anchor is citable
+    into the gated (VERIFY) context it uses. Reverse: that migrated context is
+    load-bearing (the same anchor is NOT confident-eligible), and a holiday source
+    non-citable even at VERIFY fails the provider closed."""
+    import engine.payment_clock as pcmod
+    # forward: real provider construction succeeds through the migrated cite
+    assert pcmod.HolidayCalendarProvider(golden=GoldenCopy()) is not None
+    # reverse (a): the migrated gate matters — confident is blocked (L_GRADE)
+    g = GoldenCopy()
+    try:
+        g.cite(pcmod.GCN24_SOURCE, pcmod.GCN24_ANCHOR_QUOTE,
+               output_context=gs.OUTPUT_CONFIDENT)
+        raise AssertionError("GCN §24 (L-grade) anchor must not be confident-eligible")
+    except GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+    # reverse (b): a source non-citable even at VERIFY fails the provider closed
+    diverged = GoldenCopy(freshness={pcmod.GCN24_SOURCE: ("DIVERGENT", False)})
+    try:
+        pcmod.HolidayCalendarProvider(golden=diverged)
+        raise AssertionError("DIVERGENT holiday source must fail the provider closed")
+    except pcmod.HolidaySourceUnavailable:
+        pass
+
+
+def test_migrated_site_validator_f_both_directions():
+    """Site validator.py::Validator._f (VERIFY floor). Forward: a finding citing an
+    interim-gated source (stf-109) is built — the VERIFY floor admits it — and the
+    full check surface still emits interim-source citations. Reverse: a finding
+    whose source is non-citable at VERIFY (DIVERGENT overlay) fails the builder
+    closed."""
+    # forward: _f admits an interim (stf-109) citation at the VERIFY floor
+    val = V.Validator(golden=GoldenCopy())
+    q = val.gc.body(V.STF109).strip().split("\n", 1)[0][:30]
+    f = val._f("RM-5", V.STF109, q, V.FAIL, "interim cite admitted at VERIFY", True)
+    assert f.source_file == V.STF109 and f.citation_quote == q
+    assert _interim_citations_by_method(), "checks must still cite interim sources"
+    # reverse: a DIVERGENT-overlaid source is non-citable at VERIFY -> _f raises
+    diverged = V.Validator(golden=GoldenCopy(freshness={V.XII4F: ("DIVERGENT", False)}))
+    dq = diverged.gc.body(V.XII4F).strip().split("\n", 1)[0][:20]
+    try:
+        diverged._f("RM-5", V.XII4F, dq, V.FAIL, "divergent must fail closed", True)
+        raise AssertionError("DIVERGENT source must not be citable at the VERIFY floor")
+    except GoldenEligibilityError as e:
+        assert e.status == gs.DIVERGENT_FROM_API
 
 
 def test_cite_raises_on_pending_human_read():
@@ -475,17 +557,51 @@ def test_engine_reach_is_classified_by_disposition_not_folded_into_advisory():
     assert rep["blocking_to_enforcement"] == []
 
 
-def test_enforcement_not_complete_while_engine_bypasses():
-    """Honest status: enforcement is NOT complete while any engine call site can
-    reach a non-eligible source via bare cite()."""
+def test_enforcement_complete_after_migration():
+    """Honest status: enforcement is complete now that every engine/validator call
+    site cites through an output_context — no bare cite() bypass remains."""
     rep = ga.run()
-    assert rep["enforcement_complete"] is False
+    assert rep["unmigrated_cite_sites"] == []
+    assert rep["enforcement_complete"] is True
 
 
-def test_render_states_enforcement_not_complete():
+def test_render_states_enforcement_complete():
     out = ga.render(ga.run())
-    assert "ENFORCED END-TO-END: NO" in out
+    assert "ENFORCED END-TO-END: YES" in out
     assert "BLOCKING-TO-ENFORCEMENT" in out
+
+
+def test_bare_cite_scan_is_clean_with_empty_enumerated_allowlist():
+    """The enumerated-exclusion bare-cite ban: no runtime .cite() under engine/ +
+    validator.py may be bare (missing output_context) unless it is explicitly
+    enumerated in BARE_CITE_ALLOWLIST. Post-migration the allowlist is empty and
+    the scan finds zero bare sites."""
+    assert ga.BARE_CITE_ALLOWLIST == frozenset()
+    assert ga.unmigrated_cite_sites() == []
+
+
+def test_bare_cite_scan_detects_and_allowlist_is_the_only_escape_hatch():
+    """The scan has teeth (it flags a genuinely bare cite) and the ENUMERATED
+    allowlist is the only way to exempt one — an un-enumerated bare cite is
+    reported; the same site, once enumerated, is excluded; a migrated cite is
+    never reported. Exercised against a synthetic scan target so the real files
+    stay untouched. (The scan scopes its no-output_context window per statement
+    paragraph, so the two sites are blank-line separated as they are in real code.)"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = os.path.join(tmp, "fake_engine.py")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("golden.cite(src, quote)\n\n"               # line 1: bare -> flagged
+                     "golden.cite(s, q, output_context=X)\n")    # line 3: migrated -> clean
+        rel = os.path.relpath(p, ga.REPO_ROOT)
+        orig_files, orig_allow = ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST
+        ga.ENGINE_SCAN_FILES = [p]
+        try:
+            sites = ga.unmigrated_cite_sites()
+            assert [s["line"] for s in sites] == [1], sites   # only the bare one
+            ga.BARE_CITE_ALLOWLIST = frozenset({"%s:1" % rel})
+            assert ga.unmigrated_cite_sites() == []           # enumerated -> excluded
+        finally:
+            ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST = orig_files, orig_allow
 
 
 # ======================= runner ===========================================
