@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/citation.schema.json",
+  "title": "Citation",
+  "description": "A grounded reference. No bare strings: every law-derived fact names its source and quotes the exact text. Mirrors engine/citation.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_id", "source_type", "locator", "quote", "captured_at"],
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "description": "Stable id of the source (a source-*.md filename, solicitation id, or URL)."
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["golden_rule", "solicitation", "user_entered", "official_page", "observed_pattern"],
+      "description": "observed_pattern is explicitly NOT authority."
+    },
+    "locator": {
+      "type": "string",
+      "description": "Where inside the source (section/heading/line/table cell)."
+    },
+    "quote": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact text relied upon (verbatim for golden_rule)."
+    },
+    "captured_at": {
+      "type": "string",
+      "description": "ISO date/timestamp the quote was captured."
+    }
+  }
+}

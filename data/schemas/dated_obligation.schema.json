@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/dated_obligation.schema.json",
+  "title": "DatedObligation",
+  "description": "One thing with a clock. Categorical state only — no numeric confidence/risk scores. Mirrors engine/dated_objects.py. lead_times is an operational reminder cascade (a count of reminders), not a score.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "source_object_id", "due_date", "date_status", "lead_times", "citation", "depends_on", "state"],
+  "properties": {
+    "id": {"type": "string"},
+    "kind": {
+      "type": "string",
+      "description": "Registry key. Extensible; the initial set:",
+      "enum": [
+        "bid_deadline", "question_deadline", "site_visit", "cert_expiry",
+        "vendrep_staleness", "insurance_expiry", "statute_sunset",
+        "contract_deliverable", "nfp_renewal_notice_watch", "invoice_net_due",
+        "retainage_release", "closeout_deliverable"
+      ]
+    },
+    "source_object_id": {
+      "type": ["string", "null"],
+      "description": "The tender/contract/invoice/credential this obligation hangs off."
+    },
+    "due_date": {
+      "type": ["string", "null"],
+      "description": "ISO date, or null when the date is not KNOWN. Never a guessed default."
+    },
+    "date_status": {
+      "type": "string",
+      "enum": ["KNOWN", "VERIFY_AT_SOURCE", "NOT_APPLICABLE"],
+      "description": "An unparseable/unknown date is VERIFY_AT_SOURCE, never silently absent."
+    },
+    "lead_times": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0},
+      "description": "Days-before-due reminder cascade; default [90,30,7,1], per-kind and per-obligation overridable."
+    },
+    "citation": {
+      "oneOf": [
+        {"$ref": "citation.schema.json"},
+        {"type": "null"}
+      ],
+      "description": "Required (golden_rule) for law-derived kinds; user-entered kinds carry a user_entered citation."
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Ids this obligation depends on. An unresolved dependency makes this BLOCKED."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["PENDING", "DUE_SOON", "OVERDUE", "DONE", "VERIFY", "LAPSED", "BLOCKED"],
+      "description": "Operational state only. Credential legal status (incl. RECERT_PRESUMPTION_PENDING) lives in credential_status, never here."
+    }
+  }
+}

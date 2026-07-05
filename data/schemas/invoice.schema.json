@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/invoice.schema.json",
+  "title": "Invoice",
+  "description": "SHELL for PR 2. Fields only — no payment-clock / prompt-payment-interest logic here (that is PR 2, and its HolidayCalendarProvider must be source-backed and fail closed). No tier-3 data (no TIN/SSN/DOB). No numeric confidence/risk scores.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "contract_id"],
+  "properties": {
+    "id": {"type": "string"},
+    "contract_id": {"type": "string"},
+    "entity_id": {"type": ["string", "null"]},
+    "received_date": {
+      "type": ["string", "null"],
+      "description": "Shell field; the payment clock that consumes it is PR 2."
+    },
+    "net_terms_days": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Operational term length in days (a count, not a score). Clock math is PR 2."
+    },
+    "preflight_verdict": {
+      "type": ["string", "null"],
+      "description": "Categorical RM-5 pre-flight verdict string (set by the existing validator), if run."
+    },
+    "obligations": {
+      "type": "array",
+      "items": {"$ref": "dated_obligation.schema.json"}
+    }
+  }
+}
