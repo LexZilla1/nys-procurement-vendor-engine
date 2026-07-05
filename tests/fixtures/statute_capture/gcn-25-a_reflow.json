@@ -1,0 +1,13 @@
+{
+  "_note": "SYNTHETIC recorded-shape Open Legislation response mirroring the GCN/25-A reflow case: subdivision 1 lands INLINE on the section-heading line ('§ 25-a. ... public holiday. 1. When ...') while subdivision 2 starts its own line. PLACEHOLDER content, NOT statute text; exists only to regression-test that the subdivision-count metric detects the heading-line marker and reads 2, not 1. Never promote to golden.",
+  "success": true,
+  "result": {
+    "text": "  § 25-a. Placeholder deadline extension heading sentence that runs\\n  long enough to clear the length floor and ends here. 1. When any\\n  placeholder period of time ends on a Saturday, Sunday or a public\\n  holiday, such act may be done on the next succeeding business day.\\n  2. Where time is extended, such extended time shall not be included\\n  in the placeholder computation, except for month-based periods.\\n",
+    "activeDate": "2099-01-01",
+    "title": "Placeholder deadline extension",
+    "repealed": false,
+    "repealedDate": null,
+    "docType": "SECTION",
+    "docLevelId": "25-A"
+  }
+}

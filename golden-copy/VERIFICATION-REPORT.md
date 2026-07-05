@@ -227,6 +227,15 @@ cross-checked against a second live authority before acceptance.
 | 44 | source-stf-139-h-international-boycott.md | full-section diff vs FindLaw NY State Finance Law §139-h | **PASS** — subds. 1–4 verbatim; the "rendered forfeit and void by the state comptroller" consequence cite()-checked; threshold-gated at >$5,000 (material condition, not bid-rejection) |
 | 45 | source-stf-179-p.md | full word-by-word diff vs primary-source browser capture (NY Open Legislation STF §179-p, rev. 2014-09-22) | **PASS — identical** — all six inapplicability clauses verbatim; each exclusion clause cite()-checked (RM-2 pre-screen); clause-6 set-off cross-referenced to the §179-e(8) definition |
 
+## Addendum 4 (2026-07-05) — General Construction Law capture (sanctioned statute-capture workflow, rows 46–47)
+
+Captured via the manual statute-capture GitHub Actions workflow (`.github/workflows/statute-capture.yml`), then human-verified. Method for both: sanctioned OpenLeg API v3 capture (Actions holds `NYSLEG_API_KEY`) + owner read against nysenate.gov + two independent fetch cross-checks (three-way confirmed), 2026-07-05. These are PR 2's payment-clock holiday/deadline sources.
+
+| # | File | Method | Result |
+|---|------|--------|--------|
+| 46 | source-gcn-24-public-holidays.md | sanctioned workflow API capture (GCN §24, activeDate 2020-10-16) + owner read + 2 independent fetch cross-checks | **PASS — verbatim** — full public-holiday list + half-holiday clause; dynamic President/Governor-appointed days preserved as an open class. L-grade "legal holidays"↔"public holiday" mapping attorney-review-listed |
+| 47 | source-gcn-25-a-deadline-extension.md | sanctioned workflow API capture (GCN §25-a, activeDate 2014-09-22) + owner read + 2 independent fetch cross-checks | **PASS — verbatim** — **both** numbered subdivisions present (subd. 1 next-succeeding-business-day; subd. 2 interest-computation rule with month-based exception). Capture report's "1 subdivision" was a line-start metric artifact (corrected 2026-07-05); text complete |
+
 **Stale-risk discipline applied (MWBE, row 37).** The capture source was an ESD compilation PDF dated
 12/02/2020. Because a compiled secondary PDF can drift from current law, the load-bearing provisions
 (§142.6 deadline cascade, §142.4 fields, §142.7, §140.1(kk) thresholds) were re-confirmed verbatim

@@ -157,6 +157,35 @@ def test_new_single_paragraph_section_counts_one_subdivision():
     assert sec["saved_subdiv_count"] == 1
 
 
+def test_subdivision_count_reflow_case_heading_line_marker():
+    """Regression: subdivision 1 reflowed onto the '§' heading line must still
+    be counted (the GCN/25-A '1 subdivision' artifact). Reads 2, not 1."""
+    raw = _fixture("gcn-25-a_reflow.json")["result"]
+    reflowed = fc.reflow(raw["text"])
+    # subdivision 1 shares the heading line; subdivision 2 is on its own line
+    assert reflowed.splitlines()[0].lstrip().startswith("§")
+    assert " 1. " in reflowed.splitlines()[0]  # inline on the heading line
+    assert sc.ordered_subdivisions(reflowed) == ["1", "2"]
+    sec = sc.process_section("GCN/25-A", _spec(file="source-gcn-25-a-deadline-extension.md"),
+                             raw, "2099-01-01")
+    assert sec["api_subdiv_count"] == 2
+    assert sec["saved_subdiv_count"] == 2
+
+
+def test_real_gcn_25a_golden_reads_two_subdivisions():
+    """The promoted GCN/25-A golden on disk must count 2/2 with the fix."""
+    body = fc.stored_state_text("source-gcn-25-a-deadline-extension.md")
+    assert sc.ordered_subdivisions(body) == ["1", "2"]
+
+
+def test_inline_marker_scan_ignores_section_number_and_dates():
+    """The heading-line inline scan must not miscount the section number
+    ('§ 25-a.') or in-text dates ('July 1, 2028') as subdivisions."""
+    # A single-subdivision-free heading with a date and the section number only.
+    txt = "§ 24. Public holidays. Effective July 1, 2028 and each general day."
+    assert sc.ordered_subdivisions(txt) == []  # no false subdivision markers
+
+
 # --------------------------------------------------------------------------
 # EXISTING mode
 # --------------------------------------------------------------------------
@@ -340,9 +369,15 @@ def test_freshness_registry_merge_existence_guarded():
         assert os.path.exists(os.path.join(fc.SOURCES_DIR, fn))
     # EXC/314 exists -> merged (and dedupes with the base map)
     assert EXC_FILE in merged
-    # pending GCN captures (no golden file yet) are NOT in the live map
-    assert "source-gcn-24-public-holidays.md" not in merged
-    assert "source-gcn-25-a-deadline-extension.md" not in merged
+    # POST-CAPTURE reality: the GCN goldens now exist on disk, so they are
+    # freshness-registered and correctly join the merged monthly-check map.
+    assert "source-gcn-24-public-holidays.md" in merged
+    assert "source-gcn-25-a-deadline-extension.md" in merged
+    # The existence guard still holds: a registry pointed at a directory where
+    # the golden files are absent merges nothing (pending captures never join).
+    pending = fc.load_registry_sources(
+        sources_dir=os.path.join(fc.REPO_ROOT, "does-not-exist"))
+    assert pending == {}
 
 
 # --------------------------------------------------------------------------

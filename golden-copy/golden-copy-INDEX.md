@@ -432,6 +432,24 @@ history and current revision date.
   starts." Rate = Tax Law **§1096(e)(1)** (subd. 2). Subd. 7 = the interest-waiver provision S7001
   proposes to repeal. ⚠ High freshness priority.
 
+### 4.14 — General Construction Law §24 (Public holidays; half-holidays)
+- **Name:** GCN §24 — Public holidays; half-holidays
+- **Date:** current revision 2020-10-16 (NY Open Legislation)
+- **Issued by:** NY State Legislature; via NY Senate Open Legislation (General Construction Law)
+- **Link:** https://www.nysenate.gov/legislation/laws/GCN/24
+- **Verbatim file:** `sources/source-gcn-24-public-holidays.md`
+- **Verified:** 2026-07-05 — sanctioned statute-capture workflow (openleg-api-v3) + owner read against nysenate.gov + two independent fetch cross-checks (three-way confirmed)
+- **Note:** the statutory public-holiday list for PR 2's source-backed payment clock. **L-grade mapping:** GFO XII.5.I says "legal holidays" while §24 defines "public holiday" — standard reading but interpretive; attorney-review-listed. Dynamic President/Governor-appointed days are an open class (preserved verbatim, must not be dropped).
+
+### 4.15 — General Construction Law §25-a (Extension of time where an act is due on a Saturday, Sunday or public holiday)
+- **Name:** GCN §25-a — Public holiday, Saturday or Sunday in statutes; extension of time
+- **Date:** current revision 2014-09-22 (NY Open Legislation)
+- **Issued by:** NY State Legislature; via NY Senate Open Legislation (General Construction Law)
+- **Link:** https://www.nysenate.gov/legislation/laws/GCN/25-A
+- **Verbatim file:** `sources/source-gcn-25-a-deadline-extension.md`
+- **Verified:** 2026-07-05 — sanctioned statute-capture workflow (openleg-api-v3) + owner read against nysenate.gov + two independent fetch cross-checks (three-way confirmed)
+- **Note:** the deadline-extension rule for PR 2's payment clock. **Both** numbered subdivisions captured verbatim — subd. 1 (act may be done the next succeeding business day; contract periods governed by §25) and subd. 2 (extended time excluded from interest computation, except month-based periods). The capture report's "1 subdivision" was a line-start counting artifact (metric corrected 2026-07-05); text is complete.
+
 > **Domain 4 — statutes intentionally NOT captured:** §179-r (scope) and §179-w through §179-ee
 > (revolving loan fund, advisory committee, agency reporting). These govern internal state program
 > administration; they do not bear on document validation or the payment clock, so they are out of
