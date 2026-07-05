@@ -21,15 +21,33 @@
 PR 1 (state primitives) is BUILT: engine/{citation,dated_objects,state_machine,
 outcome_log}.py + data/schemas/ + test_daily_habit_backend.py. Never-green,
 verify-first, golden-cited, no tier-3 data — all test-enforced.
-- [ ] **§314(5)(b)-(c) golden refresh — PREREQUISITE, gates PR 2's cert work.**
-  The current golden capture of source-exec-314-mwbe-cert-validity.md includes
-  the (5)(b)-(c) rebuttable recertification-presumption text in its STATE TEXT,
-  but the engine implements NO presumption logic yet. Before any presumption
-  logic ships: verify (5)(b)-(c) against primary source (nysenate.gov) and
-  record the conditions (18 months post-expiration; no ownership/capital change;
-  prior cert approved within 6 yrs 6 mos; 5 NYCRR 144 compliant; division
-  discretion; presumption expires on final determination). Presumption is
-  rebuttable and is NEVER rendered as credential_status OK.
+- [x] **§314(5)(b)-(c) golden refresh — DONE.** source-exec-314-mwbe-cert-validity.md
+  already carries the full section verbatim including subd. 5 (a)/(b)/(c) and all
+  three NB flags ("** NB Effective until July 1, 2026" / "** NB Effective July 1,
+  2026" / "* NB Repealed July 1, 2028"), captured openleg-api-v3 (activeDate
+  2026-02-20) on 2026-07-03 and primary-source verified (INDEX §314 entry,
+  2026-07-02/03). This PR adds: an **Operative version (as of 2026-07-01)**
+  metadata note that subd. 5(a)-(c) is the current text; and an **L-grade**
+  (legal-interpretive) annotation on the (5)(b)-(c) presumption (conditions —
+  no ownership/capital change, no material change in nature/management, prior
+  cert approved within 6 yrs 6 mos, 5 NYCRR 144 compliant — are attorney
+  judgment, not product logic). Cert/presumption semantics are **no longer
+  blocked by a stale §314 capture**, and the payment-clock PR (PR 2) may proceed
+  without relying on unverified §314 assumptions. Presumption is rebuttable and
+  is NEVER rendered as credential_status OK.
+- [ ] **B: re-pull EXC/314 via `openleg_fetch_diff.py --only EXC/314` for the
+  audit trail.** Requires a session with `NYSLEG_API_KEY` set + the
+  legislation.nysenate.gov / OpenLeg API allowlist active; **expect FULL-MATCH**
+  against the existing 2026-07-03 capture. Belt-and-suspenders re-verification
+  only — the golden body is already the API capture and needs no change; this
+  was not possible in the session that graded (5)(b)-(c) (key unset + egress 403).
+
+## Attorney-review list (legal-interpretive — needs licensed-attorney judgment before product logic asserts it)
+- [ ] **EXC §314(5)(b)-(c) recertification presumption (L-grade).** Product may
+  surface ONLY as credential_status=RECERT_PRESUMPTION_PENDING + citation +
+  "verify eligibility conditions"; never as a determination and never as OK. The
+  presumption expires on final determination of the application (5)(c). Source:
+  golden-copy/sources/source-exec-314-mwbe-cert-validity.md.
 - [ ] **PR 2 = payment clock.** HolidayCalendarProvider MUST be source-backed
   and fail closed — no embedded/hardcoded holiday lists; if the calendar source
   is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
