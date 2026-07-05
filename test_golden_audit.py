@@ -7,6 +7,7 @@ scripts/golden_audit.py.
 Runnable as `python3 test_golden_audit.py` or under pytest. No live network.
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -14,7 +15,42 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts"))
 from engine import golden_status as gs  # noqa: E402
 from validator import GoldenCopy, GoldenEligibilityError, CitationError  # noqa: E402
+import validator as V  # noqa: E402
 import golden_audit as ga  # noqa: E402
+
+# Sources under an interim VERIFY gate (mixed/PARTIAL captures, gated-only).
+INTERIM_SOURCES = {V.STF109, V.MWBE}
+
+
+def _validator_findings_citing_interim_sources():
+    """Mechanically collect every validator Finding that cites an interim-gated
+    source, by RUNNING the public checks over the repo fixtures (NOT narrated from
+    memory). Returns [(rule_id, source_file, quote), ...] covering all branches
+    that cite stf-109 (RM-5 §109) and mwbe-5nycrr (RM-4 MWBE)."""
+    val = V.Validator(golden=GoldenCopy())
+
+    def _load(name):
+        with open(name, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    inv_missing = _load("sample-invoice-fail-missing-cert.json")
+    inv_exc = dict(inv_missing)                     # missing cert + invokes §109(1-a)
+    inv_exc["normal_course_invoice"] = True
+    inv_exc["certification_required"] = False
+    results = [
+        val.check_invoice(_load("sample-invoice-pass.json")),      # RM-5 cert present
+        val.check_invoice(inv_missing),                            # RM-5 cert missing
+        val.check_invoice(inv_exc),                                # RM-5 exception branch
+        val.check_bid(_load("sample-bid-pass.json")),              # RM-4 MWBE
+        val.check_bid(_load("sample-bid-fail-missing-eeo.json")),  # RM-4 §143.3(c) EEO
+        val.check_bid(_load("sample-bid-fail-overdue.json")),      # RM-4 cascade overdue
+    ]
+    out = []
+    for res in results:
+        for f in res.findings:
+            if f.source_file in INTERIM_SOURCES:
+                out.append((f.rule_id, f.source_file, f.citation_quote))
+    return out
 
 # A minimal, parseable synthetic source body for temp-GoldenCopy tests.
 _HEADER = (
@@ -194,6 +230,52 @@ def test_audit_blocking_cleared_but_end_to_end_still_no():
     # migration not done -> end-to-end NO
     assert rep["unmigrated_cite_sites"], "expected unmigrated bare cite() sites"
     assert rep["enforcement_complete"] is False
+
+
+def test_exc314_confident_marker_does_not_bleed_to_other_sentences():
+    """Negative anchor-bleed: an EXC/314 quote OUTSIDE the § 314(5)(a) five-year
+    sentence must NOT inherit the confident marker. It stays governed by the
+    file's L_GRADE status — blocked in confident, allowed only in VERIFY/gated."""
+    g = GoldenCopy()
+    exc = "source-exec-314-mwbe-cert-validity.md"
+    other = "The director shall prepare a directory of certified businesses"  # subd. 2
+    assert other in g.body(exc)                     # verbatim, and NOT within the 5(a) anchor
+    raw = g._raw[exc]
+    assert gs.effective_status(raw, other, g.status_of(exc)) == gs.L_GRADE_INTERPRETIVE
+    try:
+        g.cite(exc, other, output_context=gs.OUTPUT_CONFIDENT)
+        raise AssertionError("non-5(a) EXC/314 text must not be confident-eligible")
+    except GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+    assert g.cite(exc, other, output_context=gs.OUTPUT_VERIFY) == other
+
+
+def test_interim_marker_is_additive_gating_not_a_file_trust_upgrade():
+    """The interim marker must NOT change the derived whole-file status: stf-109
+    and mwbe stay PARTIAL_CAPTURE (never VERIFIED_GOLDEN)."""
+    for fn in ("source-mwbe-5nycrr-pass-fail.md", "source-stf-109-vendor-certificate.md"):
+        raw = open(os.path.join("golden-copy", "sources", fn), encoding="utf-8").read()
+        assert gs.derive_status(raw)[0] == gs.PARTIAL_CAPTURE
+        assert gs.derive_status(raw)[0] != gs.VERIFIED_GOLDEN
+
+
+def test_rm_outputs_citing_interim_sources_flip_confident_to_verify():
+    """Every validator output that cites an interim-gated source (stf-109 / mwbe)
+    is BLOCKED in a confident context and ALLOWED in VERIFY / attorney-gated —
+    i.e. it flips confident -> VERIFY. Mechanically derived by running the checks
+    and resolving each cited quote through the guardrail (not narrated)."""
+    g = GoldenCopy()
+    cited = _validator_findings_citing_interim_sources()
+    assert cited, "expected validator findings citing stf-109/mwbe"
+    seen = set()
+    for rule_id, src, quote in cited:
+        seen.add(src)
+        eff = gs.effective_status(g._raw[src], quote, g.status_of(src))
+        assert eff == gs.INTERIM_VERIFY, (rule_id, src, eff)
+        assert gs.is_citable(eff, gs.OUTPUT_CONFIDENT)[0] is False, (rule_id, src)
+        assert gs.is_citable(eff, gs.OUTPUT_VERIFY)[0] is True, (rule_id, src)
+        assert gs.is_citable(eff, gs.OUTPUT_ATTORNEY_GATED)[0] is True, (rule_id, src)
+    assert seen == INTERIM_SOURCES, ("both interim sources must be exercised", seen)
 
 
 def test_cite_raises_on_pending_human_read():

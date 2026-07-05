@@ -21,6 +21,12 @@ Statuses (most-restrictive first — the derivation returns the first that match
                             superseded prior version; downstream must pick current.
   VERIFIED_GOLDEN           citable normally.
 
+INTERIM_VERIFY is NOT a whole-file status derive_status() ever returns. It is an
+OUTPUT-DISPOSITION gate produced only by a PROVISION ELIGIBILITY marker (see
+effective_status): it lets a still-untrusted source's verbatim quotes appear in
+VERIFY / attorney-gated outputs only (never confident), without changing the
+source's derived whole-file status.
+
 Pure functions, no I/O, so both validator.GoldenCopy (runtime guardrail) and
 scripts/golden_audit.py (CI audit) share one derivation.
 """
@@ -43,10 +49,15 @@ ALL_STATUSES = (
 )
 
 # Citation eligibility (used by GoldenCopy.cite guardrail).
-# INTERIM_VERIFY: a verbatim layer inside a still-PARTIAL/mixed capture that a
-# human has explicitly cleared to be cited ONLY into VERIFY / attorney-gated
-# outputs on an INTERIM basis, pending a clean recapture via the sanctioned
-# statute-capture workflow. It is never confident-eligible.
+#
+# INTERIM_VERIFY is an OUTPUT-DISPOSITION gate, NOT a source-trust upgrade. It
+# does NOT mean the source is trusted, verified, or eligible in the abstract: the
+# source's whole-file status is unchanged (e.g. stf-109 / mwbe stay PARTIAL_CAPTURE
+# and are still not VERIFIED_GOLDEN). The marker only permits that source's
+# verbatim quotes to appear in VERIFY / attorney-gated OUTPUTS (never confident)
+# on an INTERIM basis, pending a clean recapture via the sanctioned statute-capture
+# workflow. It behaves exactly like the gated-only tier: it never behaves like
+# VERIFIED_GOLDEN and never supports confident output.
 CITABLE_NORMALLY = frozenset({VERIFIED_GOLDEN, SUPERSEDED_VERSION_PRESENT})
 CITABLE_GATED_ONLY = frozenset({L_GRADE_INTERPRETIVE, INTERIM_VERIFY})
 NOT_CITABLE = frozenset({PENDING_HUMAN_READ, DIVERGENT_FROM_API, PARTIAL_CAPTURE,
