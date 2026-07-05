@@ -43,11 +43,18 @@ jobs:
       # keeps it out of every endpoint, report, and PR body). A missing key
       # fails the run fail-closed. On any fail-closed condition the step exits
       # non-zero, so no branch/PR is created and no partial capture is committed.
+      # law_ids is handed off via an env var, NOT interpolated into the run
+      # line. GitHub expands ${{ }} templates BEFORE the shell parses the
+      # command, so a direct ${{ inputs.law_ids }} would let shell
+      # metacharacters through before the script's validation could run. The
+      # env-var form keeps the value as opaque data; the script's law_id
+      # allowlist is the second layer.
       - name: Run statute capture
         id: capture
         env:
           NYSLEG_API_KEY: ${{ secrets.NYSLEG_API_KEY }}
-        run: python3 scripts/statute_capture.py --law-ids "${{ inputs.law_ids }}"
+          LAW_IDS: ${{ inputs.law_ids }}
+        run: python3 scripts/statute_capture.py --law-ids "$LAW_IDS"
 
       # Open a PR from a fresh branch (main is branch-protected and requires
       # PRs, so we never push the capture directly). Mirrors the freshness
