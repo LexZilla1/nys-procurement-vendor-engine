@@ -36,3 +36,21 @@ STOP conditions (report, don't improvise): referenced file/brief doesn't exist;
 instruction would modify golden-copy source bodies; instruction conflicts with
 a merged PR's contract; anything requiring credentials or State-system access.
 If the instruction is fine, just build it — don't manufacture objections.
+
+## Merge policy
+Never merge a PR without explicit approval in this session, given AFTER the
+PR is opened. For every PR, post: the PR link, a plain-English summary of
+what changed and why (≤8 lines), what could break, and test results. Then
+STOP and wait for Randi's "merge" (or requested changes).
+Exception — auto-merge allowed ONLY for: freshness-clean automation PRs,
+and typo/doc-comment-only changes touching no code, no golden copy, no
+config. Everything else waits.
+Note: PRs #29–#34 were merged under prompts that pre-authorized squash-merge;
+this policy applies from this PR forward.
+
+## Compliance wording check
+Any PR that adds or changes vendor-facing output text (verdicts, notices,
+interest/eligibility wording, form-fill notices) must include a self-review
+section in the PR summary: quote each new or changed user-facing string and
+state why it is information, not legal advice (UPL test), before requesting
+merge approval.
