@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/contract.schema.json",
+  "title": "Contract",
+  "description": "Spawned exactly once when a tender is AWARDED. PR 1 carries identity + obligations only; payment-clock logic is PR 2. entity_id nullable for future multi-entity support. No numeric confidence/risk scores.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "tender_id"],
+  "properties": {
+    "id": {"type": "string"},
+    "tender_id": {"type": "string"},
+    "entity_id": {
+      "type": ["string", "null"],
+      "description": "Nullable — reserved for future multi-entity support."
+    },
+    "spawned_at": {"type": ["string", "null"]},
+    "xi4a_covered": {
+      "type": ["boolean", "null"],
+      "description": "True when this is a GFO XI.4.A not-for-profit prompt-contracting contract (drives the nfp_renewal_notice_watch obligation)."
+    },
+    "contract_end_date": {"type": ["string", "null"]},
+    "obligations": {
+      "type": "array",
+      "items": {"$ref": "dated_obligation.schema.json"}
+    }
+  }
+}

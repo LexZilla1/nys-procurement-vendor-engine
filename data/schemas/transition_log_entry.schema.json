@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/transition_log_entry.schema.json",
+  "title": "TransitionLogEntry",
+  "description": "One immutable record of a tender_state change. Mirrors engine/state_machine.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actor_type", "actor_id", "timestamp", "from_state", "to_state"],
+  "properties": {
+    "actor_type": {"type": "string", "enum": ["USER", "SYSTEM", "ADMIN", "IMPORT"]},
+    "actor_id": {"type": ["string", "null"]},
+    "timestamp": {"type": "string", "description": "ISO timestamp of the transition."},
+    "from_state": {"type": "string"},
+    "to_state": {"type": "string"},
+    "reason": {"type": ["string", "null"]},
+    "citation": {
+      "oneOf": [
+        {"$ref": "citation.schema.json"},
+        {"type": "null"}
+      ]
+    }
+  }
+}

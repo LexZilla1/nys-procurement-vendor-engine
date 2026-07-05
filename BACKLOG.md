@@ -17,6 +17,35 @@
   typed. Do not build shape-selection before confirming the taxonomy exists.
   Must preserve factual-only boundary + denylist test when added.
 
+## Daily-habit backend — roadmap & gates
+PR 1 (state primitives) is BUILT: engine/{citation,dated_objects,state_machine,
+outcome_log}.py + data/schemas/ + test_daily_habit_backend.py. Never-green,
+verify-first, golden-cited, no tier-3 data — all test-enforced.
+- [ ] **§314(5)(b)-(c) golden refresh — PREREQUISITE, gates PR 2's cert work.**
+  The current golden capture of source-exec-314-mwbe-cert-validity.md includes
+  the (5)(b)-(c) rebuttable recertification-presumption text in its STATE TEXT,
+  but the engine implements NO presumption logic yet. Before any presumption
+  logic ships: verify (5)(b)-(c) against primary source (nysenate.gov) and
+  record the conditions (18 months post-expiration; no ownership/capital change;
+  prior cert approved within 6 yrs 6 mos; 5 NYCRR 144 compliant; division
+  discretion; presumption expires on final determination). Presumption is
+  rebuttable and is NEVER rendered as credential_status OK.
+- [ ] **PR 2 = payment clock.** HolidayCalendarProvider MUST be source-backed
+  and fail closed — no embedded/hardcoded holiday lists; if the calendar source
+  is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
+  semantic-concept check -> PREFLIGHT_FLAG (categorical, never a numeric score).
+  Fills the Invoice shell (data/schemas/invoice.schema.json) with clock logic.
+- [ ] **PR 3 = morning-brief generator.** Locked section hierarchy +
+  generated_at + data_quality counts (operational counts, not scores) +
+  prompt_payment_note wording. Consumes the outcome_log records; no analytics
+  scoring.
+- [ ] WCB C-105.2 / DB-120.1 workers'-comp & disability coverage capture —
+  BLOCKED on the .ny.gov allowlist (forms not yet fetchable this environment).
+- [ ] Fit-and-friction categorical rubric (categorical only — never a score).
+- [ ] Readiness-assessment funnel.
+- [ ] Collaboration layer (multi-user on a tender/contract).
+- [ ] Defects-prevented metric (operational count from outcome_log; not a score).
+
 ## Architecture — pre-Triage gates (design, not yet built)
 - [ ] SOURCE-DECLARATION FLAG at upload: user declares whether the uploaded
   tender is (a) an underlying public solicitation (agency/NYSCR record) or

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nys-procurement-vendor-engine/schemas/tender.schema.json",
+  "title": "Tender",
+  "description": "A tracked solicitation moving through the lifecycle. Categorical state + triage verdict only; no numeric confidence/risk scores. entity_id is nullable for future multi-entity support.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "tender_state"],
+  "properties": {
+    "id": {"type": "string"},
+    "entity_id": {
+      "type": ["string", "null"],
+      "description": "Nullable — reserved for future multi-entity support."
+    },
+    "solicitation_id": {"type": ["string", "null"]},
+    "title": {"type": ["string", "null"]},
+    "agency": {"type": ["string", "null"]},
+    "tender_state": {
+      "type": "string",
+      "enum": [
+        "WATCHING", "TRIAGED", "PREPARING", "QUESTIONS_OPEN", "READY_TO_SUBMIT",
+        "SUBMITTED", "AWARDED", "LOST", "NO_BID", "CONTRACT_EXECUTION",
+        "ACTIVE", "CLOSE_OUT", "CLOSED"
+      ]
+    },
+    "triage_verdict": {
+      "type": ["string", "null"],
+      "enum": ["BIDDABLE", "NOT_BIDDABLE", "VERIFY", null]
+    },
+    "obligations": {
+      "type": "array",
+      "items": {"$ref": "dated_obligation.schema.json"}
+    },
+    "transition_log": {
+      "type": "array",
+      "items": {"$ref": "transition_log_entry.schema.json"}
+    }
+  }
+}
