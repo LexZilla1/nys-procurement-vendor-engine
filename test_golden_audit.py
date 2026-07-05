@@ -22,11 +22,12 @@ import golden_audit as ga  # noqa: E402
 INTERIM_SOURCES = {V.STF109, V.MWBE}
 
 
-def _validator_findings_citing_interim_sources():
+def _interim_citations_by_method():
     """Mechanically collect every validator Finding that cites an interim-gated
-    source, by RUNNING the public checks over the repo fixtures (NOT narrated from
-    memory). Returns [(rule_id, source_file, quote), ...] covering all branches
-    that cite stf-109 (RM-5 §109) and mwbe-5nycrr (RM-4 MWBE)."""
+    source, by RUNNING the FULL validator surface over the repo fixtures (NOT
+    narrated). Each record is tagged with the CHECK METHOD that produced it, so
+    the RM-rule -> source attribution is derived, not hand-labelled. Returns
+    [{method, rule_id, source, quote}, ...]."""
     val = V.Validator(golden=GoldenCopy())
 
     def _load(name):
@@ -37,19 +38,37 @@ def _validator_findings_citing_interim_sources():
     inv_exc = dict(inv_missing)                     # missing cert + invokes §109(1-a)
     inv_exc["normal_course_invoice"] = True
     inv_exc["certification_required"] = False
-    results = [
-        val.check_invoice(_load("sample-invoice-pass.json")),      # RM-5 cert present
-        val.check_invoice(inv_missing),                            # RM-5 cert missing
-        val.check_invoice(inv_exc),                                # RM-5 exception branch
-        val.check_bid(_load("sample-bid-pass.json")),              # RM-4 MWBE
-        val.check_bid(_load("sample-bid-fail-missing-eeo.json")),  # RM-4 §143.3(c) EEO
-        val.check_bid(_load("sample-bid-fail-overdue.json")),      # RM-4 cascade overdue
+
+    # The full public check surface — so interim-source citations can be
+    # attributed to EXACTLY one method/rule, and any miswire (e.g. mwbe routed
+    # through check_invoice) shows up as a new (method, source) pair.
+    battery = [
+        ("check_invoice", val.check_invoice, [_load("sample-invoice-pass.json"),
+                                              inv_missing, inv_exc]),
+        ("check_budget", val.check_budget, [_load("sample-budget-pass.json"),
+                                            _load("sample-budget-fail.json")]),
+        ("check_vendrep", val.check_vendrep, [_load("sample-vendrep-pass.json"),
+                                              _load("sample-vendrep-fail-material-change.json")]),
+        ("check_bid", val.check_bid, [_load("sample-bid-pass.json"),
+                                      _load("sample-bid-fail-missing-eeo.json"),
+                                      _load("sample-bid-fail-overdue.json")]),
+        ("validate_rm2_interest", val.validate_rm2_interest, [
+            _load("sample-contract-entitled-to-interest.json"),
+            _load("sample-contract-no-interest-directive-suspended.json"),
+            _load("sample-contract-no-interest-no-directive.json"),
+            _load("sample-contract-excluded-local-government.json"),
+            _load("sample-contract-below-de-minimis.json"),
+            _load("sample-contract-excluded-court-judgment.json"),
+            _load("sample-contract-excluded-nonstate-intermediary.json")]),
     ]
     out = []
-    for res in results:
-        for f in res.findings:
-            if f.source_file in INTERIM_SOURCES:
-                out.append((f.rule_id, f.source_file, f.citation_quote))
+    for method_name, fn, inputs in battery:
+        for payload in inputs:
+            res = fn(payload)
+            for f in res.findings:
+                if f.source_file in INTERIM_SOURCES:
+                    out.append({"method": method_name, "rule_id": f.rule_id,
+                                "source": f.source_file, "quote": f.citation_quote})
     return out
 
 # A minimal, parseable synthetic source body for temp-GoldenCopy tests.
@@ -262,20 +281,63 @@ def test_interim_marker_is_additive_gating_not_a_file_trust_upgrade():
 def test_rm_outputs_citing_interim_sources_flip_confident_to_verify():
     """Every validator output that cites an interim-gated source (stf-109 / mwbe)
     is BLOCKED in a confident context and ALLOWED in VERIFY / attorney-gated —
-    i.e. it flips confident -> VERIFY. Mechanically derived by running the checks
-    and resolving each cited quote through the guardrail (not narrated)."""
+    i.e. it flips confident -> VERIFY. Exercises the REAL guardrail (g.cite) in
+    both directions per cited quote; mechanically derived (not narrated)."""
     g = GoldenCopy()
-    cited = _validator_findings_citing_interim_sources()
+    cited = _interim_citations_by_method()
     assert cited, "expected validator findings citing stf-109/mwbe"
     seen = set()
-    for rule_id, src, quote in cited:
+    for rec in cited:
+        src, quote = rec["source"], rec["quote"]
         seen.add(src)
-        eff = gs.effective_status(g._raw[src], quote, g.status_of(src))
-        assert eff == gs.INTERIM_VERIFY, (rule_id, src, eff)
-        assert gs.is_citable(eff, gs.OUTPUT_CONFIDENT)[0] is False, (rule_id, src)
-        assert gs.is_citable(eff, gs.OUTPUT_VERIFY)[0] is True, (rule_id, src)
-        assert gs.is_citable(eff, gs.OUTPUT_ATTORNEY_GATED)[0] is True, (rule_id, src)
+        # fails in confident context...
+        try:
+            g.cite(src, quote, output_context=gs.OUTPUT_CONFIDENT)
+            raise AssertionError("%s must be non-citable in CONFIDENT: %r" % (src, rec))
+        except GoldenEligibilityError as e:
+            assert e.status == gs.INTERIM_VERIFY, rec
+        # ...and passes in VERIFY / attorney-gated context.
+        assert g.cite(src, quote, output_context=gs.OUTPUT_VERIFY) == quote
+        assert g.cite(src, quote, output_context=gs.OUTPUT_ATTORNEY_GATED) == quote
     assert seen == INTERIM_SOURCES, ("both interim sources must be exercised", seen)
+
+
+def test_rm_attribution_is_a_mechanically_asserted_invariant():
+    """The RM-rule -> source attribution is an ASSERTED invariant, derived from
+    running the checks — not a hand-written label. It fails loudly on any miswire:
+      * stf-109 is cited ONLY by RM-5 / check_invoice;
+      * mwbe-5nycrr is cited ONLY by RM-4 / check_bid.
+    If mwbe were ever routed back through check_invoice (or emitted as RM-5), the
+    (source -> methods) / (source -> rule_ids) sets below would change and break."""
+    cited = _interim_citations_by_method()
+    rules_by_source, methods_by_source = {}, {}
+    for rec in cited:
+        rules_by_source.setdefault(rec["source"], set()).add(rec["rule_id"])
+        methods_by_source.setdefault(rec["source"], set()).add(rec["method"])
+
+    assert rules_by_source == {V.STF109: {"RM-5"}, V.MWBE: {"RM-4"}}, rules_by_source
+    assert methods_by_source == {V.STF109: {"check_invoice"},
+                                 V.MWBE: {"check_bid"}}, methods_by_source
+
+
+def test_mwbe_both_directions_through_the_actual_check_bid_path():
+    """mwbe both-directions, tied to the REAL RM-4 / check_bid citation (not an
+    assumed RM-5 path): a quote check_bid actually cites is non-citable confident
+    and citable in VERIFY / attorney-gated."""
+    g = GoldenCopy()
+    mwbe_via_bid = [r for r in _interim_citations_by_method()
+                    if r["source"] == V.MWBE and r["method"] == "check_bid"]
+    assert mwbe_via_bid, "check_bid must produce mwbe-5nycrr citations"
+    for rec in mwbe_via_bid:
+        assert rec["rule_id"] == "RM-4", rec
+        q = rec["quote"]
+        try:
+            g.cite(V.MWBE, q, output_context=gs.OUTPUT_CONFIDENT)
+            raise AssertionError("mwbe via check_bid must be non-citable confident")
+        except GoldenEligibilityError as e:
+            assert e.status == gs.INTERIM_VERIFY
+        assert g.cite(V.MWBE, q, output_context=gs.OUTPUT_VERIFY) == q
+        assert g.cite(V.MWBE, q, output_context=gs.OUTPUT_ATTORNEY_GATED) == q
 
 
 def test_cite_raises_on_pending_human_read():
