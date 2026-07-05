@@ -90,20 +90,49 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   the dynamic President/Governor-appointed holidays (an open class) must be
   handled, not omitted. Sources: golden-copy/sources/source-gcn-24-public-holidays.md,
   golden-copy/sources/source-xii-5-i-prompt-payment-interest.md.
-- [ ] **PR 2 = payment clock.** HolidayCalendarProvider MUST be source-backed
-  and fail closed — no embedded/hardcoded holiday lists; if the calendar source
-  is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
-  semantic-concept check -> PREFLIGHT_FLAG (categorical, never a numeric score).
-  Fills the Invoice shell (data/schemas/invoice.schema.json) with clock logic.
-  **HOLIDAY SOURCE NOW UNBLOCKED (2026-07-05).** GCN/24 (public holidays) and
-  GCN/25-a (deadline extension to the next succeeding business day; interest-
-  computation rule) were captured via the sanctioned statute-capture workflow and
-  **promoted to verified golden 2026-07-05** (owner read + two independent fetch
-  cross-checks; INDEX 4.14/4.15; VERIFICATION-REPORT rows 46–47). The source-backed
-  HolidayCalendarProvider now has its golden holiday + deadline sources. Remaining
-  gate before the clock asserts the mapping: the **L-grade attorney item** above
-  (GCN §24 "public holiday" ↔ GFO XII.5.I "legal holidays"). Design invariants
-  unchanged: no hardcoded holiday lists; fail-closed if a source is unavailable.
+  **CLOSING ACTION:** after attorney sign-off, flip
+  `HOLIDAY_MAPPING_ATTORNEY_APPROVED = True` in `engine/payment_clock.py` (single
+  gate; the confident holiday-adjusted path is already built and tested behind
+  it — no rework needed). Until then, holiday-dependent deadlines return VERIFY.
+- [~] **PR 2a = payment-clock HOLIDAY-SOURCE CORE — BUILT (engine/payment_clock.py).**
+  A NARROW slice of the payment clock, not the full statutory clock. Implemented +
+  tested (test_payment_clock.py, 17): source-backed HolidayCalendarProvider
+  (parses the GCN §24 / §25-a golden bodies via validator.GoldenCopy; no hardcoded
+  holiday lists; fails closed if a source/anchor is missing); the GCN §25-a
+  next-succeeding-business-day roll over Sat/Sun/public-holiday (incl. the §24
+  Sunday-observed roll); the attorney gate (`HOLIDAY_MAPPING_ATTORNEY_APPROVED`,
+  ships False → holiday-dependent deadlines return VERIFY, confident path built
+  behind the flag); a pure calendar day-count deadline (holiday-independent,
+  verify-first); and an invoice-shell fill (`invoice_due_dates`). Verbatim golden
+  citations (GCN §25-a/§24). No golden bodies touched.
+  **HOLIDAY SOURCE UNBLOCKED (2026-07-05):** GCN/24 + GCN/25-a promoted to verified
+  golden (INDEX 4.14/4.15; VERIFICATION-REPORT rows 46–47). Full payment-clock
+  completion remains OPEN — see PR 2b below.
+- [ ] **PR 2b = payment-clock STATUTORY-SCOPE COMPLETION (full PR 2).** NOT built
+  by PR 2a. Full payment-clock completion stays OPEN until these all land, each
+  golden-cited, never-green, test-covered:
+  - **MIR later-of net-due semantics** from source-stf-179-e.md (required-payment
+    date computed from the LATER of invoice receipt / goods-services acceptance).
+  - **Net Due Date statutory branches:** 30-day branch (§179-f); **15-day
+    qualified-small-business branch requiring BOTH `sb_15day_certified=true` AND
+    electronic/designated submission** — must cite the verbatim §179-f / GFO XII.5.I
+    conjunctive anchor; dropping either condition fabricates false 15-day clocks
+    (never-green violation); 75-day highway-construction final-payment branch.
+    (The Sat/Sun roll and the legal-holiday VERIFY gate already exist in PR 2a.)
+  - **VERIFY mir_date → invoice_net_due DatedObligation BLOCKED** (wire ClockResult
+    into engine/dated_objects ObligationGraph).
+  - **MIR_DATE_CHECK categorical audit flag.**
+  - **prompt_payment_note** (non-promissory wording), **rate_lookup** behavior, and
+    **nysinterestrates.csv** use with a **VERIFY_AT_SOURCE** fallback.
+  - **Invoice schema/model completion + DRAFT status transitions.**
+  - **RM-5 §109 semantic-concept check → PREFLIGHT_FLAG** and the
+    **DRAFT → PREFLIGHT_PASS / PREFLIGHT_FLAG** gate. (NOTE: a §109 proper-invoice
+    field/cert RM-5 preflight ALREADY EXISTS in validator.py — tests
+    test_rm5_pass_fixture_passes / test_rm5_missing_cert_fails_with_109_citation /
+    test_rm5_normal_course_exception_warns_not_fails — but the semantic-concept
+    variant and the PREFLIGHT gate are NOT yet built.)
+  - **Never-green schema scan extended to any new invoice/clock fields**
+    (test_never_green_no_numeric_score_fields_in_schemas must cover them).
 - [ ] **PR 3 = morning-brief generator.** Locked section hierarchy +
   generated_at + data_quality counts (operational counts, not scores) +
   prompt_payment_note wording. Consumes the outcome_log records; no analytics

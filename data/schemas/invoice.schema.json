@@ -12,12 +12,12 @@
     "entity_id": {"type": ["string", "null"]},
     "received_date": {
       "type": ["string", "null"],
-      "description": "Shell field; the payment clock that consumes it is PR 2."
+      "description": "Proper-invoice received date; consumed by the payment clock (engine/payment_clock.py PaymentClock.invoice_due_dates)."
     },
     "net_terms_days": {
       "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Operational term length in days (a count, not a score). Clock math is PR 2."
+      "description": "Operational term length in days (a count, not a score). Fed to the payment clock (engine/payment_clock.py); pure day-count is confident, holiday-adjusted is attorney-gated."
     },
     "preflight_verdict": {
       "type": ["string", "null"],
