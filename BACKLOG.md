@@ -108,31 +108,35 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   **HOLIDAY SOURCE UNBLOCKED (2026-07-05):** GCN/24 + GCN/25-a promoted to verified
   golden (INDEX 4.14/4.15; VERIFICATION-REPORT rows 46–47). Full payment-clock
   completion remains OPEN — see PR 2b below.
-- [ ] **PR 2b = payment-clock STATUTORY-SCOPE COMPLETION (full PR 2).** NOT built
-  by PR 2a. Full payment-clock completion stays OPEN until these all land, each
-  golden-cited, never-green, test-covered:
-  - **MIR later-of net-due semantics** from source-stf-179-e.md (required-payment
-    date computed from the LATER of invoice receipt / goods-services acceptance).
-  - **Net Due Date statutory branches:** 30-day branch (§179-f); **15-day
-    qualified-small-business branch requiring BOTH `sb_15day_certified=true` AND
-    electronic/designated submission** — must cite the verbatim §179-f / GFO XII.5.I
-    conjunctive anchor; dropping either condition fabricates false 15-day clocks
-    (never-green violation); 75-day highway-construction final-payment branch.
-    (The Sat/Sun roll and the legal-holiday VERIFY gate already exist in PR 2a.)
-  - **VERIFY mir_date → invoice_net_due DatedObligation BLOCKED** (wire ClockResult
-    into engine/dated_objects ObligationGraph).
-  - **MIR_DATE_CHECK categorical audit flag.**
-  - **prompt_payment_note** (non-promissory wording), **rate_lookup** behavior, and
-    **nysinterestrates.csv** use with a **VERIFY_AT_SOURCE** fallback.
-  - **Invoice schema/model completion + DRAFT status transitions.**
-  - **RM-5 §109 semantic-concept check → PREFLIGHT_FLAG** and the
-    **DRAFT → PREFLIGHT_PASS / PREFLIGHT_FLAG** gate. (NOTE: a §109 proper-invoice
-    field/cert RM-5 preflight ALREADY EXISTS in validator.py — tests
-    test_rm5_pass_fixture_passes / test_rm5_missing_cert_fails_with_109_citation /
-    test_rm5_normal_course_exception_warns_not_fails — but the semantic-concept
-    variant and the PREFLIGHT gate are NOT yet built.)
-  - **Never-green schema scan extended to any new invoice/clock fields**
-    (test_never_green_no_numeric_score_fields_in_schemas must cover them).
+- [x] **PR 2b = payment-clock STATUTORY-SCOPE COMPLETION — BUILT 2026-07-05**
+  (engine/invoice_clock.py, engine/invoice_status.py; tests test_invoice_clock.py
+  = 36). All sources read from in-repo goldens; no golden bodies touched; no live
+  fetches. Each item implemented + tested:
+  - **MIR later-of net-due semantics** — §179-e(6) `mir_receipt`/`mir_date_check`
+    (later of invoice receipt / goods-services acceptance; highway → §179-e(6)(c)
+    Highway Law §38(7)(g) not in goldens → MIR_HIGHWAY_VERIFY). Golden-cited.
+  - **Net Due Date branches** — §179-f(2) `net_due_branch`: 30-day standard;
+    **15-day small-business requiring BOTH `sb_15day_certified` AND
+    `submitted_electronically`** (conjunctive verbatim anchor cited; a missing
+    conjunct falls back to 30-day — never a false 15-day clock); 75-day highway
+    final payment. Because every branch is "excluding legal holidays," all inherit
+    the PR 2a Sat/Sun roll + holiday VERIFY gate (`required_payment_date`).
+  - **VERIFY mir_date → invoice_net_due BLOCKED** — `build_invoice_obligations`
+    wires a MIR obligation + `invoice_net_due` (depends_on it) into ObligationGraph.
+  - **MIR_DATE_CHECK** categorical audit flag (categorical, never numeric).
+  - **prompt_payment_note** (non-promissory) + **rate_lookup** over
+    nysinterestrates.csv with **VERIFY_AT_SOURCE** fallback (absent/stale quarter).
+  - **Invoice schema/model + status transitions** — invoice.schema.json completed;
+    `InvoiceStatusMachine` with the **DRAFT → PREFLIGHT_PASS / PREFLIGHT_FLAG** gate.
+  - **RM-5 §109 semantic-concept variant** — `preflight_109_semantic` checks the
+    three §109 attestation concepts (just/true/correct; not previously paid;
+    actually due and owing) → PREFLIGHT_PASS / PREFLIGHT_FLAG, beyond the
+    pre-existing field/cert RM-5 check in validator.py.
+  - **Never-green scan extended** over the new invoice fields + clock outputs
+    (test_never_green_new_invoice_fields_have_no_score_tokens,
+    test_never_green_clock_outputs_have_no_score_keys).
+  Attorney gate unchanged: `HOLIDAY_MAPPING_ATTORNEY_APPROVED` still ships False,
+  so every statutory required-payment DATE is VERIFY until the L-grade sign-off.
 - [ ] **PR 3 = morning-brief generator.** Locked section hierarchy +
   generated_at + data_quality counts (operational counts, not scores) +
   prompt_payment_note wording. Consumes the outcome_log records; no analytics

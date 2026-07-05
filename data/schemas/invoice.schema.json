@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nys-procurement-vendor-engine/schemas/invoice.schema.json",
   "title": "Invoice",
-  "description": "SHELL for PR 2. Fields only — no payment-clock / prompt-payment-interest logic here (that is PR 2, and its HolidayCalendarProvider must be source-backed and fail closed). No tier-3 data (no TIN/SSN/DOB). No numeric confidence/risk scores.",
+  "description": "Invoice model for the payment clock (PR 2a holiday core + PR 2b statutory clock). Sources read from in-repo goldens only; no numeric confidence/risk scores; no tier-3 data (no TIN/SSN/DOB).",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "contract_id"],
@@ -18,6 +18,48 @@
       "type": ["integer", "null"],
       "minimum": 0,
       "description": "Operational term length in days (a count, not a score). Fed to the payment clock (engine/payment_clock.py); pure day-count is confident, holiday-adjusted is attorney-gated."
+    },
+    "invoice_received_date": {
+      "type": ["string", "null"],
+      "description": "§179-e(6)(a): date the proper invoice was actually received at the designated payment office. One input to the MIR later-of."
+    },
+    "goods_received_date": {
+      "type": ["string", "null"],
+      "description": "§179-e(6)(b): date the agency received the goods/property/services. MIR = later of this and invoice_received_date."
+    },
+    "sb_15day_certified": {
+      "type": ["boolean", "null"],
+      "description": "§179-f(2) / GFO XII.5.I: the vendor is a qualified small business self-certified for 15-day payment. Conjunct (i) of the 15-day clock — necessary but NOT sufficient."
+    },
+    "expedited_payment_identified": {
+      "type": ["boolean", "null"],
+      "description": "§179-f(2): the small business 'identifies that it is seeking expedited payment as a small business'. Conjunct (ii) of the 15-day clock."
+    },
+    "electronic_channel": {
+      "type": ["string", "null"],
+      "enum": ["SFS_ELECTRONIC", "DESIGNATED_SYSTEM", "OTHER", null],
+      "description": "GFO XII.5.I: the invoice's electronic-submission channel. Conjunct (iii) of the 15-day clock — only SFS_ELECTRONIC or DESIGNATED_SYSTEM (an OSC-designated electronic system) qualify; OTHER/null fall back to the 30-day branch."
+    },
+    "highway_final_payment": {
+      "type": ["boolean", "null"],
+      "description": "§179-f(2)/§179-e(6)(c): final payment on a highway construction contract (75-day branch; MIR receipt date set by Highway Law §38(7)(g))."
+    },
+    "cert_just_true_correct": {
+      "type": ["boolean", "null"],
+      "description": "§109 attestation concept: the statement is 'just, true and correct'. Used by the §109 semantic-concept pre-flight."
+    },
+    "cert_not_previously_paid": {
+      "type": ["boolean", "null"],
+      "description": "§109 attestation concept: 'no part thereof has been paid' (not previously paid)."
+    },
+    "cert_actually_due_owing": {
+      "type": ["boolean", "null"],
+      "description": "§109 attestation concept: 'the balance therein stated is actually due and owing'."
+    },
+    "status": {
+      "type": ["string", "null"],
+      "enum": ["DRAFT", "PREFLIGHT_PASS", "PREFLIGHT_FLAG", null],
+      "description": "Categorical invoice status (engine/invoice_status.py). Gate: DRAFT -> PREFLIGHT_PASS / PREFLIGHT_FLAG."
     },
     "preflight_verdict": {
       "type": ["string", "null"],
