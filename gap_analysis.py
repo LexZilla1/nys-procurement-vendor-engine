@@ -34,6 +34,7 @@ from typing import Optional
 
 import freshness_checker as fc
 from validator import GoldenCopy
+from engine import golden_status as gs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -122,7 +123,12 @@ def _build_catalog():
     grounded, never paraphrased."""
     catalog = {}
     for e in _CATALOG_SEED:
-        _GC.cite(e.source_file, e.citation_quote)  # raises CitationError if not verbatim
+        # The catalog is seeded only from currently-golden sources and its
+        # citations are surfaced verbatim in vendor-facing verdicts, so validate
+        # each into a CONFIDENT output: verbatim AND confident-eligible. A seed
+        # quote that is not confident-eligible fails the build here rather than
+        # reaching a vendor as a confident citation.
+        _GC.cite(e.source_file, e.citation_quote, output_context=gs.OUTPUT_CONFIDENT)
         catalog[e.requirement_id] = e
     return catalog
 

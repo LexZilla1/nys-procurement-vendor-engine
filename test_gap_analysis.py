@@ -204,6 +204,26 @@ def test_analyze_summary_have_is_zero_when_authorization_lapsed():
     assert ok["summary"]["have"] == 1
 
 
+def test_gap_catalog_is_confident_gated_both_directions():
+    """The migrated gap_analysis validates its catalog at import with
+    output_context=CONFIDENT. Forward: the real catalog builds and is non-empty
+    (every seed is confident-eligible). Reverse: the CONFIDENT gate is load-bearing
+    — a gated source (mwbe-5nycrr, INTERIM_VERIFY) is BLOCKED at CONFIDENT, so a
+    gated seed would fail the build rather than reach a vendor as a confident
+    citation; it is allowed only into VERIFY / attorney-gated."""
+    import engine.golden_status as gs
+    from validator import GoldenEligibilityError
+    assert G.CATALOG and G._build_catalog()                       # forward: builds, non-empty
+    mwbe = "source-mwbe-5nycrr-pass-fail.md"
+    q = G._GC.body(mwbe).strip().split("\n", 1)[0][:30]
+    try:
+        G._GC.cite(mwbe, q, output_context=gs.OUTPUT_CONFIDENT)   # reverse: gated seed blocked
+        raise AssertionError("a gated source must fail the CONFIDENT catalog gate")
+    except GoldenEligibilityError as e:
+        assert e.status == gs.INTERIM_VERIFY
+    assert G._GC.cite(mwbe, q, output_context=gs.OUTPUT_VERIFY) == q
+
+
 # --------------------------------------------------------------------------
 # Built-in runner
 # --------------------------------------------------------------------------

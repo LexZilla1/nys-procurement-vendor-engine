@@ -571,66 +571,65 @@ def test_render_states_enforcement_complete():
     assert "BLOCKING-TO-ENFORCEMENT" in out
 
 
-def test_bare_cite_scan_is_clean_with_empty_enumerated_allowlist():
-    """The enumerated-exclusion bare-cite ban: no runtime .cite() under engine/ +
-    validator.py may be bare (missing output_context) unless it is explicitly
-    enumerated in BARE_CITE_ALLOWLIST. Post-migration the allowlist is empty and
-    the scan finds zero bare sites."""
+def test_cite_surface_classification_is_complete_and_runtime_is_migrated():
+    """The runtime scan surface is CLASSIFICATION-DERIVED, not handpicked: every
+    repo .py that invokes cite() is classified, the RUNTIME/product surface is
+    exactly the six vendor-facing paths, all cite-invoking test suites are excluded
+    WITH a reason, nothing is unclassified, and no runtime cite is bare."""
+    surface = ga.classify_cite_surface()
+    assert surface["unclassified"] == [], surface["unclassified"]
+    assert set(surface["runtime"]) == {
+        "validator.py", "bid_readiness.py", "cert_renewal.py", "gap_analysis.py",
+        "engine/citation.py", "engine/payment_clock.py"}, sorted(surface["runtime"])
+    assert all(reason for reason in surface["runtime"].values())      # every runtime path justified
+    assert all(reason for reason in surface["excluded"].values())     # every exclusion justified
     assert ga.BARE_CITE_ALLOWLIST == frozenset()
     assert ga.unmigrated_cite_sites() == []
 
 
-def test_bare_cite_scan_boundary_inscope_caught_outofscope_and_allowlisted_excluded():
-    """Boundary of the ban, both directions:
-      (1) a bare GoldenCopy.cite() in an IN-SCOPE runtime file (a member of
-          ENGINE_SCAN_FILES = engine/*.py + validator.py) IS caught;
-      (2) the SAME bare cite in an OUT-OF-SCOPE (non-runtime) path is NOT caught,
-          because the scan iterates only ENGINE_SCAN_FILES;
-      (3) an in-scope bare cite EXPLICITLY enumerated in BARE_CITE_ALLOWLIST is
-          excluded — the allowlist is the only in-scope escape hatch.
-    Exercised against synthetic files so the real tree stays untouched."""
-    with tempfile.TemporaryDirectory() as tmp:
-        runtime = os.path.join(tmp, "engine_like.py")       # stands in for an in-scope file
-        nonruntime = os.path.join(tmp, "step1_like.py")     # out-of-scope runtime module
-        for pth in (runtime, nonruntime):
-            with open(pth, "w", encoding="utf-8") as fh:
-                fh.write("golden.cite(src, quote)\n")        # identical bare cite in both
-        orig_files, orig_allow = ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST
-        ga.ENGINE_SCAN_FILES = [runtime]                     # only the runtime file is in scope
-        try:
-            sites = ga.unmigrated_cite_sites()
-            # (1) in-scope bare cite IS caught (exactly it, at line 1)...
-            assert [(os.path.basename(s["file"]), s["line"]) for s in sites] \
-                == [("engine_like.py", 1)], sites
-            # (2) ...and the identical bare cite in the out-of-scope path is NOT caught.
-            assert all("step1_like.py" not in s["file"] for s in sites), sites
-            # (3) enumerating the in-scope site excludes it.
-            ga.BARE_CITE_ALLOWLIST = frozenset(
-                {"%s:1" % os.path.relpath(runtime, ga.REPO_ROOT)})
-            assert ga.unmigrated_cite_sites() == []
-        finally:
-            ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST = orig_files, orig_allow
+def test_excluded_test_paths_with_bare_cites_are_not_flagged():
+    """A cite-invoking file is excluded ONLY with a reason, and its bare cites are
+    then not flagged: e.g. test_payment_clock.py carries bare verbatim-assert cites
+    (lines 197-200) yet is an EXCLUDED path, so no test_* site appears as
+    unmigrated."""
+    surface = ga.classify_cite_surface()
+    assert "test_payment_clock.py" in surface["excluded"]
+    assert surface["excluded"]["test_payment_clock.py"]              # reason present
+    assert all(not s["file"].startswith("test_") for s in ga.unmigrated_cite_sites())
 
 
-def test_bare_cite_scan_is_not_defeated_by_ordinary_reformatting():
-    """Matcher robustness (point 3): a .cite() reformatted onto its own line and
-    split across multiple lines is still caught, and output_context on a
-    continuation line is recognized — because the matcher reads each call's
-    balanced-paren argument span, not a single line or a fixed char window."""
+def test_unclassified_cite_invoking_file_fails_closed():
+    """A cite-invoking runtime file absent from BOTH classification tables surfaces
+    as UNCLASSIFIED and fail-closes enforcement — END-TO-END cannot be YES while a
+    product citation path escaped classification. (Simulated by dropping a known
+    runtime entry; the file is unchanged, only the classification table.)"""
+    orig = dict(ga.RUNTIME_CITE_FILES)
+    try:
+        del ga.RUNTIME_CITE_FILES["bid_readiness.py"]               # now unclassified
+        surface = ga.classify_cite_surface()
+        assert "bid_readiness.py" in surface["unclassified"], surface
+        assert ga.run()["enforcement_complete"] is False
+    finally:
+        ga.RUNTIME_CITE_FILES.clear()
+        ga.RUNTIME_CITE_FILES.update(orig)
+
+
+def test_cite_call_detection_is_ast_based_and_robust():
+    """Detection is AST-based (point 3): a `.cite(` split across lines / reformatted
+    onto its own line is found and its `output_context` recognized; a docstring
+    mention `GoldenCopy.cite()` and a `def cite(` definition are NOT calls. So the
+    ban is not defeated by ordinary reformatting, and not tripped by prose."""
     with tempfile.TemporaryDirectory() as tmp:
-        p = os.path.join(tmp, "engine_like.py")
+        p = os.path.join(tmp, "m.py")
         with open(p, "w", encoding="utf-8") as fh:
             fh.write(
-                "golden \\\n    .cite(\n        src,\n        quote,\n    )\n\n"  # bare, multi-line, own line -> caught
-                "golden.cite(\n    s, q,\n    output_context=X,\n)\n")           # migrated, multi-line -> clean
-        orig = ga.ENGINE_SCAN_FILES
-        ga.ENGINE_SCAN_FILES = [p]
-        try:
-            sites = ga.unmigrated_cite_sites()
-            assert len(sites) == 1, sites          # only the bare multi-line call
-            assert sites[0]["line"] == 2, sites    # the `.cite(` line of the bare call
-        finally:
-            ga.ENGINE_SCAN_FILES = orig
+                '"""A doc mention of GoldenCopy.cite() must be ignored."""\n'
+                "def cite(self, a, b):\n    return a\n"          # a def, not a call
+                "golden \\\n    .cite(\n        src,\n        quote,\n    )\n"  # bare, multi-line, own line
+                "self.gc.cite(s, q, output_context=X)\n")        # migrated, attribute-chained
+        calls = ga._cite_calls(p)
+        # exactly two CALLS detected: one bare, then one migrated (doc/def ignored)
+        assert [oc for _, oc in calls] == [False, True], calls
 
 
 # ======================= runner ===========================================

@@ -53,6 +53,27 @@ def test_mwbe_five_year_validity_cited_verbatim():
     assert "five years" in it.grounding["citation_quote"]
 
 
+def test_cert_renewal_grounding_is_confident_gated_both_directions():
+    """The migrated cert_renewal cites at output_context=CONFIDENT. Forward: the
+    REAL MWBE grounding it emits is confident-eligible (its §314(5)(a) quote passes
+    CONFIDENT). Reverse: the CONFIDENT gate is load-bearing — the §314(5)(b)-(c)
+    rebuttable-presumption quote (L-grade) is BLOCKED at CONFIDENT and allowed only
+    into VERIFY / attorney-gated, so a non-confident-eligible quote could not slip
+    through this runtime site."""
+    import engine.golden_status as gs
+    it = _items(_data())["MWBE"]
+    src, q = it.grounding["source_file"], it.grounding["citation_quote"]
+    assert GC.cite(src, q, output_context=gs.OUTPUT_CONFIDENT) == q          # forward
+    pres = "there shall be a rebuttable presumption"
+    assert pres in GC.body(src)                                              # verbatim, non-5(a)
+    try:
+        GC.cite(src, pres, output_context=gs.OUTPUT_CONFIDENT)              # reverse: blocked
+        raise AssertionError("§314(5)(b)-(c) presumption must not be confident-eligible")
+    except V.GoldenEligibilityError as e:
+        assert e.status == gs.L_GRADE_INTERPRETIVE
+    assert GC.cite(src, pres, output_context=gs.OUTPUT_VERIFY) == pres       # allowed VERIFY
+
+
 def test_mwbe_90day_window_is_agency_guidance_not_statutory():
     it = _items(_data())["MWBE"]
     d = it.to_dict()
