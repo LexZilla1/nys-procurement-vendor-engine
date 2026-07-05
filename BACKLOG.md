@@ -70,8 +70,12 @@ describe this as "machine-enforced" until the enforcement migration below lands.
 - [x] **PARTIAL sources cited by engine — resolved via per-provision markers
   (Micro-PR A).** stf-109 and mwbe-5nycrr now carry source-scope INTERIM_VERIFY
   markers (citable only into VERIFY/attorney-gated). NOT blessed to confident.
-  Full clean sources (§109 recapture; official NYCRR capture) are still future
-  work (coverage-ledger / source-expansion).
+  RM attribution (mechanically asserted, test_golden_audit.
+  test_rm_attribution_is_a_mechanically_asserted_invariant): **RM-5 →
+  stf-109** (§109 invoice certification, via check_invoice); **RM-4 →
+  mwbe-5nycrr** (MWBE cascade + §143.3(c) EEO, via check_bid). Full clean sources
+  (§109 recapture; official NYCRR capture) are still future work (coverage-ledger
+  / source-expansion).
 - [x] **L-grade sources reachable by confident outputs — resolved (Micro-PR A).**
   EXC/314 §314(5)(a) now has a confident per-provision marker so
   make_cert_expiry is confident-eligible; §314(5)(b)-(c) stays L-gated. GCN/24
