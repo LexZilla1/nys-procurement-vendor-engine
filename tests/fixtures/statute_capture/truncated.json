@@ -1,0 +1,11 @@
+{
+  "_note": "SYNTHETIC fail-closed fixture: body is present but truncated (does not open at a '§' section heading and is below the length floor). Capture must FAIL and write nothing.",
+  "success": true,
+  "result": {
+    "text": "  ublic holidays. 1. new",
+    "activeDate": "2099-01-01",
+    "title": "Truncated",
+    "repealed": false,
+    "repealedDate": null
+  }
+}

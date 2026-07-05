@@ -1,0 +1,13 @@
+{
+  "_note": "SYNTHETIC recorded-shape Open Legislation response for statute-capture unit tests. PLACEHOLDER content, NOT NY statute text; single-paragraph section (no numbered subdivisions) to exercise the implicit-single-subdivision path. Never promote to golden.",
+  "success": true,
+  "result": {
+    "text": "  § 25-a. Placeholder deadline extension. Where the last day for\\n  the performance of a placeholder act falls on a Saturday,\\n  Sunday or public holiday, such act may be done on the next\\n  succeeding business day, for formatter testing only.\\n",
+    "activeDate": "2099-01-01",
+    "title": "Placeholder deadline extension",
+    "repealed": false,
+    "repealedDate": null,
+    "docType": "SECTION",
+    "docLevelId": "25-A"
+  }
+}

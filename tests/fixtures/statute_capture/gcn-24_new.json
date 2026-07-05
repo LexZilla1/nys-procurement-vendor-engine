@@ -1,0 +1,13 @@
+{
+  "_note": "SYNTHETIC recorded-shape Open Legislation response for statute-capture unit tests. The `text` is PLACEHOLDER content, NOT NY statute text — it exists only to exercise the NEW-mode formatter/validator and must never be promoted to golden. It carries LITERAL escaped newlines (two-char \\n after json.loads) and a leading NBSP, mirroring the confirmed live API quirk (see tests/fixtures/openleg_raw_stf-179-g.json).",
+  "success": true,
+  "result": {
+    "text": "  § 24. Placeholder public holidays. The following shall be\\n  placeholder public holidays for formatter testing only.\\n  1. First placeholder subdivision, hard-wrapped across two\\n  lines so reflow must rejoin it.\\n  2. Second placeholder subdivision text.\\n  * NB Effective January 1, 2099\\n",
+    "activeDate": "2099-01-01",
+    "title": "Placeholder public holidays",
+    "repealed": false,
+    "repealedDate": null,
+    "docType": "SECTION",
+    "docLevelId": "24"
+  }
+}

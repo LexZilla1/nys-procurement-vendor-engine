@@ -1,0 +1,11 @@
+{
+  "_note": "SYNTHETIC fail-closed fixture: API reports success but returns an empty body. Capture must FAIL and write nothing.",
+  "success": true,
+  "result": {
+    "text": "",
+    "activeDate": "2099-01-01",
+    "title": "Empty",
+    "repealed": false,
+    "repealedDate": null
+  }
+}
