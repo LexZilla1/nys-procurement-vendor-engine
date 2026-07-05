@@ -8,6 +8,36 @@
   verbatim, citation-tagged, factual-only enforced by denylist test.
   Status: OPEN, ready to merge (draft PR #9, head 4420a58; mergeable_state clean).
 
+## Statute capture — sanctioned egress-blocked path (BUILT)
+The **manual statute-capture GitHub Actions workflow** is the sanctioned way to
+pull statutes when interactive Claude Code sessions are egress-blocked. Cloud
+sessions cannot reach legislation.nysenate.gov and do not inherit
+`NYSLEG_API_KEY`; Actions holds the key as a secret and can reach OpenLeg (same
+proof as the monthly freshness automation).
+- **Workflow:** `.github/workflows/statute-capture.yml` — `workflow_dispatch`
+  only, input `law_ids` (default `GCN/24,GCN/25-A,EXC/314`). Least-privilege
+  (`contents: write`, `pull-requests: write`). Never pushes to main: it branches
+  and opens a **draft** PR via the existing peter-evans convention. Uploads the
+  candidates + report as artifacts if PR creation fails.
+- **Script:** `scripts/statute_capture.py` — reuses the freshness checker's
+  verbatim-safe reflow/classify. NEW mode (GCN/24, GCN/25-a) writes a
+  full-section candidate marked `Tier: PENDING HUMAN READ — not golden until
+  human-verified`, all NB flags preserved verbatim. EXISTING mode (EXC/314) is
+  diff-only: FULL-MATCH is report-only (golden never rewritten); DIVERGENT opens
+  a review-flagged PR and never auto-reconciles. Fail-closed on missing key /
+  API error / empty / truncated / parse failure / missing subdivision structure
+  / missing-or-unreadable NB flags, with atomic all-or-nothing writes. The key
+  is never logged, written, or placed in any endpoint/PR body/report.
+- **Registry:** `data/config/statute_capture_registry.json` is the target
+  whitelist; `freshness_check.py` merges any target whose golden file EXISTS into
+  the monthly check (existence-guarded), so a capture becomes freshness-registered
+  once merged.
+- **Tests:** `test_statute_capture.py` (22) + `scripts/statute_capture.py
+  --selftest`, fixtures-only (no live network).
+- **NOT golden:** GCN/24 and GCN/25-a remain unverified until a human reviews the
+  workflow-produced candidates against the primary source. See the PR 2 block and
+  follow-up B above.
+
 ## Backlog — non-blocking
 - [ ] Clarification questions: multi-shape templates. Current = one fixed
   question shape per gap (safe, correct for launch). Future = 2-3 shapes
@@ -35,12 +65,16 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   blocked by a stale §314 capture**, and the payment-clock PR (PR 2) may proceed
   without relying on unverified §314 assumptions. Presumption is rebuttable and
   is NEVER rendered as credential_status OK.
-- [ ] **B: re-pull EXC/314 via `openleg_fetch_diff.py --only EXC/314` for the
-  audit trail.** Requires a session with `NYSLEG_API_KEY` set + the
-  legislation.nysenate.gov / OpenLeg API allowlist active; **expect FULL-MATCH**
-  against the existing 2026-07-03 capture. Belt-and-suspenders re-verification
-  only — the golden body is already the API capture and needs no change; this
-  was not possible in the session that graded (5)(b)-(c) (key unset + egress 403).
+- [ ] **B: re-pull EXC/314 for the audit trail.** **Now serviced by the
+  sanctioned statute-capture workflow** (`.github/workflows/statute-capture.yml`,
+  EXC/314 registered as an `existing`/diff-only target). The FIRST successful
+  workflow run that includes EXC/314 (the default input does) CLOSES this item:
+  it re-pulls via the OpenLeg API from Actions (which holds `NYSLEG_API_KEY`),
+  diffs against the stored 2026-07-03 capture, and records the verdict in the
+  capture PR. **Expect FULL-MATCH**; the golden body is already the API capture
+  and is never rewritten on a match (report-only). A DIVERGENT result would open
+  a review-flagged PR instead of silently reconciling. This was not possible in
+  interactive sessions (key unset + egress 403); the workflow is the fix.
 
 ## Attorney-review list (legal-interpretive — needs licensed-attorney judgment before product logic asserts it)
 - [ ] **EXC §314(5)(b)-(c) recertification presumption (L-grade).** Product may
@@ -53,6 +87,13 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   is unavailable, the clock refuses to compute rather than guessing. RM-5 §109
   semantic-concept check -> PREFLIGHT_FLAG (categorical, never a numeric score).
   Fills the Invoice shell (data/schemas/invoice.schema.json) with clock logic.
+  **BLOCKED on the holiday source: PR 2 must not compute the payment clock until
+  GCN/24 (public holidays) is captured via the statute-capture workflow AND
+  human-reviewed as verified golden** (GCN/25-a — deadline extension to the next
+  business day — is the companion source; capture it in the same run). Both are
+  registered in `data/config/statute_capture_registry.json`. Until GCN/24 is
+  verified golden, the source-backed HolidayCalendarProvider has no golden
+  holiday source to read, so the clock stays fail-closed by design.
 - [ ] **PR 3 = morning-brief generator.** Locked section hierarchy +
   generated_at + data_quality counts (operational counts, not scores) +
   prompt_payment_note wording. Consumes the outcome_log records; no analytics

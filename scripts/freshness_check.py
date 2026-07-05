@@ -39,6 +39,12 @@ API_BASE = "https://legislation.nysenate.gov/api/3/laws"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCES_DIR = os.path.join(REPO_ROOT, "golden-copy", "sources")
 REPORT_DIR = os.path.join(REPO_ROOT, "docs", "freshness")
+# Sanctioned statute-capture registry (scripts/statute_capture.py). Sections
+# captured through the manual capture workflow become "freshness-registered"
+# here: any target whose golden file EXISTS on disk is merged into the monthly
+# check. See load_registry_sources() for the existence guard.
+REGISTRY_PATH = os.path.join(REPO_ROOT, "data", "config",
+                             "statute_capture_registry.json")
 
 # 22 statute-class coordinates (source file -> lawId/locationId).
 STATUTE_SOURCES = {
@@ -202,6 +208,41 @@ def http_fetcher(key):
 # --------------------------------------------------------------------------
 # Core run
 # --------------------------------------------------------------------------
+
+def load_registry_sources(registry_path=None, sources_dir=None):
+    """Merge sanctioned statute-capture targets into the freshness source map,
+    but ONLY those whose golden file already exists on disk.
+
+    This is the "freshness-registered" hook: a section captured via the manual
+    statute-capture workflow joins the monthly check automatically once its
+    golden file is merged. A target declared in the registry BEFORE its golden
+    file exists (a pending capture) is skipped, so the registry can never break
+    the live run. Returns {source_file: (lawId, locationId)}.
+    """
+    registry_path = registry_path or REGISTRY_PATH
+    sources_dir = sources_dir or SOURCES_DIR
+    try:
+        with open(registry_path, encoding="utf-8") as fh:
+            reg = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for coord, spec in (reg.get("targets") or {}).items():
+        fn = (spec or {}).get("file")
+        if not fn or "/" not in coord:
+            continue
+        if not os.path.exists(os.path.join(sources_dir, fn)):
+            continue  # existence guard: pending capture, not yet golden
+        law, loc = coord.split("/", 1)
+        out[fn] = (law, loc)
+    return out
+
+
+def all_sources():
+    """Base 22 statute-class sources plus any freshness-registered captures
+    whose golden file exists (existence-guarded merge)."""
+    return {**STATUTE_SOURCES, **load_registry_sources()}
+
 
 def run(fetch, sources=None):
     sources = sources or STATUTE_SOURCES
@@ -399,6 +440,22 @@ def _selftest():
 
     rep = render_report(results, "2026-07-04")
     assert "DRIFT DETECTED" in rep and "DIVERGENT" in rep
+
+    # REGISTRY MERGE (existence guard): only registered targets whose golden
+    # file exists are added; pending captures are skipped, and the merge never
+    # shrinks or duplicates the base 22-source map.
+    reg = load_registry_sources()
+    for fn, coord in reg.items():
+        assert os.path.exists(os.path.join(SOURCES_DIR, fn)), \
+            "registry merged a non-existent golden file: %s" % fn
+    merged = all_sources()
+    assert set(STATUTE_SOURCES).issubset(set(merged)), \
+        "registry merge dropped a base source"
+    # A pending target (golden file absent) must be skipped:
+    pending = load_registry_sources(
+        sources_dir=os.path.join(REPO_ROOT, "does-not-exist"))
+    assert pending == {}, "existence guard failed: %r" % pending
+
     print("SELF-TEST: ALL PASS")
     print("  FULL-MATCH x2, DIVERGENT detected, sunset mismatch detected,")
     print("  missing-field responses handled, RAW escaped-newline fixture => "
@@ -424,7 +481,7 @@ def main(argv=None):
         return 2
 
     date_str = args.date or datetime.date.today().isoformat()
-    results = run(http_fetcher(key))
+    results = run(http_fetcher(key), sources=all_sources())
     report = render_report(results, date_str)
     os.makedirs(REPORT_DIR, exist_ok=True)
     path = os.path.join("docs", "freshness", "%s.md" % date_str)

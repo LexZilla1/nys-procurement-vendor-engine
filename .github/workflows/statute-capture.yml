@@ -1,0 +1,84 @@
+name: Manual Statute Capture (Open Legislation)
+
+# The SANCTIONED egress-blocked statute-pull path. Interactive Claude Code
+# sessions cannot reach legislation.nysenate.gov and do not inherit
+# NYSLEG_API_KEY; GitHub Actions holds the key as a secret and can reach the
+# Open Legislation API (the monthly freshness automation proves this). This
+# workflow is MANUAL only (workflow_dispatch). It fetches the requested
+# registered sections, writes PENDING-HUMAN-READ candidates for NEW sections
+# and diff-only results for EXISTING ones, then opens a draft PR. It NEVER
+# pushes to main and NEVER marks anything verified golden.
+
+on:
+  workflow_dispatch:
+    inputs:
+      law_ids:
+        description: "Comma-separated OpenLeg law ids to capture (must be registered in data/config/statute_capture_registry.json)"
+        default: "GCN/24,GCN/25-A,EXC/314"
+        required: true
+
+# Least-required permissions: write files to a branch and open a PR. No more.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: statute-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The key is passed ONLY as an env var to this step. It is never echoed,
+      # never written to disk, and never placed in a logged URL (the script
+      # keeps it out of every endpoint, report, and PR body). A missing key
+      # fails the run fail-closed. On any fail-closed condition the step exits
+      # non-zero, so no branch/PR is created and no partial capture is committed.
+      - name: Run statute capture
+        id: capture
+        env:
+          NYSLEG_API_KEY: ${{ secrets.NYSLEG_API_KEY }}
+        run: python3 scripts/statute_capture.py --law-ids "${{ inputs.law_ids }}"
+
+      # Open a PR from a fresh branch (main is branch-protected and requires
+      # PRs, so we never push the capture directly). Mirrors the freshness
+      # automation's peter-evans convention. Draft + review labels when the run
+      # contains NEW candidates or a DIVERGENT section; never auto-merges.
+      - name: Open statute-capture PR
+        if: steps.capture.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: |
+            golden-copy/sources/
+            docs/statute-capture/
+            data/config/statute_capture_registry.json
+          branch: ${{ steps.capture.outputs.branch }}
+          base: main
+          title: "Statute capture — ${{ steps.capture.outputs.date }} (PENDING HUMAN READ)"
+          body-path: ${{ steps.capture.outputs.report }}
+          labels: ${{ steps.capture.outputs.labels }}
+          draft: ${{ steps.capture.outputs.draft }}
+          commit-message: "statute-capture: ${{ steps.capture.outputs.date }} candidate captures (PENDING HUMAN READ; not golden)"
+
+      # Fallback: if PR creation fails (or for audit either way), preserve the
+      # generated candidates + report as artifacts for manual inspection. The
+      # report never contains the key. if-no-files-found: ignore covers the
+      # fail-closed case where nothing was written.
+      - name: Upload capture artifacts (inspection / PR-failure fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: statute-capture-${{ steps.capture.outputs.date }}
+          if-no-files-found: ignore
+          path: |
+            golden-copy/sources/source-gcn-*.md
+            docs/statute-capture/

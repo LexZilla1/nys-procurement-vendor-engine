@@ -1,0 +1,25 @@
+{
+  "_note": "Sanctioned statute-capture targets for scripts/statute_capture.py and the .github/workflows/statute-capture.yml manual workflow. This is the SINGLE source of truth for which OpenLeg sections the capture workflow may pull, and where each lands in golden-copy/sources/. Declaring a target here does NOT create a golden file or mark anything verified golden -- the workflow run fetches the section, writes a PENDING-HUMAN-READ candidate, and opens a PR for human review.",
+  "_freshness_note": "freshness_check.py merges any target here whose golden file ALREADY EXISTS on disk into its monthly check (existence-guarded, so a pending target can never break the live run). This is how a captured section becomes 'freshness-registered' once its golden file merges.",
+  "_id_format": "Keys are OpenLeg law coordinates 'LAWID/LOCATIONID' (uppercase law id; e.g. GCN/24, GCN/25-A, EXC/314). mode is 'new' (no stored golden; full-section capture) or 'existing' (diff-only against the stored golden). min_subdivisions is the fail-closed floor on parsed top-level subdivisions (default 1 = section body must be present and non-truncated).",
+  "targets": {
+    "GCN/24": {
+      "file": "source-gcn-24-public-holidays.md",
+      "mode": "new",
+      "min_subdivisions": 1,
+      "subject": "General Construction Law § 24 -- public holidays (payment-clock holiday source, PR 2)"
+    },
+    "GCN/25-A": {
+      "file": "source-gcn-25-a-deadline-extension.md",
+      "mode": "new",
+      "min_subdivisions": 1,
+      "subject": "General Construction Law § 25-a -- act due on Saturday/Sunday/public holiday extends to next business day (payment-clock deadline source, PR 2)"
+    },
+    "EXC/314": {
+      "file": "source-exec-314-mwbe-cert-validity.md",
+      "mode": "existing",
+      "min_subdivisions": 1,
+      "subject": "Executive Law § 314 -- MWBE statewide certification program (audit re-pull; follow-up B; expect FULL-MATCH)"
+    }
+  }
+}
