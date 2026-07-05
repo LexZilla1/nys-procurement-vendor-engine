@@ -228,22 +228,46 @@ def engine_citation_reach(status_by_file, raw_by_file):
 BARE_CITE_ALLOWLIST = frozenset()
 
 
+def _cite_call_arg_text(code, open_paren_idx):
+    """Return the argument text of a `.cite(` call: everything between its opening
+    paren and the matching closing paren, by paren-depth scan. This bounds the
+    output_context check to THIS call's own arguments (handles multi-line calls and
+    nested parens; does not bleed into the next statement). Fail-closed: an
+    unbalanced/unterminated call returns the rest of the file, so a malformed call
+    is treated as bare rather than silently passing."""
+    depth = 0
+    for i in range(open_paren_idx, len(code)):
+        c = code[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return code[open_paren_idx + 1:i]
+    return code[open_paren_idx + 1:]
+
+
 def unmigrated_cite_sites():
     """Runtime cite() call sites under engine/ + validator.py that do NOT pass an
     output_context (so the runtime guardrail is bypassed) AND are not in the
     enumerated BARE_CITE_ALLOWLIST. While any remain, the enforcement migration is
-    incomplete — end-to-end enforcement is NOT claimed. Heuristic for the bare
-    call: a `.cite(` with no `output_context` within the next 400 chars; the
-    allowlist is the exact-enumeration escape hatch for a deliberately bare site."""
+    incomplete — end-to-end enforcement is NOT claimed.
+
+    Matcher: a `.cite(` literal (tolerant of whitespace before the paren, so a
+    call reformatted onto its own line — `GoldenCopy\\n    .cite(...)` — is still
+    matched), whose OWN balanced-paren argument span is then checked for
+    `output_context`. Not AST-based, but not defeated by ordinary reformatting
+    (multi-line calls, continuation lines, nested-paren args). The BARE_CITE_ALLOWLIST
+    is the exact-enumeration escape hatch for a deliberately bare in-scope site."""
     sites = []
     for path in ENGINE_SCAN_FILES:
         try:
             code = open(path, encoding="utf-8").read()
         except OSError:
             continue
-        for m in re.finditer(r"\.cite\(", code):
-            window = code[m.start():m.start() + 400].split("\n\n", 1)[0]
-            if "output_context" in window:
+        for m in re.finditer(r"\.cite\s*\(", code):
+            open_paren_idx = m.end() - 1
+            if "output_context" in _cite_call_arg_text(code, open_paren_idx):
                 continue
             relpath = os.path.relpath(path, REPO_ROOT)
             line = code[:m.start()].count("\n") + 1

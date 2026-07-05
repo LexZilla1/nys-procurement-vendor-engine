@@ -580,28 +580,57 @@ def test_bare_cite_scan_is_clean_with_empty_enumerated_allowlist():
     assert ga.unmigrated_cite_sites() == []
 
 
-def test_bare_cite_scan_detects_and_allowlist_is_the_only_escape_hatch():
-    """The scan has teeth (it flags a genuinely bare cite) and the ENUMERATED
-    allowlist is the only way to exempt one — an un-enumerated bare cite is
-    reported; the same site, once enumerated, is excluded; a migrated cite is
-    never reported. Exercised against a synthetic scan target so the real files
-    stay untouched. (The scan scopes its no-output_context window per statement
-    paragraph, so the two sites are blank-line separated as they are in real code.)"""
+def test_bare_cite_scan_boundary_inscope_caught_outofscope_and_allowlisted_excluded():
+    """Boundary of the ban, both directions:
+      (1) a bare GoldenCopy.cite() in an IN-SCOPE runtime file (a member of
+          ENGINE_SCAN_FILES = engine/*.py + validator.py) IS caught;
+      (2) the SAME bare cite in an OUT-OF-SCOPE (non-runtime) path is NOT caught,
+          because the scan iterates only ENGINE_SCAN_FILES;
+      (3) an in-scope bare cite EXPLICITLY enumerated in BARE_CITE_ALLOWLIST is
+          excluded — the allowlist is the only in-scope escape hatch.
+    Exercised against synthetic files so the real tree stays untouched."""
     with tempfile.TemporaryDirectory() as tmp:
-        p = os.path.join(tmp, "fake_engine.py")
-        with open(p, "w", encoding="utf-8") as fh:
-            fh.write("golden.cite(src, quote)\n\n"               # line 1: bare -> flagged
-                     "golden.cite(s, q, output_context=X)\n")    # line 3: migrated -> clean
-        rel = os.path.relpath(p, ga.REPO_ROOT)
+        runtime = os.path.join(tmp, "engine_like.py")       # stands in for an in-scope file
+        nonruntime = os.path.join(tmp, "step1_like.py")     # out-of-scope runtime module
+        for pth in (runtime, nonruntime):
+            with open(pth, "w", encoding="utf-8") as fh:
+                fh.write("golden.cite(src, quote)\n")        # identical bare cite in both
         orig_files, orig_allow = ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST
+        ga.ENGINE_SCAN_FILES = [runtime]                     # only the runtime file is in scope
+        try:
+            sites = ga.unmigrated_cite_sites()
+            # (1) in-scope bare cite IS caught (exactly it, at line 1)...
+            assert [(os.path.basename(s["file"]), s["line"]) for s in sites] \
+                == [("engine_like.py", 1)], sites
+            # (2) ...and the identical bare cite in the out-of-scope path is NOT caught.
+            assert all("step1_like.py" not in s["file"] for s in sites), sites
+            # (3) enumerating the in-scope site excludes it.
+            ga.BARE_CITE_ALLOWLIST = frozenset(
+                {"%s:1" % os.path.relpath(runtime, ga.REPO_ROOT)})
+            assert ga.unmigrated_cite_sites() == []
+        finally:
+            ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST = orig_files, orig_allow
+
+
+def test_bare_cite_scan_is_not_defeated_by_ordinary_reformatting():
+    """Matcher robustness (point 3): a .cite() reformatted onto its own line and
+    split across multiple lines is still caught, and output_context on a
+    continuation line is recognized — because the matcher reads each call's
+    balanced-paren argument span, not a single line or a fixed char window."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = os.path.join(tmp, "engine_like.py")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(
+                "golden \\\n    .cite(\n        src,\n        quote,\n    )\n\n"  # bare, multi-line, own line -> caught
+                "golden.cite(\n    s, q,\n    output_context=X,\n)\n")           # migrated, multi-line -> clean
+        orig = ga.ENGINE_SCAN_FILES
         ga.ENGINE_SCAN_FILES = [p]
         try:
             sites = ga.unmigrated_cite_sites()
-            assert [s["line"] for s in sites] == [1], sites   # only the bare one
-            ga.BARE_CITE_ALLOWLIST = frozenset({"%s:1" % rel})
-            assert ga.unmigrated_cite_sites() == []           # enumerated -> excluded
+            assert len(sites) == 1, sites          # only the bare multi-line call
+            assert sites[0]["line"] == 2, sites    # the `.cite(` line of the bare call
         finally:
-            ga.ENGINE_SCAN_FILES, ga.BARE_CITE_ALLOWLIST = orig_files, orig_allow
+            ga.ENGINE_SCAN_FILES = orig
 
 
 # ======================= runner ===========================================
