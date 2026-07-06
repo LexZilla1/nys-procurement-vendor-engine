@@ -31,7 +31,7 @@ Independent project. NOT LexZilla — do not use that name anywhere. LexZilla1 i
   - Non-NY → OUT_OF_SCOPE
   - No match → HUMAN_REVIEW ("jurisdiction undetermined")
 - **Ad-type classification** (Step 3): 12 NYSCR labels as config table, all `provisional: true`. 7 BIDDABLE, 4 NON_BIDDABLE, 1 EDGE (grant_flow tag-only).
-- **LLM fallback** (Step 4): currently a stub returning low-confidence → HUMAN_REVIEW. Injectable interface for tests. **Wiring to live Sonnet call is the next build item.**
+- **LLM fallback** (Step 4): live via `pipeline/llm_classifier.py` (`classify()` → real Messages API call), injectable for tests. Model is configurable via `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`) and the prompt delimits tender text as untrusted data; every failure path stays fail-closed to HUMAN_REVIEW.
 - **Never-green invariant**: no confident BIDDABLE/NON_BIDDABLE unless jurisdiction confirmed STATE via entity lookup AND (not provisional+low-confidence).
 - 22 tests green including: ESD without "Authority" in name, bare "Authority" non-match, alias resolution, sole-source language override.
 

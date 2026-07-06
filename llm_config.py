@@ -54,6 +54,22 @@ def has_anthropic_api_key():
     return get_anthropic_api_key(required=False) is not None
 
 
+# The pipeline's default model. Externalised via ANTHROPIC_MODEL so a single
+# env var moves every call site together (triage today, advisory later) and no
+# call site mixes models mid-pipeline. The default preserves the existing model
+# — any move to a newer model is a separate, deliberate change, never implicit.
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
+
+
+def get_anthropic_model():
+    """Return the configured Anthropic model id. Reads ANTHROPIC_MODEL from the
+    environment; a blank/unset value falls back to DEFAULT_ANTHROPIC_MODEL
+    (claude-sonnet-4-6). Never raises — model selection must not be a failure
+    path."""
+    model = (os.getenv("ANTHROPIC_MODEL") or "").strip()
+    return model or DEFAULT_ANTHROPIC_MODEL
+
+
 if __name__ == "__main__":
     # Safe status check — reports presence + length only, NEVER the value.
     k = get_anthropic_api_key(required=False)
@@ -61,3 +77,4 @@ if __name__ == "__main__":
         print("ANTHROPIC_API_KEY: set ({} chars)".format(len(k)))
     else:
         print("ANTHROPIC_API_KEY: NOT set")
+    print("ANTHROPIC_MODEL: {}".format(get_anthropic_model()))
