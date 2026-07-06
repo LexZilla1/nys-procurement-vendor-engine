@@ -117,10 +117,17 @@ class _FakeBlock:
         self.text = text
 
 
+class _FakeUsage:
+    def __init__(self, input_tokens, output_tokens):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
 class _FakeMsg:
-    def __init__(self, text, stop_reason=None):
+    def __init__(self, text, stop_reason=None, usage=None):
         self.content = [_FakeBlock(text)]
         self.stop_reason = stop_reason
+        self.usage = usage
 
 
 # --------------------------------------------------------------------------
@@ -517,6 +524,175 @@ def test_enforcement_complete_true_with_coverage_advisory_in_tree():
     assert rep["enforcement_complete"] is True
     assert "coverage_advisory.py" not in rep["cite_surface_unclassified"]
     assert "coverage_advisory.py" not in rep["cite_surface_runtime"]
+
+
+# --------------------------------------------------------------------------
+# Diagnostics (PR 3) — smoke/debug only; advise() behavior must be unchanged
+# --------------------------------------------------------------------------
+
+def test_advise_behavior_unchanged_valid_and_malformed():
+    # advise() still returns a validated dict for good output and None for bad —
+    # exactly as before the diagnostic path was added.
+    good = _CountingTransport(_FakeMsg(json.dumps(_good_output()), stop_reason="end_turn"))
+    bad = _CountingTransport(_FakeMsg("not json", stop_reason="end_turn"))
+    with _dummy_key():
+        assert isinstance(CA.advise(_report(), transport=good), dict)
+    with _dummy_key():
+        assert CA.advise(_report(), transport=bad) is None
+
+
+def test_diag_valid_returns_advisory_matching_advise():
+    msg = _FakeMsg(json.dumps(_good_output()), stop_reason="end_turn")
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(msg))
+        adv = CA.advise(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(_good_output()), stop_reason="end_turn")))
+    assert diag["null_reason"] is None
+    assert isinstance(diag["advisory"], dict)
+    assert diag["advisory"] == adv                      # identical to advise()
+    assert diag["advisory"]["disclaimer"] == CA.ADVISORY_DISCLAIMER
+
+
+def test_diag_parse_error_when_not_max_tokens():
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(
+                _FakeMsg("this is not json", stop_reason="end_turn")))
+    assert diag["advisory"] is None and diag["null_reason"] == "parse_error"
+
+
+def test_diag_truncated_when_max_tokens_and_parse_fails():
+    # stop_reason == max_tokens AND parse fails -> 'truncated', never 'parse_error'.
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(
+                _FakeMsg('{"grouping": [', stop_reason="max_tokens")))
+    assert diag["advisory"] is None and diag["null_reason"] == "truncated"
+    assert diag["stop_reason"] == "max_tokens"
+
+
+def test_diag_validation_error_with_reason_missing_key():
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(
+                _FakeMsg('{"grouping": []}', stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "missing_top_level_key"
+
+
+def test_diag_validation_error_reasons_are_specific():
+    def _diag(out):
+        with _dummy_key():
+            return CA.advise_with_diagnostics(
+                _report(), transport=_CountingTransport(
+                    _FakeMsg(json.dumps(out), stop_reason="end_turn")))
+    o = _good_output(); o["extra"] = "x"
+    assert _diag(o)["validation_reason"] == "unknown_top_level_key"
+    o = _good_output(); o["grouping"] = "nope"
+    assert _diag(o)["validation_reason"] == "non_list_top_level_value"
+    o = _good_output(); o["grouping"][0]["member_refs"][0]["source"] = "bogus"
+    assert _diag(o)["validation_reason"] == "invalid_source"
+    o = _good_output(); o["grouping"][0]["member_refs"][0]["page"] = "1"
+    assert _diag(o)["validation_reason"] == "invalid_page"
+    o = _good_output(); o["item_notes"][0]["confidence"] = "certain"
+    assert _diag(o)["validation_reason"] == "invalid_confidence"
+    o = _good_output(); o["coverage_backlog_candidates"][0]["action"] = "auto-add"
+    assert _diag(o)["validation_reason"] == "invalid_backlog_action"
+    o = _good_output(); del o["grouping"][0]["explanation"]
+    assert _diag(o)["validation_reason"] == "malformed_entry_shape"
+    o = _good_output(); o["item_notes"][0]["rationale"] = "the vendor is compliant"
+    assert _diag(o)["validation_reason"] == "forbidden_language"
+
+
+def test_diag_no_key_returns_no_key_transport_not_called():
+    rec = _CountingTransport(_FakeMsg(json.dumps(_good_output())))
+    with _env("ANTHROPIC_API_KEY", None):
+        diag = CA.advise_with_diagnostics(_report(), transport=rec)
+    assert diag["null_reason"] == "no_key" and diag["advisory"] is None
+    assert rec.calls == 0
+
+
+def test_diag_captures_usage_and_stop_reason():
+    msg = _FakeMsg(json.dumps(_good_output()), stop_reason="end_turn",
+                   usage=_FakeUsage(1234, 567))
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(msg))
+    assert diag["stop_reason"] == "end_turn"
+    assert diag["usage"] == {"input_tokens": 1234, "output_tokens": 567}
+    assert isinstance(diag["latency_seconds"], float)
+
+
+def test_diag_refusal_reason():
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(
+                _FakeMsg("", stop_reason="refusal")))
+    assert diag["null_reason"] == "refusal" and diag["advisory"] is None
+
+
+def test_diag_sdk_missing_and_api_error():
+    with _dummy_key():
+        d1 = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(ImportError("no anthropic")))
+        d2 = CA.advise_with_diagnostics(
+            _report(), transport=_CountingTransport(ValueError("bad request")))
+    assert d1["null_reason"] == "sdk_missing"
+    assert d2["null_reason"] == "api_error" and d2["error_type"] == "ValueError"
+
+
+def test_validation_reason_is_none_iff_validate_passes():
+    # Invariant: the diagnostic label agrees with the enforcement policy.
+    good = _good_output()
+    assert CA._validation_reason(good) is None and CA._validate(good) is not None
+    bad = _good_output(); bad["extra"] = 1
+    assert CA._validation_reason(bad) is not None and CA._validate(bad) is None
+
+
+# --------------------------------------------------------------------------
+# Diagnostics never leak into vendor-facing render
+# --------------------------------------------------------------------------
+
+_DIAG_STRINGS = ("null_reason", "validation_reason", "stop_reason", "usage",
+                 "input_tokens", "output_tokens")
+
+
+def test_render_bid_readiness_contains_no_diagnostic_strings():
+    rep = _report()
+    adv = CA.advise(rep, llm=lambda payload: _good_output())
+    out_with = BR.render_bid_readiness(rep, advisory=adv)
+    out_without = BR.render_bid_readiness(rep)
+    for s in _DIAG_STRINGS:
+        assert s not in out_with, "diagnostic string leaked: %r" % s
+        assert s not in out_without
+    assert "ADVISORY (candidates" in out_with           # advisory still renders
+
+
+def test_render_advisory_section_has_no_diagnostic_fields():
+    rep = _report()
+    adv = CA.advise(rep, llm=lambda payload: _good_output())
+    section = "\n".join(CA.render_advisory(adv))
+    for s in _DIAG_STRINGS:
+        assert s not in section
+
+
+# --------------------------------------------------------------------------
+# Smoke script — fixture argument accepted without a live key
+# --------------------------------------------------------------------------
+
+def test_smoke_resolve_fixture_default_and_arg():
+    sys.path.insert(0, os.path.join(HERE, "scripts"))
+    import smoke_advisory_llm as SMOKE
+    assert SMOKE.resolve_fixture([]) == SMOKE.DEFAULT_TENDER
+    assert SMOKE.resolve_fixture(["test-tenders/rfp25003mediation.pdf"]) \
+        == "test-tenders/rfp25003mediation.pdf"
+
+
+def test_smoke_main_with_fixture_no_key_returns_2_no_network():
+    sys.path.insert(0, os.path.join(HERE, "scripts"))
+    import smoke_advisory_llm as SMOKE
+    with _env("ANTHROPIC_API_KEY", None):
+        rc = SMOKE.main([os.path.join(HERE, "sample-tender.pdf")])
+    assert rc == 2                                       # no key -> no live call
 
 
 # --------------------------------------------------------------------------
