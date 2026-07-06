@@ -31,8 +31,8 @@ SRC_UNMAPPED = "unmapped"
 SRC_POSSIBLE_AUTHORITY = "possible_authority"
 
 MODEL = "claude-sonnet-4-6"      # default only; live model via _resolve_model()
-_MAX_TOKENS = 4096
-_TIMEOUT_S = 120
+_MAX_TOKENS = 8192
+_TIMEOUT_S = 240
 MAX_RETRIES = 2
 
 # Transient failure classes worth retrying (mirrors pipeline/llm_classifier).
