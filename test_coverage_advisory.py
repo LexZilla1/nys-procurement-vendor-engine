@@ -234,6 +234,80 @@ def test_descriptive_mwbe_compliance_survives():
 
 
 # --------------------------------------------------------------------------
+# Strict schema shape validation — reject whole advisory to None (no salvage)
+# --------------------------------------------------------------------------
+
+def _advise_out(out):
+    return CA.advise(_report(), llm=lambda payload: out)
+
+
+def test_unknown_top_level_key_rejects():
+    o = _good_output(); o["extra"] = "x"
+    assert _advise_out(o) is None
+
+
+def test_model_emitted_disclaimer_rejects():
+    o = _good_output(); o["disclaimer"] = "advisory only"
+    assert _advise_out(o) is None
+
+
+def test_non_list_top_level_value_rejects():
+    o = _good_output(); o["grouping"] = "not a list"
+    assert _advise_out(o) is None
+
+
+def test_grouping_entry_missing_required_key_rejects():
+    o = _good_output(); del o["grouping"][0]["explanation"]
+    assert _advise_out(o) is None
+
+
+def test_member_ref_unknown_source_rejects():
+    o = _good_output(); o["grouping"][0]["member_refs"][0]["source"] = "bogus"
+    assert _advise_out(o) is None
+
+
+def test_member_ref_non_int_page_rejects():
+    o = _good_output(); o["grouping"][0]["member_refs"][0]["page"] = "1"
+    assert _advise_out(o) is None
+
+
+def test_item_notes_invalid_confidence_rejects():
+    o = _good_output(); o["item_notes"][0]["confidence"] = "certain"
+    assert _advise_out(o) is None
+
+
+def test_backlog_invalid_confidence_rejects():
+    o = _good_output(); o["coverage_backlog_candidates"][0]["confidence"] = "maybe"
+    assert _advise_out(o) is None
+
+
+def test_backlog_action_other_than_expected_rejects():
+    o = _good_output()
+    o["coverage_backlog_candidates"][0]["action"] = "auto-add to catalog"
+    assert _advise_out(o) is None
+
+
+def test_valid_empty_lists_survive():
+    empty = {"grouping": [], "item_notes": [], "coverage_backlog_candidates": []}
+    adv = _advise_out(empty)
+    assert isinstance(adv, dict) and adv["disclaimer"] == CA.ADVISORY_DISCLAIMER
+
+
+def test_canonical_fixture_survives_strict_validation_and_renders():
+    # Over-tightening guard: a fully valid canonical response passes strict
+    # validation AND renders without error.
+    assert CA._validate(_good_output()) is not None
+    adv = _advise_out(_good_output())
+    assert isinstance(adv, dict)
+    assert set(adv) == {"grouping", "item_notes",
+                        "coverage_backlog_candidates", "disclaimer"}
+    lines = CA.render_advisory(adv)                       # must not raise
+    assert isinstance(lines, list)
+    assert any("ADVISORY (candidates" in ln for ln in lines)
+    assert any("Education Law §2-d" in ln for ln in lines)
+
+
+# --------------------------------------------------------------------------
 # Disclaimer is wrapper-attached, never model-emitted
 # --------------------------------------------------------------------------
 

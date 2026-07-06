@@ -186,25 +186,84 @@ def _has_forbidden(blob):
     return False
 
 
-def _as_list(v):
-    return v if isinstance(v, list) else []
+# Strict schema vocabulary.
+_ALLOWED_TOP = frozenset({"grouping", "item_notes", "coverage_backlog_candidates"})
+_SOURCES = frozenset({SRC_NEEDS_REVIEW, SRC_UNMAPPED, SRC_POSSIBLE_AUTHORITY})
+_CONF = frozenset({"low", "medium", "high"})
+_BACKLOG_ACTION = "candidate for human capture"
+
+
+def _is_str(v):
+    return isinstance(v, str)
+
+
+def _is_int(v):
+    # bool is a subclass of int — page must be a real int, not True/False.
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _valid_ref(v):
+    return (isinstance(v, dict) and set(v) == {"source", "page"}
+            and v["source"] in _SOURCES and _is_int(v["page"]))
+
+
+def _valid_grouping(e):
+    if not (isinstance(e, dict) and set(e) == {"theme", "member_refs", "explanation"}):
+        return False
+    if not (_is_str(e["theme"]) and _is_str(e["explanation"])):
+        return False
+    mr = e["member_refs"]
+    return isinstance(mr, list) and all(_valid_ref(m) for m in mr)
+
+
+def _valid_item_note(e):
+    if not (isinstance(e, dict)
+            and set(e) == {"ref", "suggested_kind", "rationale", "confidence"}):
+        return False
+    return (_valid_ref(e["ref"]) and _is_str(e["suggested_kind"])
+            and _is_str(e["rationale"]) and e["confidence"] in _CONF)
+
+
+def _valid_backlog(e):
+    if not (isinstance(e, dict)
+            and set(e) == {"suggested_authority", "why", "confidence", "action"}):
+        return False
+    return (_is_str(e["suggested_authority"]) and _is_str(e["why"])
+            and e["confidence"] in _CONF and e["action"] == _BACKLOG_ACTION)
 
 
 def _validate(parsed):
-    """Return a normalized advisory dict, or None. None on: non-dict, or any
-    forbidden token/phrase/conclusion anywhere in the model output. Unknown keys
-    (including any model-emitted 'disclaimer') are dropped — the disclaimer is
-    attached by the wrapper AFTER this, never by the model."""
+    """Return the advisory dict, or None. STRICT — the whole advisory is rejected
+    to None on ANY bad shape (no partial salvage). None on:
+      * non-dict;
+      * any top-level key outside grouping/item_notes/coverage_backlog_candidates
+        (so a model-emitted 'disclaimer' or extra key nulls);
+      * any forbidden token/phrase/conclusion anywhere in the output;
+      * any top-level value that is not a list;
+      * any entry with the wrong key set, wrong type, unknown source, invalid
+        confidence, non-int page, or wrong backlog action.
+    Missing top-level keys default to an empty list (empty lists are valid). The
+    wrapper attaches the disclaimer AFTER this; the model never emits it."""
     if not isinstance(parsed, dict):
+        return None
+    if set(parsed.keys()) - _ALLOWED_TOP:                 # unknown top-level key
         return None
     if _has_forbidden(json.dumps(parsed, ensure_ascii=False)):
         return None
-    return {
-        "grouping": _as_list(parsed.get("grouping")),
-        "item_notes": _as_list(parsed.get("item_notes")),
-        "coverage_backlog_candidates": _as_list(
-            parsed.get("coverage_backlog_candidates")),
-    }
+    grouping = parsed.get("grouping", [])
+    notes = parsed.get("item_notes", [])
+    backlog = parsed.get("coverage_backlog_candidates", [])
+    if not (isinstance(grouping, list) and isinstance(notes, list)
+            and isinstance(backlog, list)):
+        return None
+    if not all(_valid_grouping(e) for e in grouping):
+        return None
+    if not all(_valid_item_note(e) for e in notes):
+        return None
+    if not all(_valid_backlog(e) for e in backlog):
+        return None
+    return {"grouping": grouping, "item_notes": notes,
+            "coverage_backlog_candidates": backlog}
 
 
 def _finalize(parsed):
