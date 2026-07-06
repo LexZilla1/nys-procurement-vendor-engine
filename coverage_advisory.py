@@ -32,7 +32,7 @@ SRC_POSSIBLE_AUTHORITY = "possible_authority"
 
 MODEL = "claude-sonnet-4-6"      # default only; live model via _resolve_model()
 _MAX_TOKENS = 4096
-_TIMEOUT_S = 30
+_TIMEOUT_S = 120
 MAX_RETRIES = 2
 
 # Transient failure classes worth retrying (mirrors pipeline/llm_classifier).
