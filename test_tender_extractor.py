@@ -196,6 +196,51 @@ def test_repeated_authority_is_deduped_by_normalized_reference():
     assert len(auth) == 1, [r["text"] for r in auth]
 
 
+# --------------------------------------------------------------------------
+# Other-bucket precision (PR #45 review): prose wrap-stitch + fragment guard
+# --------------------------------------------------------------------------
+
+def test_is_incomplete_fragment_flags_real_wrap_leftovers():
+    """The real PDF wrap leftovers are incomplete fragments; a whole obligation
+    is not."""
+    assert TE.is_incomplete_fragment("no later than May")            # 4 words, unterminated
+    assert TE.is_incomplete_fragment("The CDRC must")                # 3 words, unterminated
+    assert not TE.is_incomplete_fragment(
+        "The contractor shall submit all required documentation before the deadline.")
+
+
+def test_prose_wrap_stitches_lowercase_continuation():
+    """A line ending mid-clause whose next line starts lowercase is a PDF wrap —
+    rejoined with a single space."""
+    assert TE._stitch_wraps("submit the plan\nno later than the deadline.") == \
+        "submit the plan no later than the deadline."
+    # a comma (mid-clause) also joins
+    assert TE._stitch_wraps("Court System,\nthe bidder will provide.") == \
+        "Court System, the bidder will provide."
+
+
+def test_prose_stitch_never_joins_complete_sentences():
+    """Two lines that each read as complete sentences (prior ends terminal, next
+    starts uppercase) are NEVER joined."""
+    assert TE._stitch_wraps("First sentence.\nSecond sentence.") == \
+        "First sentence.\nSecond sentence."
+    # prior ends terminal even if next is lowercase → not joined
+    assert TE._stitch_wraps("Done.\nthen more") == "Done.\nthen more"
+    # next starts uppercase (a new clause) → not joined
+    assert TE._stitch_wraps("ends midclause\nThe Next") == "ends midclause\nThe Next"
+
+
+def test_wrapped_obligation_consolidates_into_one_segment():
+    """A genuine obligation wrapped across lines is stitched into ONE complete
+    segment (consolidates, does not fragment)."""
+    page = "The contractor shall maintain records\nfor the full contract term."
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    texts = [r["text"] for r in reqs]
+    assert any(t == "The contractor shall maintain records for the full contract "
+               "term." for t in texts), texts
+
+
 def test_passing_narrative_authority_mention_is_not_captured():
     """PRECISION: an authority cited only in passing narrative (the issuer's
     action, no bidder duty) must NOT generate a spurious requirement."""

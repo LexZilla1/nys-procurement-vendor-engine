@@ -33,7 +33,7 @@ import sys
 
 from validator import GoldenCopy, FAIL, WARN, PASS, INFO
 from engine import golden_status as gs
-from tender_extractor import has_obligation_cue
+from tender_extractor import has_obligation_cue, is_incomplete_fragment
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -756,6 +756,7 @@ def score_bid(extracted, profile, golden=None):
     other = []
     possible_authorities = []
     seen_kinds = set()
+    seen_other = set()
     for req in requirements:
         # Authority/form reference captured without mandatory language (silent-
         # drop fix). Uncertain by construction → its own possible-authority
@@ -768,7 +769,16 @@ def score_bid(extracted, profile, golden=None):
         if meta is None:
             # A "shall/must" passage with no known rule. Do NOT emit one row per
             # passage (a 68-page tender yields hundreds and buries the real
-            # findings). Collect them for a single clustered summary instead.
+            # findings). Collect them for a single clustered summary instead —
+            # after pruning PDF line-wrap leftovers (whole obligations are stitched
+            # upstream and survive; incomplete fragments are dropped) and deduping
+            # by normalized text. This does not change what counts as an obligation.
+            if is_incomplete_fragment(req["text"]):
+                continue
+            norm = " ".join(req["text"].split()).lower()
+            if norm in seen_other:
+                continue
+            seen_other.add(norm)
             other.append({"text": req["text"], "page": req["page"], "kind": kind})
             continue
         # Collapse multiple tender lines of the same kind to one verdict row,

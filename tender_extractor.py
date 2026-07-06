@@ -301,18 +301,43 @@ def _is_passing_narrative(seg):
     return bool(_ISSUER_NARRATIVE_RE.search(seg)) and not has_obligation_cue(seg)
 
 
-def _stitch_citations(text):
-    """Rejoin a statutory citation split across a PDF line break BEFORE the text
-    is segmented, so one wrapped citation is captured whole (or not at all) rather
-    than as several fragments. Conservative — only touches `§` contexts, so text
-    with no section symbols (e.g. the synthetic sample) is unchanged."""
+def _stitch_wraps(text):
+    """Rejoin PDF line-wrap artifacts BEFORE the text is segmented, so a wrapped
+    clause is captured whole (or not at all) rather than as several fragments.
+    STRICTLY a wrap-repair — it only joins a line break that is a wrap artifact,
+    never two lines that each read as complete sentences:
+      * `§` citation splits (`§ 2-`\\n`d`, `Education Law §`\\n`2-d`, `and § …`);
+      * a general prose wrap — the prior line ends mid-clause (NO terminal `.?!;:`)
+        AND the next line starts lowercase (a sentence/clause never resumes with a
+        lowercase word, so this newline is a wrap, not a real break).
+    Conservative by construction: text whose lines all end in terminal punctuation
+    (e.g. the synthetic sample) is unchanged."""
     # "§ 2-\nd" → "§ 2-d" (hyphen-split section id)
     text = re.sub(r"(§+\s*\d+[\w.]*)-\n\s*([A-Za-z0-9])", r"\1-\2", text)
     # "Education Law §\n2-d" → "Education Law § 2-d" (symbol split from number)
     text = re.sub(r"(§+)\s*\n\s*(\d)", r"\1 \2", text)
     # "... § 2-d\nand § 121.6 ..." → join a citation continued by "and/or § ..."
     text = re.sub(r"\n\s*(?=(?:and|or)\s+§)", " ", text, flags=re.IGNORECASE)
+    # General prose wrap: prior char is not terminal punctuation, next line starts
+    # lowercase → the newline is a wrap. Join with a single space.
+    text = re.sub(r"([^\s.?!;:])[ \t]*\n[ \t]*(?=[a-z])", r"\1 ", text)
     return text
+
+
+# A complete-enough segment ends in terminal/clause punctuation; a whole standalone
+# obligation runs several words. Anything shorter or unterminated is a line-wrap
+# leftover ("no later than May", "The CDRC must") — an incomplete fragment.
+_TERMINATED_RE = re.compile(r"[.?!;:][\"')\]]*\s*$")
+_MIN_FRAGMENT_WORDS = 5
+
+
+def is_incomplete_fragment(text):
+    """True when a passage is a wrap leftover, not a whole obligation: too short,
+    or not ending in terminal/clause punctuation. Used only to prune the unmapped
+    bucket — it does NOT change what counts as an obligation (the mandatory-signal
+    test is untouched)."""
+    return (len(text.split()) < _MIN_FRAGMENT_WORDS
+            or not _TERMINATED_RE.search(text))
 
 
 def _authority_norm(seg):
@@ -407,7 +432,7 @@ def find_requirements(extracted):
     rows = []
     seen = set()
     for idx, page_text in enumerate(extracted.get("pages", []), start=1):
-        for seg in _segments(_stitch_citations(page_text)):
+        for seg in _segments(_stitch_wraps(page_text)):
             kind = _classify(seg)
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":

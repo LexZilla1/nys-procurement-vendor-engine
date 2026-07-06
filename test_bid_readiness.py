@@ -684,6 +684,33 @@ def test_na_rows_excluded_from_coverage_buckets():
     assert st not in verified and st not in needs_review
 
 
+def test_incomplete_other_fragments_are_dropped_from_unmapped():
+    """PR #45 review: PDF line-wrap leftovers no longer pollute the UNMAPPED
+    'other' bucket. The real fragments 'no later than May' / 'The CDRC must'
+    (each carries a signal, so they used to land in 'other') are pruned."""
+    rep = _mk(["no later than May", "The CDRC must"])
+    assert rep.other_requirements == [], rep.other_requirements
+    assert rep.coverage_counts[BR.UNMAPPED] == 0
+
+
+def test_complete_unmapped_obligation_survives_in_other():
+    """A whole unmapped shall/must obligation is preserved in the gap report —
+    the fragment guard removes leftovers, not genuine obligations."""
+    rep = _mk(["The contractor shall submit all required documentation before "
+               "the stated deadline."])
+    assert len(rep.other_requirements) == 1
+    assert rep.coverage_counts[BR.UNMAPPED] == 1
+    assert rep.coverage_complete is False
+
+
+def test_other_bucket_dedupes_normalized_duplicates():
+    """Obvious duplicate unmapped passages (whitespace/case variants) collapse."""
+    rep = _mk(["The vendor shall keep all logs current for the term.",
+               "The  vendor   shall keep all logs current for the term.",
+               "the vendor shall keep all logs current for the term."])
+    assert len(rep.other_requirements) == 1, rep.other_requirements
+
+
 def test_citation_audit_still_end_to_end_yes_after_pr45():
     """Guardrail invariant (PR #44): the citation audit still prints END-TO-END
     YES, the runtime surface is unchanged, and nothing is unclassified — this PR
