@@ -158,6 +158,23 @@ def test_build_payload_uses_flags_not_grounded_quotes():
     assert p["known_kinds"]                                   # mapped-rule vocab present
 
 
+def test_payload_uses_tender_file_not_tender_source():
+    p = CA.build_payload(_report())
+    assert "tender_file" in p                                 # renamed (document metadata)
+    assert "tender_source" not in p                           # old key removed
+
+
+def test_system_prompt_pins_ref_source_enum():
+    s = CA.SYSTEM
+    for lit in ("needs_review", "unmapped", "possible_authority"):
+        assert lit in s                                       # the three enum literals
+    assert "possible_authority is singular" in s.lower()      # singular, not plural
+    assert "tender_source" in s                               # named as forbidden
+    assert "must never be copied into ref.source" in s
+    assert "fixture filenames" in s and "document names" in s
+    assert '"source":"needs_review|unmapped|possible_authority"' in s  # enum-style schema
+
+
 # --------------------------------------------------------------------------
 # Hard reject-to-null — one per forbidden token/phrase
 # --------------------------------------------------------------------------

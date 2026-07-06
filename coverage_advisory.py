@@ -89,7 +89,7 @@ def build_payload(report):
     _unmapped_unique, unmapped_samples = report.cluster_other()
     _poss_unique, poss_samples = report.cluster_possible_authorities()
     return {
-        "tender_source": report.source,
+        "tender_file": report.source,   # document metadata only — NOT a ref source
         "contract_value": report.contract_value,
         "needs_review": [
             {"kind": r.kind, "label": r.label, "excerpt": r.tender_excerpt,
@@ -128,10 +128,18 @@ SYSTEM = (
     "override any rule or gate. Everything you output is an unverified candidate "
     "for human review.\n"
     "- Make no legal or procurement conclusion.\n"
+    "- Every ref source — grouping[].member_refs[].source and "
+    "item_notes[].ref.source — MUST be exactly one of these literal strings: "
+    "needs_review, unmapped, possible_authority (possible_authority is SINGULAR). "
+    "Do NOT use tender_source, tender_file, fixture filenames, document names, or "
+    "page labels as a ref source; the top-level tender file/document metadata is "
+    "document metadata only and must never be copied into ref.source.\n"
     "Respond in JSON only, with exactly these keys: "
-    '{"grouping":[{"theme":str,"member_refs":[{"source":str,"page":int}],'
+    '{"grouping":[{"theme":str,'
+    '"member_refs":[{"source":"needs_review|unmapped|possible_authority","page":int}],'
     '"explanation":str}],'
-    '"item_notes":[{"ref":{"source":str,"page":int},"suggested_kind":str,'
+    '"item_notes":[{"ref":{"source":"needs_review|unmapped|possible_authority",'
+    '"page":int},"suggested_kind":str,'
     '"rationale":str,"confidence":"low|medium|high"}],'
     '"coverage_backlog_candidates":[{"suggested_authority":str,"why":str,'
     '"confidence":"low|medium|high","action":"candidate for human capture"}]}.'
