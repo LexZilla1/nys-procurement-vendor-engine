@@ -379,7 +379,7 @@ def _ref_reason(v):
     if not isinstance(v, dict) or set(v) != {"source", "page"}:
         return "malformed_entry_shape"
     if v["source"] not in _SOURCES:
-        return "invalid_source"
+        return "invalid_source: %r" % (v["source"],)   # diagnostics: show value
     if not _is_int(v["page"]):
         return "invalid_page"
     return None
@@ -407,7 +407,7 @@ def _item_note_reason(e):
     if not (_is_str(e["suggested_kind"]) and _is_str(e["rationale"])):
         return "malformed_entry_shape"
     if e["confidence"] not in _CONF:
-        return "invalid_confidence"
+        return "invalid_confidence: %r" % (e["confidence"],)   # diagnostics: show value
     return None
 
 
@@ -418,9 +418,9 @@ def _backlog_reason(e):
     if not (_is_str(e["suggested_authority"]) and _is_str(e["why"])):
         return "malformed_entry_shape"
     if e["confidence"] not in _CONF:
-        return "invalid_confidence"
+        return "invalid_confidence: %r" % (e["confidence"],)   # diagnostics: show value
     if e["action"] != _BACKLOG_ACTION:
-        return "invalid_backlog_action"
+        return "invalid_backlog_action: %r" % (e["action"],)   # diagnostics: show value
     return None
 
 

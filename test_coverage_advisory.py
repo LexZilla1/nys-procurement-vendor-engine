@@ -591,17 +591,47 @@ def test_diag_validation_error_reasons_are_specific():
     o = _good_output(); o["grouping"] = "nope"
     assert _diag(o)["validation_reason"] == "non_list_top_level_value"
     o = _good_output(); o["grouping"][0]["member_refs"][0]["source"] = "bogus"
-    assert _diag(o)["validation_reason"] == "invalid_source"
+    assert _diag(o)["validation_reason"] == "invalid_source: 'bogus'"
     o = _good_output(); o["grouping"][0]["member_refs"][0]["page"] = "1"
     assert _diag(o)["validation_reason"] == "invalid_page"
     o = _good_output(); o["item_notes"][0]["confidence"] = "certain"
-    assert _diag(o)["validation_reason"] == "invalid_confidence"
+    assert _diag(o)["validation_reason"] == "invalid_confidence: 'certain'"
     o = _good_output(); o["coverage_backlog_candidates"][0]["action"] = "auto-add"
-    assert _diag(o)["validation_reason"] == "invalid_backlog_action"
+    assert _diag(o)["validation_reason"] == "invalid_backlog_action: 'auto-add'"
     o = _good_output(); del o["grouping"][0]["explanation"]
     assert _diag(o)["validation_reason"] == "malformed_entry_shape"
     o = _good_output(); o["item_notes"][0]["rationale"] = "the vendor is compliant"
     assert _diag(o)["validation_reason"] == "forbidden_language"
+
+
+def test_enriched_invalid_source_includes_offending_value():
+    o = _good_output()
+    o["grouping"][0]["member_refs"][0]["source"] = "possible_authorities"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_source: 'possible_authorities'"
+
+
+def test_enriched_invalid_confidence_includes_offending_value():
+    o = _good_output()
+    o["item_notes"][0]["confidence"] = "certain"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_confidence: 'certain'"
+
+
+def test_enriched_invalid_backlog_action_includes_offending_value():
+    o = _good_output()
+    o["coverage_backlog_candidates"][0]["action"] = "verify automatically"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_backlog_action: 'verify automatically'"
 
 
 def test_diag_no_key_returns_no_key_transport_not_called():
