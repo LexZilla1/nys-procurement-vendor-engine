@@ -226,6 +226,127 @@ _SIGNAL_RE = re.compile(
     r"required to|responsible for|no later than|prior to award|"
     r"as a condition of)\b", re.IGNORECASE)
 
+# --- Silent-drop fix (PR #45): authority / form references without shall/must --
+# NYS RFQs frequently point to a statutory authority or a form/attachment as an
+# obligation WITHOUT using shall/must language. Those passages used to be
+# silently dropped (no signal + kind "general"). They are now captured — but as
+# an UNCERTAIN "possible authority", behind FOUR precision filters so PDF line-
+# wrap fragments and bare cross-references do not flood the coverage report:
+#   1. stitch citations split across line breaks BEFORE segmenting;
+#   2. drop dangling citation fragments (start/end mid-citation);
+#   3. require an obligation/review cue (a bare "Article 15" is not a duty);
+#   4. dedupe by normalized authority reference (one law cited 12× counts once).
+# This is coverage plumbing, not new legal logic: nothing here is scored/grounded.
+_AUTHORITY_REF_RE = re.compile(
+    r"(?:§+\s*\d+[\w.\-]*|"                          # § 314, §§ 139-d, § 2-d, § 121.6
+    r"\bArticle\s+\d+\b|"                            # Article 8
+    r"\b(?:State\s+Finance|Executive|Labor|Tax|Education|General\s+Municipal|"
+    r"Public\s+Officers|Economic\s+Development|Environmental\s+Conservation)"
+    r"\s+Law\b|"                                     # named NYS laws
+    r"\b(?:OSC|OGS|ESD|NYSCR)\b|"                    # NYS agency short codes
+    r"\b(?:Attachment|Appendix|Exhibit|Schedule|Form)\s+"
+    r"(?-i:[A-Z0-9][A-Z0-9.\-]*))",                  # form/attachment CODES (not
+    re.IGNORECASE)                                   # a lowercase word: "Form is")
+
+# An obligation / review cue — the reference plausibly imposes or governs a duty
+# (mandatory modals + obligation verbs). A bare noun is NOT enough; a cue-less
+# keyword hit ("the agency values workers' compensation") never qualifies.
+_OBLIGATION_CUE_RE = re.compile(
+    r"\b(shall|must|is\s+required\s+to|are\s+required\s+to|will\s+be\s+required|"
+    r"required\s+to|responsible\s+for|as\s+a\s+condition\s+of|subject\s+to|"
+    r"submit|certif|comply|complet|provide|furnish|file|register|include|"
+    r"execute|maintain|hold|deliver|attach(?!ment)|enclose|accompan|agree|"
+    r"warrant|acknowledg|sign|review|governed\s+by|in\s+accordance\s+with)\w*",
+    re.IGNORECASE)
+
+# A narrative frame — the authority is cited to explain the ISSUER'S action, not
+# to impose a duty on the bidder ("Pursuant to State Finance Law, the agency
+# issues this RFQ"). Narrative frame + no obligation cue → not a requirement.
+_ISSUER_NARRATIVE_RE = re.compile(
+    r"\b(the\s+agency|the\s+state|the\s+department|the\s+office|the\s+division|"
+    r"the\s+comptroller|this\s+solicitation|this\s+rfq|this\s+rfp|"
+    r"this\s+procurement|this\s+ifb)\b.*\b(issue|issues|issued|issuing|"
+    r"seeks?|invites?|solicits?|is\s+seeking|is\s+issued|are\s+issued|"
+    r"publish(?:es)?|releas(?:es)?)\b", re.IGNORECASE)
+
+# A dangling line-wrap fragment: begins mid-citation ("d and § 121.6 of",
+# "A of the New York State Executive Law") or ends mid-citation ("Education Law
+# § 2-", "... pursuant to"). Such a segment is PDF noise, not a whole reference.
+# Begins mid-citation ("d and § 121.6 of", "A of the ... Law") OR begins with a
+# lowercase letter — a whole reference/sentence starts with a capital, "§", a
+# digit or a paren, so a lowercase start is a wrapped-line fragment ("iled with
+# OSC when the contract...").
+_FRAG_HEAD_RE = re.compile(
+    r"^\W*(?:[A-Za-z]{1,3}\s+(?:of|and|or|the)\b|(?-i:[a-z]))", re.IGNORECASE)
+_FRAG_TAIL_RE = re.compile(
+    r"(?:§+\s*\d[\w.]*-|§+|\b(?:of|and|or|the|to|by|under|pursuant\s+to))"
+    r"\s*[)\.\,;:\s]*$", re.IGNORECASE)
+
+
+def has_obligation_cue(text):
+    """True when the passage carries a mandatory modal or an obligation verb —
+    used both to gate authority capture and to qualify a VERIFIED_MATCH."""
+    return bool(_OBLIGATION_CUE_RE.search(text))
+
+
+def _looks_fragmentary(seg):
+    """True when a candidate reference is a line-wrap fragment (starts or ends
+    mid-citation) rather than a whole, standalone reference."""
+    return bool(_FRAG_HEAD_RE.search(seg) or _FRAG_TAIL_RE.search(seg))
+
+
+def _is_passing_narrative(seg):
+    """True when an authority reference is a passing issuer-narrative mention
+    (frame present, no obligation cue) — i.e. NOT a bidder obligation."""
+    return bool(_ISSUER_NARRATIVE_RE.search(seg)) and not has_obligation_cue(seg)
+
+
+def _stitch_wraps(text):
+    """Rejoin PDF line-wrap artifacts BEFORE the text is segmented, so a wrapped
+    clause is captured whole (or not at all) rather than as several fragments.
+    STRICTLY a wrap-repair — it only joins a line break that is a wrap artifact,
+    never two lines that each read as complete sentences:
+      * `§` citation splits (`§ 2-`\\n`d`, `Education Law §`\\n`2-d`, `and § …`);
+      * a general prose wrap — the prior line ends mid-clause (NO terminal `.?!;:`)
+        AND the next line starts lowercase (a sentence/clause never resumes with a
+        lowercase word, so this newline is a wrap, not a real break).
+    Conservative by construction: text whose lines all end in terminal punctuation
+    (e.g. the synthetic sample) is unchanged."""
+    # "§ 2-\nd" → "§ 2-d" (hyphen-split section id)
+    text = re.sub(r"(§+\s*\d+[\w.]*)-\n\s*([A-Za-z0-9])", r"\1-\2", text)
+    # "Education Law §\n2-d" → "Education Law § 2-d" (symbol split from number)
+    text = re.sub(r"(§+)\s*\n\s*(\d)", r"\1 \2", text)
+    # "... § 2-d\nand § 121.6 ..." → join a citation continued by "and/or § ..."
+    text = re.sub(r"\n\s*(?=(?:and|or)\s+§)", " ", text, flags=re.IGNORECASE)
+    # General prose wrap: prior char is not terminal punctuation, next line starts
+    # lowercase → the newline is a wrap. Join with a single space.
+    text = re.sub(r"([^\s.?!;:])[ \t]*\n[ \t]*(?=[a-z])", r"\1 ", text)
+    return text
+
+
+# A complete-enough segment ends in terminal/clause punctuation; a whole standalone
+# obligation runs several words. Anything shorter or unterminated is a line-wrap
+# leftover ("no later than May", "The CDRC must") — an incomplete fragment.
+_TERMINATED_RE = re.compile(r"[.?!;:][\"')\]]*\s*$")
+_MIN_FRAGMENT_WORDS = 5
+
+
+def is_incomplete_fragment(text):
+    """True when a passage is a wrap leftover, not a whole obligation: too short,
+    or not ending in terminal/clause punctuation. Used only to prune the unmapped
+    bucket — it does NOT change what counts as an obligation (the mandatory-signal
+    test is untouched)."""
+    return (len(text.split()) < _MIN_FRAGMENT_WORDS
+            or not _TERMINATED_RE.search(text))
+
+
+def _authority_norm(seg):
+    """A normalized key for the authority reference(s) in `seg`, so repeats of the
+    same citation collapse to one capture (e.g. Education Law § 2-d cited 12×)."""
+    toks = [re.sub(r"\s+", " ", m.group(0)).strip().lower()
+            for m in _AUTHORITY_REF_RE.finditer(seg)]
+    return frozenset(toks)
+
 # Domain buckets. The first matching keyword wins; order matters (specific
 # before general). "kind" lets bid_readiness map a passage to a known rule.
 _KIND_KEYWORDS = [
@@ -300,23 +421,46 @@ def _segments(page_text):
 def find_requirements(extracted):
     """From an extract() result, return requirement rows.
 
-    Each row: {"text", "page", "kind"} where text is verbatim tender language
-    and page is 1-based. A passage qualifies if it uses mandatory language OR
-    names a known compliance domain (so a terse "MWBE goal: 30%" is not missed).
+    Each row: {"text", "page", "kind"[, "capture"]} where text is verbatim
+    tender language and page is 1-based. A passage qualifies if it uses mandatory
+    language OR names a known compliance domain (so a terse "MWBE goal: 30%" is
+    not missed). A residual authority/form reference that carries no mandatory
+    language and maps to no domain is captured as an uncertain "possible
+    authority" (capture="authority_reference") instead of being silently dropped
+    — unless it is a passing issuer-narrative mention.
     """
     rows = []
     seen = set()
     for idx, page_text in enumerate(extracted.get("pages", []), start=1):
-        for seg in _segments(page_text):
+        for seg in _segments(_stitch_wraps(page_text)):
             kind = _classify(seg)
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":
+                # Silent-drop fix (PR #45): rescue a WHOLE authority/form
+                # reference that plausibly imposes an obligation. Four precision
+                # filters keep PDF line-wrap fragments and bare cross-references
+                # out: an obligation cue is required, passing narrative and
+                # dangling fragments are dropped, and repeats of the same
+                # normalized citation collapse to one capture.
+                # Require the cue OUTSIDE the authority span, so a form word like
+                # "Attachment" cannot supply its own cue.
+                residual = _AUTHORITY_REF_RE.sub(" ", seg)
+                if (_AUTHORITY_REF_RE.search(seg)
+                        and has_obligation_cue(residual)
+                        and not _is_passing_narrative(seg)
+                        and not _looks_fragmentary(seg)):
+                    key = ("authority_reference", _authority_norm(seg))
+                    if key not in seen:
+                        seen.add(key)
+                        rows.append({"text": seg, "page": idx, "kind": kind,
+                                     "capture": "authority_reference"})
                 continue
             key = (seg.lower(), kind)
             if key in seen:
                 continue
             seen.add(key)
-            rows.append({"text": seg, "page": idx, "kind": kind})
+            rows.append({"text": seg, "page": idx, "kind": kind,
+                         "capture": "signal"})
     return rows
 
 

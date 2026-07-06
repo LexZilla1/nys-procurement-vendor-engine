@@ -497,6 +497,236 @@ def test_noncollusion_carries_cure_note_others_do_not():
         assert row.note is None, "{} must not carry a cure note".format(kind)
 
 
+# --------------------------------------------------------------------------
+# Coverage taxonomy + fail-closed coverage_complete gate (PR #45)
+# --------------------------------------------------------------------------
+
+def _mk(pages, profile=None):
+    ex = {"pages": pages, "page_count": 1, "source": "x", "has_text_layer": True}
+    return BR.score_bid(ex, profile or {}, golden=GC)
+
+
+def test_coverage_taxonomy_three_statuses_present_on_sample():
+    """VERIFIED_MATCH, NEEDS_REVIEW and UNMAPPED are all represented on the real
+    sample tender, and the per-row coverage is exposed."""
+    rep = _report()
+    verified, needs_review = rep.coverage_buckets
+    assert verified and needs_review                       # both present
+    assert all(r.coverage == BR.VERIFIED_MATCH for r in verified)
+    assert all(r.coverage == BR.NEEDS_REVIEW for r in needs_review)
+    c = rep.coverage_counts
+    assert c[BR.VERIFIED_MATCH] > 0 and c[BR.NEEDS_REVIEW] > 0 and c[BR.UNMAPPED] > 0
+
+
+def test_verified_match_is_grounded_row():
+    rep = _report()
+    eeo = [r for r in rep.rows if r.kind == "eeo"][0]
+    assert eeo.grounding is not None and eeo.coverage == BR.VERIFIED_MATCH
+
+
+def test_similar_but_not_exact_requirement_is_needs_review_not_verified():
+    """A requirement mapped to a kind that has NO golden-copy grounding (bid bond,
+    insurance) is NEEDS_REVIEW / POSSIBLE_MATCH — never VERIFIED_MATCH."""
+    rep = _report()
+    for kind in ("bonding", "insurance", "registration"):
+        row = [r for r in rep.rows if r.kind == kind][0]
+        assert row.grounding is None
+        assert row.coverage == BR.NEEDS_REVIEW
+        assert row.coverage != BR.VERIFIED_MATCH
+    assert BR.POSSIBLE_MATCH == BR.NEEDS_REVIEW           # spec alias
+
+
+def test_missing_golden_match_is_not_treated_as_no_requirement():
+    """A kind-mapped requirement with no golden grounding still appears as a real
+    row (NEEDS_REVIEW) and blocks coverage — it is NOT silently 'no requirement'."""
+    rep = _mk(["A bid bond equal to 5% of the bid amount is required."])
+    bond = [r for r in rep.rows if r.kind == "bonding"]
+    assert bond, "the bonding requirement must not be dropped"
+    assert bond[0].coverage == BR.NEEDS_REVIEW
+    assert rep.coverage_complete is False
+
+
+def test_one_unmapped_item_forces_coverage_incomplete():
+    """STANDING: a single UNMAPPED passage forces coverage_complete = False."""
+    rep = _mk(["The contractor shall paint the widget green."])
+    assert rep.other_requirements                          # captured, not dropped
+    assert rep.coverage_counts[BR.UNMAPPED] >= 1
+    assert rep.coverage_complete is False
+
+
+def test_one_needs_review_item_forces_coverage_incomplete():
+    """STANDING: a single NEEDS_REVIEW (kind-mapped, ungrounded) item forces
+    coverage_complete = False."""
+    rep = _mk(["A bid bond equal to 5% of the bid amount is required."])
+    assert rep.coverage_counts[BR.NEEDS_REVIEW] >= 1
+    assert rep.coverage_counts[BR.UNMAPPED] == 0
+    assert rep.coverage_complete is False
+
+
+def test_unmapped_form_certification_forces_coverage_incomplete():
+    """An RFQ form/authority reference not mapped to a verified rule forces the
+    gate False (via UNMAPPED or the possible-authority bucket)."""
+    rep = _mk(["Vendors register under Environmental Conservation Law § 17-0303."])
+    assert rep.possible_authorities                        # captured
+    assert rep.coverage_counts[BR.UNMAPPED] >= 1
+    assert rep.coverage_complete is False
+
+
+def test_unmapped_authority_appears_in_gap_report():
+    """An unmapped authority reference is surfaced (possible-authority bucket),
+    both in the JSON and rendered output — never silently dropped."""
+    rep = _mk(["Vendors register under Environmental Conservation Law § 17-0303."])
+    d = rep.to_dict()
+    assert d["coverage"]["possible_authorities"]["detected"] >= 1
+    out = BR.render_bid_readiness(rep)
+    assert "POSSIBLE AUTHORITIES REFERENCED" in out
+    assert "Environmental Conservation Law" in out
+
+
+def test_cueless_grounded_keyword_hit_is_not_verified_match():
+    """Item C regression: a grounded rule KIND reached by an incidental keyword
+    with NO obligation cue in the passage must NOT become VERIFIED_MATCH — it
+    inherits nothing and stays NEEDS_REVIEW."""
+    rep = _mk(["The agency deeply values the workers' compensation of its own staff."])
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"]
+    assert wc, "the keyword still maps to a row (not dropped)"
+    assert wc[0].grounding is not None                     # grounded KIND...
+    assert wc[0].coverage == BR.NEEDS_REVIEW               # ...but cue-less → not verified
+    assert wc[0].coverage != BR.VERIFIED_MATCH
+
+
+def test_verified_match_requires_obligation_cue_in_passage():
+    """VERIFIED_MATCH demands BOTH a grounded kind AND an obligation cue in this
+    passage; the same grounded kind WITH a cue is VERIFIED_MATCH."""
+    cued = _mk(["Contractors must maintain workers' compensation coverage."])
+    wc = [r for r in cued.rows if r.kind == "insurance_workers"][0]
+    assert wc.grounding is not None and BR.has_obligation_cue(wc.tender_excerpt)
+    assert wc.coverage == BR.VERIFIED_MATCH
+
+
+def test_passing_narrative_authority_makes_no_spurious_unmapped():
+    """PRECISION: a passing narrative authority mention creates no UNMAPPED item
+    and no possible-authority item."""
+    rep = _mk(["Pursuant to State Finance Law, the agency issues this RFQ."])
+    assert rep.other_requirements == []
+    assert rep.possible_authorities == []
+    assert rep.coverage_counts[BR.UNMAPPED] == 0
+
+
+def test_coverage_complete_can_be_true_when_all_verified():
+    """The gate is not vacuous: a tender whose only item is a grounded rule with no
+    unmapped/possible items yields coverage_complete = True."""
+    rep = _mk(["Bidders must certify compliance with the Iran Divestment Act "
+               "under State Finance Law 165-a."],
+              profile={"iran_divestment_certification_ready": True})
+    assert rep.coverage_counts[BR.UNMAPPED] == 0
+    assert rep.coverage_counts[BR.NEEDS_REVIEW] == 0
+    assert rep.coverage_complete is True
+
+
+def test_coverage_complete_is_literal_derivation_not_stored_flag():
+    """coverage_complete is derived from item counts every call — mutating the
+    counts (adding an unmapped item) flips it, proving it is not a cached flag."""
+    rep = _mk(["Bidders must certify compliance with the Iran Divestment Act "
+               "under State Finance Law 165-a."],
+              profile={"iran_divestment_certification_ready": True})
+    assert rep.coverage_complete is True
+    rep.other_requirements.append({"text": "surprise unmapped duty", "page": 9})
+    assert rep.coverage_complete is False                  # re-derived, not stored
+
+
+def test_top_level_coverage_complete_field_matches_gate():
+    rep = _report()
+    d = rep.to_dict()
+    assert d["coverage_complete"] == rep.coverage_complete
+    assert d["coverage"]["coverage_complete"] == rep.coverage_complete
+    assert d["coverage"]["counts"] == rep.coverage_counts
+
+
+def test_no_complete_headline_renders_while_coverage_incomplete():
+    """STANDING: no PASS/COMPLETE headline may render while coverage_complete is
+    False. If a later change lets a COMPLETE headline print with an unmapped or
+    needs-review item present, this fails."""
+    rep = _report()
+    assert rep.coverage_complete is False
+    out = BR.render_bid_readiness(rep)
+    assert BR.HEADLINE_COVERAGE_INCOMPLETE in out
+    assert BR.HEADLINE_COVERAGE_COMPLETE not in out        # positive headline absent
+    assert "NOT COMPLETE" in out
+
+
+def test_complete_headline_renders_only_when_coverage_complete():
+    rep = _mk(["Bidders must certify compliance with the Iran Divestment Act "
+               "under State Finance Law 165-a."],
+              profile={"iran_divestment_certification_ready": True})
+    assert rep.coverage_complete is True
+    out = BR.render_bid_readiness(rep)
+    assert BR.HEADLINE_COVERAGE_COMPLETE in out
+
+
+def test_render_separates_verified_from_needs_review_and_unmapped():
+    """User-facing output visibly separates VERIFIED from NEEDS_REVIEW / UNMAPPED."""
+    out = BR.render_bid_readiness(_report())
+    assert "VERIFIED against golden copy" in out
+    assert "NEEDS REVIEW" in out
+    assert "UNMAPPED RFQ passages" in out
+    # The 'found in RFQ but not verified' language is present for unmapped items.
+    assert "not verified in the golden copy" in out
+
+
+def test_na_rows_excluded_from_coverage_buckets():
+    """A rule below its threshold (N/A) is not a requirement for this contract and
+    is excluded from the coverage taxonomy counts."""
+    rep = _report(_profile(contract_value_usd=30000))
+    st = [r for r in rep.rows if r.kind == "sales_tax_5a"][0]
+    assert st.status == BR.NA
+    verified, needs_review = rep.coverage_buckets
+    assert st not in verified and st not in needs_review
+
+
+def test_incomplete_other_fragments_are_dropped_from_unmapped():
+    """PR #45 review: PDF line-wrap leftovers no longer pollute the UNMAPPED
+    'other' bucket. The real fragments 'no later than May' / 'The CDRC must'
+    (each carries a signal, so they used to land in 'other') are pruned."""
+    rep = _mk(["no later than May", "The CDRC must"])
+    assert rep.other_requirements == [], rep.other_requirements
+    assert rep.coverage_counts[BR.UNMAPPED] == 0
+
+
+def test_complete_unmapped_obligation_survives_in_other():
+    """A whole unmapped shall/must obligation is preserved in the gap report —
+    the fragment guard removes leftovers, not genuine obligations."""
+    rep = _mk(["The contractor shall submit all required documentation before "
+               "the stated deadline."])
+    assert len(rep.other_requirements) == 1
+    assert rep.coverage_counts[BR.UNMAPPED] == 1
+    assert rep.coverage_complete is False
+
+
+def test_other_bucket_dedupes_normalized_duplicates():
+    """Obvious duplicate unmapped passages (whitespace/case variants) collapse."""
+    rep = _mk(["The vendor shall keep all logs current for the term.",
+               "The  vendor   shall keep all logs current for the term.",
+               "the vendor shall keep all logs current for the term."])
+    assert len(rep.other_requirements) == 1, rep.other_requirements
+
+
+def test_citation_audit_still_end_to_end_yes_after_pr45():
+    """Guardrail invariant (PR #44): the citation audit still prints END-TO-END
+    YES, the runtime surface is unchanged, and nothing is unclassified — this PR
+    added no new cite() path."""
+    sys.path.insert(0, os.path.join(HERE, "scripts"))
+    import golden_audit as ga
+    rep = ga.run()
+    assert rep["enforcement_complete"] is True
+    assert rep["cite_surface_unclassified"] == []
+    assert rep["unmigrated_cite_sites"] == []
+    assert set(rep["cite_surface_runtime"]) == {
+        "validator.py", "bid_readiness.py", "cert_renewal.py", "gap_analysis.py",
+        "engine/citation.py", "engine/payment_clock.py"}
+    assert "ENFORCED END-TO-END: YES" in ga.render(rep)
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]

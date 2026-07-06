@@ -33,6 +33,7 @@ import sys
 
 from validator import GoldenCopy, FAIL, WARN, PASS, INFO
 from engine import golden_status as gs
+from tender_extractor import has_obligation_cue, is_incomplete_fragment
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,6 +42,28 @@ YELLOW = "YELLOW"
 RED = "RED"
 NA = "N/A"  # threshold-gated rule that genuinely does not apply at this contract size
 _COLOR_SEVERITY = {GREEN: PASS, YELLOW: WARN, RED: FAIL}
+
+# --- Coverage taxonomy (PR #45) --------------------------------------------
+# A RELIABILITY / COVERAGE status for each RFQ-derived item — NOT a legal
+# conclusion and NOT new legal logic. It answers only "did we verify this item
+# against the golden copy?", so the report can never imply complete readiness
+# while unverified / unmapped items remain.
+#   VERIFIED_MATCH  — mapped to a known rule AND backed by golden-copy grounding.
+#   NEEDS_REVIEW    — kind-mapped but not confidently/exactly verified by golden
+#                     grounding (a.k.a. POSSIBLE_MATCH).
+#   UNMAPPED        — an RFQ requirement / form / authority / mandatory passage
+#                     not mapped to a verified golden-copy rule.
+VERIFIED_MATCH = "VERIFIED_MATCH"
+NEEDS_REVIEW = "NEEDS_REVIEW"
+POSSIBLE_MATCH = NEEDS_REVIEW  # spec alias — NEEDS_REVIEW / POSSIBLE_MATCH
+UNMAPPED = "UNMAPPED"
+
+# The report headline distinguishes "we VERIFIED X" from "there are no other
+# requirements". These exact markers are asserted by the standing coverage test:
+# the COMPLETE marker must never render while coverage_complete is False. (Note
+# "NOT COMPLETE" does not contain the substring "COVERAGE STATUS: COMPLETE".)
+HEADLINE_COVERAGE_COMPLETE = "COVERAGE STATUS: COMPLETE"
+HEADLINE_COVERAGE_INCOMPLETE = "COVERAGE STATUS: NOT COMPLETE"
 
 # Candidate golden-copy grounding for each requirement kind. Verified verbatim
 # at import (see _build_rules); a quote that fails cite() is dropped to None so
@@ -432,6 +455,17 @@ class RequirementRow:
     def checkable(self):
         return self.vendor_has is not None
 
+    @property
+    def coverage(self):
+        """Reliability/coverage status of this MAPPED requirement. VERIFIED_MATCH
+        demands BOTH (a) a golden-copy-grounded rule kind AND (b) an obligation
+        cue in THIS RFQ passage — so a cue-less keyword hit (e.g. a passing
+        "workers' compensation" mention) inherits the rule's grounding but stays
+        NEEDS_REVIEW, never a confident VERIFIED_MATCH. Not a legal conclusion."""
+        if self.grounding and has_obligation_cue(self.tender_excerpt):
+            return VERIFIED_MATCH
+        return NEEDS_REVIEW
+
     def to_dict(self):
         d = {
             "kind": self.kind,
@@ -440,6 +474,7 @@ class RequirementRow:
             "tender_provenance": "this tender, page {}".format(self.page),
             "vendor_satisfies": self.vendor_has,
             "status": self.status,
+            "coverage": self.coverage,
             "mandatory": self.must,
         }
         if self.grounding:
@@ -466,7 +501,7 @@ class RequirementRow:
 
 class BidReadinessReport:
     def __init__(self, vendor_name, source, pages_read, requirements_found,
-                 rows, other_requirements=None):
+                 rows, other_requirements=None, possible_authorities=None):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
@@ -474,14 +509,20 @@ class BidReadinessReport:
         self.rows = rows
         # Unmapped "shall/must" passages with no known rule — kept OUT of the
         # per-requirement findings (they flood the output) and surfaced as a
-        # clustered summary instead.
+        # clustered summary instead. These are UNMAPPED coverage items.
         self.other_requirements = other_requirements or []
+        # Authority/form references captured without mandatory language — held in
+        # a visually distinct "possible authorities referenced — review" bucket
+        # rather than mixed into the scored UNMAPPED passages (they are uncertain
+        # by construction). Still counted as unverified coverage.
+        self.possible_authorities = possible_authorities or []
         self.contract_value = None  # set by score_bid; None = not determined
 
-    def cluster_other(self, limit=8):
-        """De-dupe the unmapped passages and return (unique_count, samples)."""
+    @staticmethod
+    def _cluster(items, limit=8):
+        """De-dupe a list of {text, page} passages → (unique_count, samples)."""
         seen, samples = set(), []
-        for o in self.other_requirements:
+        for o in items:
             key = " ".join(o["text"].lower().split())
             if key in seen:
                 continue
@@ -489,6 +530,14 @@ class BidReadinessReport:
             if len(samples) < limit:
                 samples.append({"page": o["page"], "text": o["text"]})
         return len(seen), samples
+
+    def cluster_other(self, limit=8):
+        """De-dupe the unmapped passages and return (unique_count, samples)."""
+        return self._cluster(self.other_requirements, limit)
+
+    def cluster_possible_authorities(self, limit=8):
+        """De-dupe the possible-authority references → (unique_count, samples)."""
+        return self._cluster(self.possible_authorities, limit)
 
     @property
     def checkable_rows(self):
@@ -525,6 +574,61 @@ class BidReadinessReport:
         # NA rows are neither a problem to fix nor a green pass — exclude them.
         return [r for r in self.rows if r.status not in (GREEN, NA)]
 
+    # --- Coverage taxonomy / fail-closed completeness gate (PR #45) ---------
+
+    @property
+    def coverage_buckets(self):
+        """(verified_match_rows, needs_review_rows) over the MAPPED requirement
+        rows. N/A rows (a rule that genuinely does not apply at this contract
+        size) are excluded — they are not requirements for this contract."""
+        verified, needs_review = [], []
+        for r in self.rows:
+            if r.status == NA:
+                continue
+            (verified if r.coverage == VERIFIED_MATCH else needs_review).append(r)
+        return verified, needs_review
+
+    @property
+    def coverage_counts(self):
+        """Item counts behind the coverage gate. UNMAPPED folds together the
+        unmapped 'shall/must' passages and the possible-authority references —
+        both are RFQ-specific items not verified against the golden copy."""
+        verified, needs_review = self.coverage_buckets
+        unmapped_unique, _ = self.cluster_other()
+        possible_unique, _ = self.cluster_possible_authorities()
+        return {
+            VERIFIED_MATCH: len(verified),
+            NEEDS_REVIEW: len(needs_review),
+            UNMAPPED: unmapped_unique + possible_unique,
+        }
+
+    @property
+    def coverage_complete(self):
+        """LITERAL fail-closed gate, derived from item counts every time (never a
+        separately-stored flag): coverage is complete ONLY when nothing is
+        unmapped AND nothing needs review. Any UNMAPPED or NEEDS_REVIEW item
+        forces False. This is a reliability/coverage judgment, not a legal PASS."""
+        c = self.coverage_counts
+        return c[UNMAPPED] == 0 and c[NEEDS_REVIEW] == 0
+
+    @property
+    def coverage_headline(self):
+        """The one-line coverage verdict. It never reads as a final PASS/COMPLETE
+        while coverage_complete is False; it distinguishes 'we verified X' from
+        'there are no other requirements'."""
+        c = self.coverage_counts
+        if self.coverage_complete:
+            return ("{} — all {} detected RFQ item(s) mapped to a verified "
+                    "golden-copy rule. Coverage/reliability judgment, not a legal "
+                    "conclusion.".format(HEADLINE_COVERAGE_COMPLETE,
+                                         c[VERIFIED_MATCH]))
+        return ("{} — verified {} item(s) against the golden copy, but {} need "
+                "review and {} unmapped / possible-authority item(s) remain. This "
+                "lists what we VERIFIED; it does NOT assert there are no other "
+                "requirements. Review required before final bid-readiness."
+                .format(HEADLINE_COVERAGE_INCOMPLETE, c[VERIFIED_MATCH],
+                        c[NEEDS_REVIEW], c[UNMAPPED]))
+
     @property
     def actions(self):
         """The action list = collected FIX texts from all RED + YELLOW findings,
@@ -551,6 +655,39 @@ class BidReadinessReport:
             "samples": samples,
         }
 
+    def _possible_authorities_dict(self):
+        unique, samples = self.cluster_possible_authorities()
+        return {
+            "detected": len(self.possible_authorities),
+            "unique": unique,
+            "note": "Possible authorities referenced — review. Authority/form "
+                    "references found in the RFQ without mandatory language; "
+                    "uncertain, not scored, and not verified in the golden copy.",
+            "samples": samples,
+        }
+
+    def _coverage_dict(self):
+        verified, needs_review = self.coverage_buckets
+        return {
+            "coverage_complete": self.coverage_complete,
+            "headline": self.coverage_headline,
+            "counts": self.coverage_counts,
+            "verified_match": [
+                {"requirement": r.label,
+                 "source_file": r.grounding["source_file"]} for r in verified],
+            "needs_review": [
+                {"requirement": r.label, "status": r.status,
+                 "reason": "kind-mapped but not verified in the golden copy"}
+                for r in needs_review],
+            "unmapped": self._other_dict(),
+            "possible_authorities": self._possible_authorities_dict(),
+            "note": "Reliability/coverage status, not legal advice. VERIFIED means "
+                    "grounded in verbatim golden copy; NEEDS_REVIEW / UNMAPPED "
+                    "items are NOT confirmed and do not mean 'no requirement'. "
+                    "Found in RFQ but not verified in the golden copy → review "
+                    "required before final bid-readiness.",
+        }
+
     def to_dict(self):
         return {
             "feature": "bid_readiness",
@@ -564,7 +701,11 @@ class BidReadinessReport:
                 "contract_value": self.contract_value,
                 "requirements_not_applicable": len(self.na_rows),
                 "other_requirements_detected": len(self.other_requirements),
+                "possible_authorities_detected": len(self.possible_authorities),
             },
+            # Top-level fail-closed gate — literal, derived from item counts.
+            "coverage_complete": self.coverage_complete,
+            "coverage": self._coverage_dict(),
             "bid_readiness_score": self.score,
             "status_counts": self.counts,
             "requirements": [r.to_dict() for r in self.rows],
@@ -613,14 +754,31 @@ def score_bid(extracted, profile, golden=None):
 
     rows = []
     other = []
+    possible_authorities = []
     seen_kinds = set()
+    seen_other = set()
     for req in requirements:
+        # Authority/form reference captured without mandatory language (silent-
+        # drop fix). Uncertain by construction → its own possible-authority
+        # bucket, never a scored requirement row.
+        if req.get("capture") == "authority_reference":
+            possible_authorities.append({"text": req["text"], "page": req["page"]})
+            continue
         kind = req["kind"]
         meta = rules.get(kind)
         if meta is None:
             # A "shall/must" passage with no known rule. Do NOT emit one row per
             # passage (a 68-page tender yields hundreds and buries the real
-            # findings). Collect them for a single clustered summary instead.
+            # findings). Collect them for a single clustered summary instead —
+            # after pruning PDF line-wrap leftovers (whole obligations are stitched
+            # upstream and survive; incomplete fragments are dropped) and deduping
+            # by normalized text. This does not change what counts as an obligation.
+            if is_incomplete_fragment(req["text"]):
+                continue
+            norm = " ".join(req["text"].split()).lower()
+            if norm in seen_other:
+                continue
+            seen_other.add(norm)
             other.append({"text": req["text"], "page": req["page"], "kind": kind})
             continue
         # Collapse multiple tender lines of the same kind to one verdict row,
@@ -738,7 +896,8 @@ def score_bid(extracted, profile, golden=None):
         source=extracted.get("source", "(unknown)"),
         pages_read=extracted.get("page_count", 0),
         requirements_found=len(requirements),
-        rows=rows, other_requirements=other)
+        rows=rows, other_requirements=other,
+        possible_authorities=possible_authorities)
     report.contract_value = contract_value
     return report
 
@@ -765,11 +924,18 @@ def render_bid_readiness(report):
                  len(report.other_requirements), len(report.checkable_rows)))
     c = report.counts
     na = len(report.na_rows)
+    score_caveat = ("" if report.coverage_complete
+                    else "  (coverage NOT complete — not a final pass; see below)")
     L.append("Verdicts: GREEN={}  YELLOW={}  RED={}  N/A={}   →   BID-READINESS "
-             "SCORE: {}/100".format(c[GREEN], c[YELLOW], c[RED], na, report.score))
+             "SCORE: {}/100{}".format(c[GREEN], c[YELLOW], c[RED], na,
+                                      report.score, score_caveat))
     L.append("Score = weighted mean over the {} checkable requirements "
              "(mandatory ×2, advisory ×1; GREEN=1.0, YELLOW=0.5, RED=0.0)."
              .format(len(report.checkable_rows)))
+    # Fail-closed coverage headline — never reads as PASS/COMPLETE while
+    # coverage_complete is False. Distinguishes "we verified X" from "there are
+    # no other requirements."
+    L.append(report.coverage_headline)
     L.append("")
     L.append("PER-REQUIREMENT")
     L.append("-" * 78)
@@ -810,12 +976,43 @@ def render_bid_readiness(report):
         L.append("  [{}] {} — {}".format(a["status"], a["for"], a["fix"]))
     if not report.actions:
         L.append("  (nothing outstanding)")
+    # -------- COVERAGE (reliability/completeness), separated by taxonomy --------
+    verified, needs_review = report.coverage_buckets
+    cc = report.coverage_counts
+    L.append("")
+    L.append("COVERAGE (reliability judgment, not legal advice)")
+    L.append("-" * 78)
+    L.append("VERIFIED against golden copy ({}):".format(cc[VERIFIED_MATCH]))
+    for r in verified:
+        L.append("  ✓ {} — {}".format(r.label, r.grounding["source_file"]))
+    if not verified:
+        L.append("  (none)")
+    L.append("NEEDS REVIEW — kind-mapped but NOT verified in the golden copy ({}):"
+             .format(cc[NEEDS_REVIEW]))
+    for r in needs_review:
+        L.append("  ? {} — no verified golden-copy rule backs this; review "
+                 "required.".format(r.label))
+    if not needs_review:
+        L.append("  (none)")
     if report.other_requirements:
         unique, samples = report.cluster_other()
-        L.append("")
-        L.append("OTHER REQUIREMENTS DETECTED: {} passage(s) ({} unique) with no "
-                 "matched rule.".format(len(report.other_requirements), unique))
-        L.append("  Not scored — review these against the tender. Examples:")
+        L.append("UNMAPPED RFQ passages — found in RFQ but not verified in the "
+                 "golden copy ({} passage(s), {} unique):".format(
+                     len(report.other_requirements), unique))
+        L.append("  Not scored. Review required before final bid-readiness. "
+                 "Examples:")
+        for s in samples:
+            txt = s["text"] if len(s["text"]) <= 90 else s["text"][:87] + "..."
+            L.append("  • [p{}] {}".format(s["page"], txt))
+        if unique > len(samples):
+            L.append("  ...and {} more.".format(unique - len(samples)))
+    if report.possible_authorities:
+        unique, samples = report.cluster_possible_authorities()
+        L.append("POSSIBLE AUTHORITIES REFERENCED — REVIEW ({} reference(s), {} "
+                 "unique):".format(len(report.possible_authorities), unique))
+        L.append("  Authority/form references without mandatory language — "
+                 "uncertain, not scored. Found in RFQ but not verified in the "
+                 "golden copy. Examples:")
         for s in samples:
             txt = s["text"] if len(s["text"]) <= 90 else s["text"][:87] + "..."
             L.append("  • [p{}] {}".format(s["page"], txt))
