@@ -909,7 +909,7 @@ def score_bid(extracted, profile, golden=None):
 _MARK = {GREEN: "GREEN ", YELLOW: "YELLOW", RED: "RED   ", NA: " N/A  "}
 
 
-def render_bid_readiness(report):
+def render_bid_readiness(report, advisory=None):
     L = []
     L.append("=" * 78)
     L.append("BID-READINESS — {}".format(report.vendor_name))
@@ -1018,6 +1018,12 @@ def render_bid_readiness(report):
             L.append("  • [p{}] {}".format(s["page"], txt))
         if unique > len(samples):
             L.append("  ...and {} more.".format(unique - len(samples)))
+    # -------- ADVISORY (sibling, read-only) — appended AFTER coverage. Only
+    # rendered when an advisory dict is present; a null advisory (default)
+    # renders nothing, so output is byte-identical to the pre-advisory report.
+    if advisory:
+        import coverage_advisory
+        L.extend(coverage_advisory.render_advisory(advisory))
     L.append("")
     L.append(report.to_dict()["disclaimer"])
     L.append("=" * 78)
@@ -1043,10 +1049,15 @@ def main(argv=None):
               "Re-upload a text PDF or paste the text as .txt.", file=sys.stderr)
         return 1
     report = score_bid(extracted, _load_json(profile_path))
+    # Post-score, sibling-only advisory layer (PR 2). Read-only: it never changes
+    # the report, its counts, score, grounding, or the coverage gate. Returns
+    # None (no advisory section) whenever no key / SDK / valid output is present.
+    import coverage_advisory
+    advisory = coverage_advisory.advise(report)
     if "--json" in argv:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     else:
-        print(render_bid_readiness(report))
+        print(render_bid_readiness(report, advisory=advisory))
     return 0
 
 

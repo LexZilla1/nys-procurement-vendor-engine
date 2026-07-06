@@ -604,6 +604,25 @@ def test_verified_match_requires_obligation_cue_in_passage():
     assert wc.coverage == BR.VERIFIED_MATCH
 
 
+def test_advisory_render_does_not_change_report_or_gate():
+    """PR 2 sibling-immutability: rendering WITH an advisory changes only the
+    output; coverage_complete, counts, score, grounding, and to_dict() are
+    identical to rendering WITHOUT one. The advisory is a read-only sibling."""
+    import json
+    rep = _mk(["A bid bond equal to 5% of the bid amount is required.",
+               "The contractor shall paint the widget green."])
+    before = json.dumps(rep.to_dict(), sort_keys=True)
+    gate = (rep.coverage_complete, dict(rep.coverage_counts), rep.score)
+    advisory = {"grouping": [], "item_notes": [], "coverage_backlog_candidates": [],
+                "disclaimer": "advisory only"}
+    plain = BR.render_bid_readiness(rep)
+    with_adv = BR.render_bid_readiness(rep, advisory=advisory)
+    assert json.dumps(rep.to_dict(), sort_keys=True) == before   # report untouched
+    assert (rep.coverage_complete, dict(rep.coverage_counts), rep.score) == gate
+    assert plain == BR.render_bid_readiness(rep)                 # default still identical
+    assert "ADVISORY (candidates" in with_adv and "ADVISORY (candidates" not in plain
+
+
 def test_passing_narrative_authority_makes_no_spurious_unmapped():
     """PRECISION: a passing narrative authority mention creates no UNMAPPED item
     and no possible-authority item."""
