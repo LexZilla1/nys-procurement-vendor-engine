@@ -482,6 +482,10 @@ def test_injection_hostile_text_only_inside_delimiters_and_system_warns():
 
 
 def test_injection_biddable_high_would_pass_is_a_known_finding():
+    """Documents CURRENT policy only — a schema-valid BIDDABLE/high produced by
+    obeying injected instructions passes _coerce. This is a tracked limitation,
+    NOT a desired safety guarantee. A hostile-text validator / no-greenlight
+    policy is a future design decision (backlogged)."""
     # FINDING (reported for review, NOT fixed in this PR): the in-code guard rails
     # (_coerce / step1_triage._finalize) enforce class vocabulary, confidence, and
     # jurisdiction — they do NOT detect prompt injection. So if the model OBEYS a
