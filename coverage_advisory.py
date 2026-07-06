@@ -363,6 +363,188 @@ def advise(report, llm=None, transport=None):
 
 
 # ---------------------------------------------------------------------------
+# Diagnostics — SMOKE / DEBUG ONLY. Same live call + same validation as advise(),
+# but returns WHY the advisory was nulled. Never mutates advise()/_live/_validate,
+# never changes product behavior, and no diagnostic field is ever rendered to a
+# vendor (see render_advisory, which only reads grouping/item_notes/backlog).
+# ---------------------------------------------------------------------------
+
+# Diagnostic null-reason vocabulary (also documents the possible values).
+NULL_REASONS = ("no_key", "sdk_missing", "timeout", "transient_exhausted",
+                "api_error", "refusal", "truncated", "parse_error",
+                "validation_error")
+
+
+def _ref_reason(v):
+    if not isinstance(v, dict) or set(v) != {"source", "page"}:
+        return "malformed_entry_shape"
+    if v["source"] not in _SOURCES:
+        return "invalid_source"
+    if not _is_int(v["page"]):
+        return "invalid_page"
+    return None
+
+
+def _grouping_reason(e):
+    if not (isinstance(e, dict) and set(e) == {"theme", "member_refs", "explanation"}
+            and _is_str(e["theme"]) and _is_str(e["explanation"])
+            and isinstance(e["member_refs"], list)):
+        return "malformed_entry_shape"
+    for m in e["member_refs"]:
+        r = _ref_reason(m)
+        if r:
+            return r
+    return None
+
+
+def _item_note_reason(e):
+    if not (isinstance(e, dict)
+            and set(e) == {"ref", "suggested_kind", "rationale", "confidence"}):
+        return "malformed_entry_shape"
+    r = _ref_reason(e["ref"])
+    if r:
+        return r
+    if not (_is_str(e["suggested_kind"]) and _is_str(e["rationale"])):
+        return "malformed_entry_shape"
+    if e["confidence"] not in _CONF:
+        return "invalid_confidence"
+    return None
+
+
+def _backlog_reason(e):
+    if not (isinstance(e, dict)
+            and set(e) == {"suggested_authority", "why", "confidence", "action"}):
+        return "malformed_entry_shape"
+    if not (_is_str(e["suggested_authority"]) and _is_str(e["why"])):
+        return "malformed_entry_shape"
+    if e["confidence"] not in _CONF:
+        return "invalid_confidence"
+    if e["action"] != _BACKLOG_ACTION:
+        return "invalid_backlog_action"
+    return None
+
+
+def _validation_reason(parsed):
+    """Precise reason a parsed response would fail _validate(), or None if it
+    passes. Invariant: (_validation_reason(p) is None) iff (_validate(p) is not
+    None) — the same policy, just labelled. Diagnostic use only."""
+    if not isinstance(parsed, dict):
+        return "not_a_dict"
+    keys = set(parsed.keys())
+    if keys - _ALLOWED_TOP:
+        return "unknown_top_level_key"
+    if _ALLOWED_TOP - keys:
+        return "missing_top_level_key"
+    if _has_forbidden(json.dumps(parsed, ensure_ascii=False)):
+        return "forbidden_language"
+    for k in ("grouping", "item_notes", "coverage_backlog_candidates"):
+        if not isinstance(parsed[k], list):
+            return "non_list_top_level_value"
+    for e in parsed["grouping"]:
+        r = _grouping_reason(e)
+        if r:
+            return r
+    for e in parsed["item_notes"]:
+        r = _item_note_reason(e)
+        if r:
+            return r
+    for e in parsed["coverage_backlog_candidates"]:
+        r = _backlog_reason(e)
+        if r:
+            return r
+    return None
+
+
+def _usage_of(msg):
+    u = getattr(msg, "usage", None)
+    if u is None:
+        return None
+    it = getattr(u, "input_tokens", None)
+    ot = getattr(u, "output_tokens", None)
+    if it is None and ot is None:
+        return None
+    return {"input_tokens": it, "output_tokens": ot}
+
+
+def advise_with_diagnostics(report, transport=None):
+    """SMOKE / DEBUG ONLY. Performs the SAME live call and the SAME validation as
+    advise(report), but returns a diagnostic dict instead of a bare advisory-or-
+    None:
+        {advisory, null_reason, validation_reason, model, stop_reason, usage,
+         latency_seconds, error_type}
+    null_reason is one of NULL_REASONS or None (success). Truncation is detected
+    mechanically: stop_reason == 'max_tokens' AND a parse failure -> 'truncated'
+    (never 'parse_error'). This never alters advise()/_live/_validate and its
+    fields are never rendered to a vendor."""
+    import time
+    diag = {"advisory": None, "null_reason": None, "validation_reason": None,
+            "model": None, "stop_reason": None, "usage": None,
+            "latency_seconds": None, "error_type": None}
+    payload = build_payload(report)
+    try:
+        from llm_config import get_anthropic_api_key
+        key = get_anthropic_api_key(required=False)
+    except Exception:
+        key = None
+    if not key:
+        diag["null_reason"] = "no_key"
+        return diag                                  # transport NOT called
+    model = _resolve_model()
+    diag["model"] = model
+    call = transport or _default_transport
+    system, user = SYSTEM, _build_user(payload)
+
+    t0 = time.monotonic()
+    attempts, total = 0, MAX_RETRIES + 1
+    while attempts < total:
+        attempts += 1
+        try:
+            msg = call(key, model, _MAX_TOKENS, system, user, _TIMEOUT_S)
+        except ImportError:
+            diag["latency_seconds"] = round(time.monotonic() - t0, 3)
+            diag["null_reason"] = "sdk_missing"
+            return diag
+        except Exception as exc:
+            if _is_transient(exc) and attempts < total:
+                continue                             # retry transient
+            diag["latency_seconds"] = round(time.monotonic() - t0, 3)
+            diag["error_type"] = type(exc).__name__
+            if _is_transient(exc):
+                diag["null_reason"] = (
+                    "timeout" if isinstance(exc, TimeoutError)
+                    or type(exc).__name__ == "APITimeoutError"
+                    else "transient_exhausted")
+            else:
+                diag["null_reason"] = "api_error"
+            return diag
+        diag["latency_seconds"] = round(time.monotonic() - t0, 3)
+        diag["stop_reason"] = getattr(msg, "stop_reason", None)
+        diag["usage"] = _usage_of(msg)
+        if diag["stop_reason"] == "refusal":
+            diag["null_reason"] = "refusal"
+            return diag
+        raw = "".join(b.text for b in getattr(msg, "content", [])
+                      if getattr(b, "type", None) == "text")
+        try:
+            parsed = _parse_json(raw)
+        except Exception:
+            diag["null_reason"] = ("truncated"
+                                   if diag["stop_reason"] == "max_tokens"
+                                   else "parse_error")
+            return diag
+        vr = _validation_reason(parsed)
+        if vr is not None:
+            diag["null_reason"] = "validation_error"
+            diag["validation_reason"] = vr
+            return diag
+        diag["advisory"] = _finalize(parsed)         # identical to advise()
+        return diag
+    diag["latency_seconds"] = round(time.monotonic() - t0, 3)
+    diag["null_reason"] = "transient_exhausted"
+    return diag
+
+
+# ---------------------------------------------------------------------------
 # Rendering — a distinct ADVISORY section. NEVER a "cite   :" line; NEVER
 # populates grounding; statute names appear only as unverified candidate text.
 # ---------------------------------------------------------------------------
