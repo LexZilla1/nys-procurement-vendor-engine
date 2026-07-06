@@ -158,6 +158,23 @@ def test_build_payload_uses_flags_not_grounded_quotes():
     assert p["known_kinds"]                                   # mapped-rule vocab present
 
 
+def test_payload_uses_tender_file_not_tender_source():
+    p = CA.build_payload(_report())
+    assert "tender_file" in p                                 # renamed (document metadata)
+    assert "tender_source" not in p                           # old key removed
+
+
+def test_system_prompt_pins_ref_source_enum():
+    s = CA.SYSTEM
+    for lit in ("needs_review", "unmapped", "possible_authority"):
+        assert lit in s                                       # the three enum literals
+    assert "possible_authority is singular" in s.lower()      # singular, not plural
+    assert "tender_source" in s                               # named as forbidden
+    assert "must never be copied into ref.source" in s
+    assert "fixture filenames" in s and "document names" in s
+    assert '"source":"needs_review|unmapped|possible_authority"' in s  # enum-style schema
+
+
 # --------------------------------------------------------------------------
 # Hard reject-to-null — one per forbidden token/phrase
 # --------------------------------------------------------------------------
@@ -328,6 +345,159 @@ def test_canonical_fixture_survives_strict_validation_and_renders():
     assert isinstance(lines, list)
     assert any("ADVISORY (candidates" in ln for ln in lines)
     assert any("Education Law §2-d" in ln for ln in lines)
+
+
+# --------------------------------------------------------------------------
+# Bounded-output ceilings (PR 4) — reject only egregious blowouts (2x targets)
+# --------------------------------------------------------------------------
+
+def _ref(src="needs_review", page=1):
+    return {"source": src, "page": page}
+
+
+def _grp(theme="Theme", expl="Short explanation.", refs=None):
+    return {"theme": theme, "explanation": expl,
+            "member_refs": refs if refs is not None else [_ref()]}
+
+
+def _note(kind="mwbe", rationale="Short rationale.", conf="low"):
+    return {"ref": _ref(), "suggested_kind": kind, "rationale": rationale,
+            "confidence": conf}
+
+
+def _bk(auth="Some Authority", why="Short why.", conf="low"):
+    return {"suggested_authority": auth, "why": why, "confidence": conf,
+            "action": "candidate for human capture"}
+
+
+def _adv(ng=1, ni=1, nb=1):
+    return {"grouping": [_grp() for _ in range(ng)],
+            "item_notes": [_note() for _ in range(ni)],
+            "coverage_backlog_candidates": [_bk() for _ in range(nb)]}
+
+
+def test_compact_advisory_at_prompt_target_survives_and_renders():
+    out = _adv(CA.TARGET_GROUPINGS, CA.TARGET_ITEM_NOTES, CA.TARGET_BACKLOG_CANDIDATES)
+    adv = _advise_out(out)
+    assert isinstance(adv, dict)
+    lines = CA.render_advisory(adv)                       # must not raise
+    assert any("ADVISORY (candidates" in ln for ln in lines)
+
+
+def test_between_target_and_ceiling_survives():
+    out = _adv(ng=CA.TARGET_GROUPINGS + 1)                # count between target & ceiling
+    out["grouping"][0]["explanation"] = "y" * (CA.TARGET_EXPLANATION_CHARS + 5)
+    assert CA.TARGET_EXPLANATION_CHARS < len(out["grouping"][0]["explanation"]) \
+        <= CA.MAX_EXPLANATION_CHARS
+    assert isinstance(_advise_out(out), dict)             # survives (drift allowed)
+
+
+def test_above_ceiling_fixture_rejects_to_null():
+    out = _adv(ng=CA.MAX_GROUPINGS + 1)
+    out["grouping"][0]["theme"] = "t" * (CA.MAX_THEME_CHARS + 1)
+    assert _advise_out(out) is None
+
+
+def test_grouping_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(ng=CA.MAX_GROUPINGS)), dict)
+    assert _advise_out(_adv(ng=CA.MAX_GROUPINGS + 1)) is None
+
+
+def test_item_notes_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(ni=CA.MAX_ITEM_NOTES)), dict)
+    assert _advise_out(_adv(ni=CA.MAX_ITEM_NOTES + 1)) is None
+
+
+def test_backlog_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(nb=CA.MAX_BACKLOG_CANDIDATES)), dict)
+    assert _advise_out(_adv(nb=CA.MAX_BACKLOG_CANDIDATES + 1)) is None
+
+
+def _mut(setter):
+    out = _adv()
+    setter(out)
+    return out
+
+
+def test_theme_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "theme", "t" * CA.MAX_THEME_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "theme", "t" * (CA.MAX_THEME_CHARS + 1)))) is None
+
+
+def test_explanation_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * CA.MAX_EXPLANATION_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * (CA.MAX_EXPLANATION_CHARS + 1)))) is None
+
+
+def test_suggested_kind_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "suggested_kind", "k" * CA.MAX_SUGGESTED_KIND_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "suggested_kind", "k" * (CA.MAX_SUGGESTED_KIND_CHARS + 1)))) is None
+
+
+def test_rationale_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "rationale", "r" * CA.MAX_RATIONALE_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "rationale", "r" * (CA.MAX_RATIONALE_CHARS + 1)))) is None
+
+
+def test_suggested_authority_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0]
+        .__setitem__("suggested_authority", "a" * CA.MAX_AUTHORITY_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0].__setitem__(
+        "suggested_authority", "a" * (CA.MAX_AUTHORITY_CHARS + 1)))) is None
+
+
+def test_why_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0]
+        .__setitem__("why", "w" * CA.MAX_WHY_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0].__setitem__(
+        "why", "w" * (CA.MAX_WHY_CHARS + 1)))) is None
+
+
+def test_no_partial_salvage_one_over_ceiling_entry_nulls_all():
+    out = _adv(ng=3)                                      # 3 valid groupings...
+    out["grouping"][1]["theme"] = "t" * (CA.MAX_THEME_CHARS + 1)   # ...one over ceiling
+    assert _advise_out(out) is None                      # whole advisory nulled
+
+
+def test_diag_ceiling_reasons_report_exact_ceiling_and_value():
+    over = _adv(ng=CA.MAX_GROUPINGS + 1)
+    with _dummy_key():
+        d = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(over), stop_reason="end_turn")))
+    assert d["null_reason"] == "validation_error"
+    assert d["validation_reason"] == "grouping_count_exceeds_ceiling: %d > %d" % (
+        CA.MAX_GROUPINGS + 1, CA.MAX_GROUPINGS)
+    bad = _mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * (CA.MAX_EXPLANATION_CHARS + 1)))
+    with _dummy_key():
+        d2 = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(bad), stop_reason="end_turn")))
+    assert d2["validation_reason"] == "explanation_exceeds_ceiling: %d > %d" % (
+        CA.MAX_EXPLANATION_CHARS + 1, CA.MAX_EXPLANATION_CHARS)
+
+
+def test_prompt_contains_target_counts_and_concise_instruction():
+    s = CA.SYSTEM
+    assert ("at most %d groupings" % CA.TARGET_GROUPINGS) in s
+    assert ("at most %d item_notes" % CA.TARGET_ITEM_NOTES) in s
+    assert ("at most %d coverage_backlog_candidates" % CA.TARGET_BACKLOG_CANDIDATES) in s
+    assert "one short sentence" in s
+    assert "compact" in s.lower()
+
+
+def test_prompt_contains_confidence_discipline():
+    s = CA.SYSTEM
+    assert "Confidence discipline" in s
+    assert "unless the tender excerpt itself names" in s
+    assert "candidates for human source verification" in s
 
 
 # --------------------------------------------------------------------------
@@ -591,17 +761,47 @@ def test_diag_validation_error_reasons_are_specific():
     o = _good_output(); o["grouping"] = "nope"
     assert _diag(o)["validation_reason"] == "non_list_top_level_value"
     o = _good_output(); o["grouping"][0]["member_refs"][0]["source"] = "bogus"
-    assert _diag(o)["validation_reason"] == "invalid_source"
+    assert _diag(o)["validation_reason"] == "invalid_source: 'bogus'"
     o = _good_output(); o["grouping"][0]["member_refs"][0]["page"] = "1"
     assert _diag(o)["validation_reason"] == "invalid_page"
     o = _good_output(); o["item_notes"][0]["confidence"] = "certain"
-    assert _diag(o)["validation_reason"] == "invalid_confidence"
+    assert _diag(o)["validation_reason"] == "invalid_confidence: 'certain'"
     o = _good_output(); o["coverage_backlog_candidates"][0]["action"] = "auto-add"
-    assert _diag(o)["validation_reason"] == "invalid_backlog_action"
+    assert _diag(o)["validation_reason"] == "invalid_backlog_action: 'auto-add'"
     o = _good_output(); del o["grouping"][0]["explanation"]
     assert _diag(o)["validation_reason"] == "malformed_entry_shape"
     o = _good_output(); o["item_notes"][0]["rationale"] = "the vendor is compliant"
     assert _diag(o)["validation_reason"] == "forbidden_language"
+
+
+def test_enriched_invalid_source_includes_offending_value():
+    o = _good_output()
+    o["grouping"][0]["member_refs"][0]["source"] = "possible_authorities"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_source: 'possible_authorities'"
+
+
+def test_enriched_invalid_confidence_includes_offending_value():
+    o = _good_output()
+    o["item_notes"][0]["confidence"] = "certain"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_confidence: 'certain'"
+
+
+def test_enriched_invalid_backlog_action_includes_offending_value():
+    o = _good_output()
+    o["coverage_backlog_candidates"][0]["action"] = "verify automatically"
+    with _dummy_key():
+        diag = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(o), stop_reason="end_turn")))
+    assert diag["null_reason"] == "validation_error"
+    assert diag["validation_reason"] == "invalid_backlog_action: 'verify automatically'"
 
 
 def test_diag_no_key_returns_no_key_transport_not_called():
