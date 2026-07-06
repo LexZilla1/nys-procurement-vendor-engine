@@ -287,7 +287,23 @@ def test_backlog_action_other_than_expected_rejects():
     assert _advise_out(o) is None
 
 
+def test_missing_grouping_rejects():
+    o = _good_output(); del o["grouping"]
+    assert _advise_out(o) is None
+
+
+def test_missing_item_notes_rejects():
+    o = _good_output(); del o["item_notes"]
+    assert _advise_out(o) is None
+
+
+def test_missing_coverage_backlog_candidates_rejects():
+    o = _good_output(); del o["coverage_backlog_candidates"]
+    assert _advise_out(o) is None
+
+
 def test_valid_empty_lists_survive():
+    # All three required keys present, each an empty list -> valid.
     empty = {"grouping": [], "item_notes": [], "coverage_backlog_candidates": []}
     adv = _advise_out(empty)
     assert isinstance(adv, dict) and adv["disclaimer"] == CA.ADVISORY_DISCLAIMER

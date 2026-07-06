@@ -236,23 +236,25 @@ def _validate(parsed):
     """Return the advisory dict, or None. STRICT — the whole advisory is rejected
     to None on ANY bad shape (no partial salvage). None on:
       * non-dict;
-      * any top-level key outside grouping/item_notes/coverage_backlog_candidates
-        (so a model-emitted 'disclaimer' or extra key nulls);
+      * a top-level key set that is not EXACTLY
+        {grouping, item_notes, coverage_backlog_candidates} — a superset (extra
+        key or a model-emitted 'disclaimer') OR a subset (a missing required key,
+        i.e. truncated/malformed output) both null;
       * any forbidden token/phrase/conclusion anywhere in the output;
       * any top-level value that is not a list;
       * any entry with the wrong key set, wrong type, unknown source, invalid
         confidence, non-int page, or wrong backlog action.
-    Missing top-level keys default to an empty list (empty lists are valid). The
-    wrapper attaches the disclaimer AFTER this; the model never emits it."""
+    All three keys must be present; each may be an empty list. The wrapper
+    attaches the disclaimer AFTER this; the model never emits it."""
     if not isinstance(parsed, dict):
         return None
-    if set(parsed.keys()) - _ALLOWED_TOP:                 # unknown top-level key
+    if set(parsed.keys()) != _ALLOWED_TOP:                # exact key set required
         return None
     if _has_forbidden(json.dumps(parsed, ensure_ascii=False)):
         return None
-    grouping = parsed.get("grouping", [])
-    notes = parsed.get("item_notes", [])
-    backlog = parsed.get("coverage_backlog_candidates", [])
+    grouping = parsed["grouping"]
+    notes = parsed["item_notes"]
+    backlog = parsed["coverage_backlog_candidates"]
     if not (isinstance(grouping, list) and isinstance(notes, list)
             and isinstance(backlog, list)):
         return None
