@@ -230,30 +230,38 @@ _SIGNAL_RE = re.compile(
 # NYS RFQs frequently point to a statutory authority or a form/attachment as an
 # obligation WITHOUT using shall/must language. Those passages used to be
 # silently dropped (no signal + kind "general"). They are now captured — but as
-# an UNCERTAIN "possible authority", held to a narrative guard so a passing
-# citation is not mistaken for a requirement. This is coverage plumbing, not new
-# legal logic: nothing here is scored or grounded.
+# an UNCERTAIN "possible authority", behind FOUR precision filters so PDF line-
+# wrap fragments and bare cross-references do not flood the coverage report:
+#   1. stitch citations split across line breaks BEFORE segmenting;
+#   2. drop dangling citation fragments (start/end mid-citation);
+#   3. require an obligation/review cue (a bare "Article 15" is not a duty);
+#   4. dedupe by normalized authority reference (one law cited 12× counts once).
+# This is coverage plumbing, not new legal logic: nothing here is scored/grounded.
 _AUTHORITY_REF_RE = re.compile(
-    r"(?:§+\s*\d|"                                   # § 314, §§ 139-d
+    r"(?:§+\s*\d+[\w.\-]*|"                          # § 314, §§ 139-d, § 2-d, § 121.6
     r"\bArticle\s+\d+\b|"                            # Article 8
-    r"\b(?:State\s+Finance|Executive|Labor|Tax|General\s+Municipal|"
+    r"\b(?:State\s+Finance|Executive|Labor|Tax|Education|General\s+Municipal|"
     r"Public\s+Officers|Economic\s+Development|Environmental\s+Conservation)"
     r"\s+Law\b|"                                     # named NYS laws
     r"\b(?:OSC|OGS|ESD|NYSCR)\b|"                    # NYS agency short codes
     r"\b(?:Attachment|Appendix|Exhibit|Schedule|Form)\s+"
-    r"[A-Z0-9][A-Z0-9.\-]*)",                        # form / attachment codes
-    re.IGNORECASE)
+    r"(?-i:[A-Z0-9][A-Z0-9.\-]*))",                  # form/attachment CODES (not
+    re.IGNORECASE)                                   # a lowercase word: "Form is")
 
-# A vendor-directed cue — the authority reference bites on the BIDDER.
-_VENDOR_CUE_RE = re.compile(
-    r"\b(bidder|contractor|vendor|proposer|offeror|awardee|"
+# An obligation / review cue — the reference plausibly imposes or governs a duty
+# (mandatory modals + obligation verbs). A bare noun is NOT enough; a cue-less
+# keyword hit ("the agency values workers' compensation") never qualifies.
+_OBLIGATION_CUE_RE = re.compile(
+    r"\b(shall|must|is\s+required\s+to|are\s+required\s+to|will\s+be\s+required|"
+    r"required\s+to|responsible\s+for|as\s+a\s+condition\s+of|subject\s+to|"
     r"submit|certif|comply|complet|provide|furnish|file|register|include|"
-    r"execute|maintain|hold|deliver|attach|enclose|accompan|warrant|"
-    r"acknowledg)\w*", re.IGNORECASE)
+    r"execute|maintain|hold|deliver|attach(?!ment)|enclose|accompan|agree|"
+    r"warrant|acknowledg|sign|review|governed\s+by|in\s+accordance\s+with)\w*",
+    re.IGNORECASE)
 
 # A narrative frame — the authority is cited to explain the ISSUER'S action, not
 # to impose a duty on the bidder ("Pursuant to State Finance Law, the agency
-# issues this RFQ"). Narrative frame + no vendor cue → not a requirement.
+# issues this RFQ"). Narrative frame + no obligation cue → not a requirement.
 _ISSUER_NARRATIVE_RE = re.compile(
     r"\b(the\s+agency|the\s+state|the\s+department|the\s+office|the\s+division|"
     r"the\s+comptroller|this\s+solicitation|this\s+rfq|this\s+rfp|"
@@ -261,11 +269,58 @@ _ISSUER_NARRATIVE_RE = re.compile(
     r"seeks?|invites?|solicits?|is\s+seeking|is\s+issued|are\s+issued|"
     r"publish(?:es)?|releas(?:es)?)\b", re.IGNORECASE)
 
+# A dangling line-wrap fragment: begins mid-citation ("d and § 121.6 of",
+# "A of the New York State Executive Law") or ends mid-citation ("Education Law
+# § 2-", "... pursuant to"). Such a segment is PDF noise, not a whole reference.
+# Begins mid-citation ("d and § 121.6 of", "A of the ... Law") OR begins with a
+# lowercase letter — a whole reference/sentence starts with a capital, "§", a
+# digit or a paren, so a lowercase start is a wrapped-line fragment ("iled with
+# OSC when the contract...").
+_FRAG_HEAD_RE = re.compile(
+    r"^\W*(?:[A-Za-z]{1,3}\s+(?:of|and|or|the)\b|(?-i:[a-z]))", re.IGNORECASE)
+_FRAG_TAIL_RE = re.compile(
+    r"(?:§+\s*\d[\w.]*-|§+|\b(?:of|and|or|the|to|by|under|pursuant\s+to))"
+    r"\s*[)\.\,;:\s]*$", re.IGNORECASE)
+
+
+def has_obligation_cue(text):
+    """True when the passage carries a mandatory modal or an obligation verb —
+    used both to gate authority capture and to qualify a VERIFIED_MATCH."""
+    return bool(_OBLIGATION_CUE_RE.search(text))
+
+
+def _looks_fragmentary(seg):
+    """True when a candidate reference is a line-wrap fragment (starts or ends
+    mid-citation) rather than a whole, standalone reference."""
+    return bool(_FRAG_HEAD_RE.search(seg) or _FRAG_TAIL_RE.search(seg))
+
 
 def _is_passing_narrative(seg):
     """True when an authority reference is a passing issuer-narrative mention
-    (frame present, no bidder-directed cue) — i.e. NOT a bidder obligation."""
-    return bool(_ISSUER_NARRATIVE_RE.search(seg)) and not _VENDOR_CUE_RE.search(seg)
+    (frame present, no obligation cue) — i.e. NOT a bidder obligation."""
+    return bool(_ISSUER_NARRATIVE_RE.search(seg)) and not has_obligation_cue(seg)
+
+
+def _stitch_citations(text):
+    """Rejoin a statutory citation split across a PDF line break BEFORE the text
+    is segmented, so one wrapped citation is captured whole (or not at all) rather
+    than as several fragments. Conservative — only touches `§` contexts, so text
+    with no section symbols (e.g. the synthetic sample) is unchanged."""
+    # "§ 2-\nd" → "§ 2-d" (hyphen-split section id)
+    text = re.sub(r"(§+\s*\d+[\w.]*)-\n\s*([A-Za-z0-9])", r"\1-\2", text)
+    # "Education Law §\n2-d" → "Education Law § 2-d" (symbol split from number)
+    text = re.sub(r"(§+)\s*\n\s*(\d)", r"\1 \2", text)
+    # "... § 2-d\nand § 121.6 ..." → join a citation continued by "and/or § ..."
+    text = re.sub(r"\n\s*(?=(?:and|or)\s+§)", " ", text, flags=re.IGNORECASE)
+    return text
+
+
+def _authority_norm(seg):
+    """A normalized key for the authority reference(s) in `seg`, so repeats of the
+    same citation collapse to one capture (e.g. Education Law § 2-d cited 12×)."""
+    toks = [re.sub(r"\s+", " ", m.group(0)).strip().lower()
+            for m in _AUTHORITY_REF_RE.finditer(seg)]
+    return frozenset(toks)
 
 # Domain buckets. The first matching keyword wins; order matters (specific
 # before general). "kind" lets bid_readiness map a passage to a known rule.
@@ -352,15 +407,24 @@ def find_requirements(extracted):
     rows = []
     seen = set()
     for idx, page_text in enumerate(extracted.get("pages", []), start=1):
-        for seg in _segments(page_text):
+        for seg in _segments(_stitch_citations(page_text)):
             kind = _classify(seg)
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":
-                # Silent-drop fix (PR #45): rescue an authority/form reference
-                # that plausibly imposes an obligation; still drop a passing
-                # issuer-narrative citation (avoids spurious UNMAPPED items).
-                if _AUTHORITY_REF_RE.search(seg) and not _is_passing_narrative(seg):
-                    key = (seg.lower(), "authority_reference")
+                # Silent-drop fix (PR #45): rescue a WHOLE authority/form
+                # reference that plausibly imposes an obligation. Four precision
+                # filters keep PDF line-wrap fragments and bare cross-references
+                # out: an obligation cue is required, passing narrative and
+                # dangling fragments are dropped, and repeats of the same
+                # normalized citation collapse to one capture.
+                # Require the cue OUTSIDE the authority span, so a form word like
+                # "Attachment" cannot supply its own cue.
+                residual = _AUTHORITY_REF_RE.sub(" ", seg)
+                if (_AUTHORITY_REF_RE.search(seg)
+                        and has_obligation_cue(residual)
+                        and not _is_passing_narrative(seg)
+                        and not _looks_fragmentary(seg)):
+                    key = ("authority_reference", _authority_norm(seg))
                     if key not in seen:
                         seen.add(key)
                         rows.append({"text": seg, "page": idx, "kind": kind,

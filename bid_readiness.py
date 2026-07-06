@@ -33,6 +33,7 @@ import sys
 
 from validator import GoldenCopy, FAIL, WARN, PASS, INFO
 from engine import golden_status as gs
+from tender_extractor import has_obligation_cue
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -456,10 +457,14 @@ class RequirementRow:
 
     @property
     def coverage(self):
-        """Reliability/coverage status of this MAPPED requirement: VERIFIED_MATCH
-        when golden-copy grounded, else NEEDS_REVIEW (kind-mapped but not verified
-        against golden copy). Not a legal conclusion."""
-        return VERIFIED_MATCH if self.grounding else NEEDS_REVIEW
+        """Reliability/coverage status of this MAPPED requirement. VERIFIED_MATCH
+        demands BOTH (a) a golden-copy-grounded rule kind AND (b) an obligation
+        cue in THIS RFQ passage — so a cue-less keyword hit (e.g. a passing
+        "workers' compensation" mention) inherits the rule's grounding but stays
+        NEEDS_REVIEW, never a confident VERIFIED_MATCH. Not a legal conclusion."""
+        if self.grounding and has_obligation_cue(self.tender_excerpt):
+            return VERIFIED_MATCH
+        return NEEDS_REVIEW
 
     def to_dict(self):
         d = {
@@ -580,7 +585,7 @@ class BidReadinessReport:
         for r in self.rows:
             if r.status == NA:
                 continue
-            (verified if r.grounding else needs_review).append(r)
+            (verified if r.coverage == VERIFIED_MATCH else needs_review).append(r)
         return verified, needs_review
 
     @property

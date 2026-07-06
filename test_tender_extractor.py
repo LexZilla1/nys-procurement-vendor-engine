@@ -130,19 +130,70 @@ def _reqs(*lines):
     return TE.find_requirements(ex)
 
 
-def test_authority_reference_without_mandatory_language_is_captured():
-    """An authority/form reference with no shall/must and no mapped domain used
-    to be silently dropped; it is now captured as a possible-authority."""
-    reqs = _reqs("Environmental Conservation Law § 17-0303 applies to this project.")
+def test_authority_reference_with_cue_but_no_mandatory_language_is_captured():
+    """An authority reference with an obligation cue but no shall/must and no
+    mapped domain used to be silently dropped; it is now captured."""
+    reqs = _reqs("Vendors register under Environmental Conservation Law § 17-0303.")
     auth = [r for r in reqs if r.get("capture") == "authority_reference"]
-    assert auth, "authority reference should be captured, not dropped"
+    assert auth, "cued authority reference should be captured, not dropped"
     assert "Environmental Conservation Law" in auth[0]["text"]
 
 
-def test_form_attachment_reference_is_captured():
-    reqs = _reqs("All submissions are governed by Appendix B.")
+def test_form_attachment_reference_with_cue_is_captured():
+    reqs = _reqs("All submissions are governed by Appendix B.")     # 'governed by' cue
     auth = [r for r in reqs if r.get("capture") == "authority_reference"]
     assert auth and "Appendix B" in auth[0]["text"]
+
+
+def test_bare_authority_or_form_reference_without_cue_is_dropped():
+    """Refinement 3 — a bare authority/form reference with NO obligation cue is
+    not a duty and must not be captured (kills 'Article 15', '(See Attachment A)')."""
+    for line in ("Article 15", "Article 3", "(See Attachment A).",
+                 "The program operates under Executive Law generally."):
+        reqs = _reqs(line)
+        assert [r for r in reqs if r.get("capture") == "authority_reference"] == [], \
+            line
+
+
+def test_real_pdf_wrap_fragments_are_dropped():
+    """Refinement 1+2 — the actual PDF line-wrap fragments found in
+    rfp25003mediation must NOT each become a possible-authority."""
+    fragments = ["Education Law § 2-", "d and § 121.6 of",
+                 "Pursuant to Education Law § 2-",
+                 "A of the New York State Executive Law"]
+    for frag in fragments:
+        reqs = _reqs(frag)
+        assert [r for r in reqs if r.get("capture") == "authority_reference"] == [], \
+            frag
+
+
+def test_form_code_pattern_does_not_match_lowercase_word():
+    """'Form is completed' is not a form CODE — the code must be uppercase/digit."""
+    assert not TE._AUTHORITY_REF_RE.search("the form is completed by the vendor")
+    assert TE._AUTHORITY_REF_RE.search("submit Form ST-220 with the bid")
+
+
+def test_wrapped_citation_is_stitched_before_capture():
+    """Refinement 1 — a citation split across a line break is rejoined so it is
+    captured once as a whole reference rather than as two fragments."""
+    page = "The contractor certifies compliance with Education Law § 2-\nd and § 121.6."
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    auth = [r for r in reqs if r.get("capture") == "authority_reference"]
+    assert auth, "stitched citation should be captured"
+    assert "§ 2-d" in auth[0]["text"]                  # hyphen-split id rejoined
+
+
+def test_repeated_authority_is_deduped_by_normalized_reference():
+    """Refinement 4 — the same citation repeated across the document collapses to
+    a single possible-authority capture."""
+    page = "\n".join(
+        ["Contractor certifies compliance with Education Law § 2-d for record %d." % i
+         for i in range(5)])
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    auth = [r for r in reqs if r.get("capture") == "authority_reference"]
+    assert len(auth) == 1, [r["text"] for r in auth]
 
 
 def test_passing_narrative_authority_mention_is_not_captured():

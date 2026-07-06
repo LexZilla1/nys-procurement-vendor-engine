@@ -566,7 +566,7 @@ def test_one_needs_review_item_forces_coverage_incomplete():
 def test_unmapped_form_certification_forces_coverage_incomplete():
     """An RFQ form/authority reference not mapped to a verified rule forces the
     gate False (via UNMAPPED or the possible-authority bucket)."""
-    rep = _mk(["Environmental Conservation Law § 17-0303 applies to this project."])
+    rep = _mk(["Vendors register under Environmental Conservation Law § 17-0303."])
     assert rep.possible_authorities                        # captured
     assert rep.coverage_counts[BR.UNMAPPED] >= 1
     assert rep.coverage_complete is False
@@ -575,12 +575,33 @@ def test_unmapped_form_certification_forces_coverage_incomplete():
 def test_unmapped_authority_appears_in_gap_report():
     """An unmapped authority reference is surfaced (possible-authority bucket),
     both in the JSON and rendered output — never silently dropped."""
-    rep = _mk(["Environmental Conservation Law § 17-0303 applies to this project."])
+    rep = _mk(["Vendors register under Environmental Conservation Law § 17-0303."])
     d = rep.to_dict()
     assert d["coverage"]["possible_authorities"]["detected"] >= 1
     out = BR.render_bid_readiness(rep)
     assert "POSSIBLE AUTHORITIES REFERENCED" in out
     assert "Environmental Conservation Law" in out
+
+
+def test_cueless_grounded_keyword_hit_is_not_verified_match():
+    """Item C regression: a grounded rule KIND reached by an incidental keyword
+    with NO obligation cue in the passage must NOT become VERIFIED_MATCH — it
+    inherits nothing and stays NEEDS_REVIEW."""
+    rep = _mk(["The agency deeply values the workers' compensation of its own staff."])
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"]
+    assert wc, "the keyword still maps to a row (not dropped)"
+    assert wc[0].grounding is not None                     # grounded KIND...
+    assert wc[0].coverage == BR.NEEDS_REVIEW               # ...but cue-less → not verified
+    assert wc[0].coverage != BR.VERIFIED_MATCH
+
+
+def test_verified_match_requires_obligation_cue_in_passage():
+    """VERIFIED_MATCH demands BOTH a grounded kind AND an obligation cue in this
+    passage; the same grounded kind WITH a cue is VERIFIED_MATCH."""
+    cued = _mk(["Contractors must maintain workers' compensation coverage."])
+    wc = [r for r in cued.rows if r.kind == "insurance_workers"][0]
+    assert wc.grounding is not None and BR.has_obligation_cue(wc.tender_excerpt)
+    assert wc.coverage == BR.VERIFIED_MATCH
 
 
 def test_passing_narrative_authority_makes_no_spurious_unmapped():
