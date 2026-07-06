@@ -120,6 +120,60 @@ def test_pdf_string_unescape_octal_and_parens():
     assert TE._unescape_pdf_string(r"\101") == "A"  # octal 101 = 'A'
 
 
+# --------------------------------------------------------------------------
+# Silent-drop fix (PR #45) — authority/form references without shall/must
+# --------------------------------------------------------------------------
+
+def _reqs(*lines):
+    ex = {"pages": ["\n".join(lines)], "page_count": 1, "source": "x",
+          "has_text_layer": True}
+    return TE.find_requirements(ex)
+
+
+def test_authority_reference_without_mandatory_language_is_captured():
+    """An authority/form reference with no shall/must and no mapped domain used
+    to be silently dropped; it is now captured as a possible-authority."""
+    reqs = _reqs("Environmental Conservation Law § 17-0303 applies to this project.")
+    auth = [r for r in reqs if r.get("capture") == "authority_reference"]
+    assert auth, "authority reference should be captured, not dropped"
+    assert "Environmental Conservation Law" in auth[0]["text"]
+
+
+def test_form_attachment_reference_is_captured():
+    reqs = _reqs("All submissions are governed by Appendix B.")
+    auth = [r for r in reqs if r.get("capture") == "authority_reference"]
+    assert auth and "Appendix B" in auth[0]["text"]
+
+
+def test_passing_narrative_authority_mention_is_not_captured():
+    """PRECISION: an authority cited only in passing narrative (the issuer's
+    action, no bidder duty) must NOT generate a spurious requirement."""
+    seg = "Pursuant to State Finance Law, the agency issues this RFQ."
+    reqs = _reqs(seg)
+    assert reqs == [], reqs                          # no requirement at all
+    assert TE._is_passing_narrative(seg)             # classified as narrative
+    assert TE._AUTHORITY_REF_RE.search(seg)          # (the authority IS present)
+
+
+def test_authority_reference_with_vendor_cue_is_not_treated_as_narrative():
+    """A bidder-directed cue defeats the narrative guard even with a 'pursuant to'
+    frame — the reference plausibly imposes an obligation and is captured."""
+    seg = "Pursuant to Labor Law § 220, the contractor must register."
+    # This one has 'must' → captured via the normal signal path (not dropped).
+    reqs = _reqs(seg)
+    assert reqs, "a bidder-directed authority obligation must not be dropped"
+    assert not TE._is_passing_narrative(seg)
+
+
+def test_existing_signal_captures_still_tagged_signal():
+    ex = TE.extract(PDF)
+    reqs = TE.find_requirements(ex)
+    assert reqs and all(r.get("capture") in ("signal", "authority_reference")
+                        for r in reqs)
+    # The real sample has no residual possible-authority captures.
+    assert all(r.get("capture") == "signal" for r in reqs)
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]

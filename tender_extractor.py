@@ -226,6 +226,47 @@ _SIGNAL_RE = re.compile(
     r"required to|responsible for|no later than|prior to award|"
     r"as a condition of)\b", re.IGNORECASE)
 
+# --- Silent-drop fix (PR #45): authority / form references without shall/must --
+# NYS RFQs frequently point to a statutory authority or a form/attachment as an
+# obligation WITHOUT using shall/must language. Those passages used to be
+# silently dropped (no signal + kind "general"). They are now captured — but as
+# an UNCERTAIN "possible authority", held to a narrative guard so a passing
+# citation is not mistaken for a requirement. This is coverage plumbing, not new
+# legal logic: nothing here is scored or grounded.
+_AUTHORITY_REF_RE = re.compile(
+    r"(?:§+\s*\d|"                                   # § 314, §§ 139-d
+    r"\bArticle\s+\d+\b|"                            # Article 8
+    r"\b(?:State\s+Finance|Executive|Labor|Tax|General\s+Municipal|"
+    r"Public\s+Officers|Economic\s+Development|Environmental\s+Conservation)"
+    r"\s+Law\b|"                                     # named NYS laws
+    r"\b(?:OSC|OGS|ESD|NYSCR)\b|"                    # NYS agency short codes
+    r"\b(?:Attachment|Appendix|Exhibit|Schedule|Form)\s+"
+    r"[A-Z0-9][A-Z0-9.\-]*)",                        # form / attachment codes
+    re.IGNORECASE)
+
+# A vendor-directed cue — the authority reference bites on the BIDDER.
+_VENDOR_CUE_RE = re.compile(
+    r"\b(bidder|contractor|vendor|proposer|offeror|awardee|"
+    r"submit|certif|comply|complet|provide|furnish|file|register|include|"
+    r"execute|maintain|hold|deliver|attach|enclose|accompan|warrant|"
+    r"acknowledg)\w*", re.IGNORECASE)
+
+# A narrative frame — the authority is cited to explain the ISSUER'S action, not
+# to impose a duty on the bidder ("Pursuant to State Finance Law, the agency
+# issues this RFQ"). Narrative frame + no vendor cue → not a requirement.
+_ISSUER_NARRATIVE_RE = re.compile(
+    r"\b(the\s+agency|the\s+state|the\s+department|the\s+office|the\s+division|"
+    r"the\s+comptroller|this\s+solicitation|this\s+rfq|this\s+rfp|"
+    r"this\s+procurement|this\s+ifb)\b.*\b(issue|issues|issued|issuing|"
+    r"seeks?|invites?|solicits?|is\s+seeking|is\s+issued|are\s+issued|"
+    r"publish(?:es)?|releas(?:es)?)\b", re.IGNORECASE)
+
+
+def _is_passing_narrative(seg):
+    """True when an authority reference is a passing issuer-narrative mention
+    (frame present, no bidder-directed cue) — i.e. NOT a bidder obligation."""
+    return bool(_ISSUER_NARRATIVE_RE.search(seg)) and not _VENDOR_CUE_RE.search(seg)
+
 # Domain buckets. The first matching keyword wins; order matters (specific
 # before general). "kind" lets bid_readiness map a passage to a known rule.
 _KIND_KEYWORDS = [
@@ -300,9 +341,13 @@ def _segments(page_text):
 def find_requirements(extracted):
     """From an extract() result, return requirement rows.
 
-    Each row: {"text", "page", "kind"} where text is verbatim tender language
-    and page is 1-based. A passage qualifies if it uses mandatory language OR
-    names a known compliance domain (so a terse "MWBE goal: 30%" is not missed).
+    Each row: {"text", "page", "kind"[, "capture"]} where text is verbatim
+    tender language and page is 1-based. A passage qualifies if it uses mandatory
+    language OR names a known compliance domain (so a terse "MWBE goal: 30%" is
+    not missed). A residual authority/form reference that carries no mandatory
+    language and maps to no domain is captured as an uncertain "possible
+    authority" (capture="authority_reference") instead of being silently dropped
+    — unless it is a passing issuer-narrative mention.
     """
     rows = []
     seen = set()
@@ -311,12 +356,22 @@ def find_requirements(extracted):
             kind = _classify(seg)
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":
+                # Silent-drop fix (PR #45): rescue an authority/form reference
+                # that plausibly imposes an obligation; still drop a passing
+                # issuer-narrative citation (avoids spurious UNMAPPED items).
+                if _AUTHORITY_REF_RE.search(seg) and not _is_passing_narrative(seg):
+                    key = (seg.lower(), "authority_reference")
+                    if key not in seen:
+                        seen.add(key)
+                        rows.append({"text": seg, "page": idx, "kind": kind,
+                                     "capture": "authority_reference"})
                 continue
             key = (seg.lower(), kind)
             if key in seen:
                 continue
             seen.add(key)
-            rows.append({"text": seg, "page": idx, "kind": kind})
+            rows.append({"text": seg, "page": idx, "kind": kind,
+                         "capture": "signal"})
     return rows
 
 
