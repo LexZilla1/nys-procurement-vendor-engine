@@ -44,10 +44,12 @@ def main():
               "    ANTHROPIC_API_KEY=sk-ant-... python3 scripts/smoke_triage_llm.py",
               file=sys.stderr)
         return 2
+    from llm_config import get_anthropic_model  # noqa: E402
+    model = get_anthropic_model()
     print("Sample ad (issuer=%r, source will be non-NYSCR -> Step 4 live call):\n"
           % SAMPLE_AD["issuer"])
     print(SAMPLE_AD["text"])
-    print("\n--- one real claude-sonnet-4-6 call via Step 4 ---\n")
+    print("\n--- one real %s call via Step 4 ---\n" % model)
     result = T.triage(SAMPLE_AD)          # no llm injected -> live classifier
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
