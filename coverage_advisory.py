@@ -31,7 +31,7 @@ SRC_UNMAPPED = "unmapped"
 SRC_POSSIBLE_AUTHORITY = "possible_authority"
 
 MODEL = "claude-sonnet-4-6"      # default only; live model via _resolve_model()
-_MAX_TOKENS = 1024
+_MAX_TOKENS = 4096
 _TIMEOUT_S = 30
 MAX_RETRIES = 2
 
