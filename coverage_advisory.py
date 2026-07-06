@@ -35,6 +35,30 @@ _MAX_TOKENS = 8192
 _TIMEOUT_S = 240
 MAX_RETRIES = 2
 
+# Bounded-output shaping. TARGET_* are the COMPACT sizes requested in the prompt;
+# MAX_* are the validator CEILINGS (2x targets). Validation rejects only egregious
+# blowouts above the ceiling — never minor nondeterministic prose drift — so style
+# variance does not reintroduce chronic nulls as a self-inflicted failure mode.
+TARGET_GROUPINGS = 5
+TARGET_ITEM_NOTES = 8
+TARGET_BACKLOG_CANDIDATES = 5
+TARGET_THEME_CHARS = 120
+TARGET_EXPLANATION_CHARS = 260
+TARGET_SUGGESTED_KIND_CHARS = 80
+TARGET_RATIONALE_CHARS = 260
+TARGET_AUTHORITY_CHARS = 160
+TARGET_WHY_CHARS = 260
+
+MAX_GROUPINGS = 10
+MAX_ITEM_NOTES = 16
+MAX_BACKLOG_CANDIDATES = 10
+MAX_THEME_CHARS = 240
+MAX_EXPLANATION_CHARS = 520
+MAX_SUGGESTED_KIND_CHARS = 160
+MAX_RATIONALE_CHARS = 520
+MAX_AUTHORITY_CHARS = 320
+MAX_WHY_CHARS = 520
+
 # Transient failure classes worth retrying (mirrors pipeline/llm_classifier).
 _TRANSIENT_NAMES = frozenset({
     "APITimeoutError", "APIConnectionError", "RateLimitError",
@@ -108,6 +132,21 @@ def build_payload(report):
 # model describes candidates only; it never verifies, concludes, or overrides.
 # ---------------------------------------------------------------------------
 
+# Compact-output + confidence-discipline rules, pinned to the TARGET_* constants.
+# Built with %d (no literal braces) and concatenated into SYSTEM so the JSON
+# schema example's braces are never interpreted by str.format.
+_COMPACT_RULES = (
+    "- Output MUST be compact and vendor-usable: at most %d groupings, at most "
+    "%d item_notes, and at most %d coverage_backlog_candidates. Use concise "
+    "phrases, not long paragraphs; each explanation, rationale, and why MUST be "
+    "one short sentence. Keep only the most useful items; do not pad.\n"
+    "- Confidence discipline: do NOT assign high confidence to an authority "
+    "citation unless the tender excerpt itself names that authority; prefer "
+    "medium or low confidence for any inferred authority or backlog candidate. "
+    "All backlog authorities are candidates for human source verification, not "
+    "verified citations.\n"
+    % (TARGET_GROUPINGS, TARGET_ITEM_NOTES, TARGET_BACKLOG_CANDIDATES))
+
 SYSTEM = (
     "You assist a New York State procurement bid-readiness tool. You are given "
     "reliability/coverage items already computed by deterministic code: RFQ "
@@ -134,6 +173,7 @@ SYSTEM = (
     "Do NOT use tender_source, tender_file, fixture filenames, document names, or "
     "page labels as a ref source; the top-level tender file/document metadata is "
     "document metadata only and must never be copied into ref.source.\n"
+    + _COMPACT_RULES +
     "Respond in JSON only, with exactly these keys: "
     '{"grouping":[{"theme":str,'
     '"member_refs":[{"source":"needs_review|unmapped|possible_authority","page":int}],'
@@ -220,6 +260,8 @@ def _valid_grouping(e):
         return False
     if not (_is_str(e["theme"]) and _is_str(e["explanation"])):
         return False
+    if len(e["theme"]) > MAX_THEME_CHARS or len(e["explanation"]) > MAX_EXPLANATION_CHARS:
+        return False
     mr = e["member_refs"]
     return isinstance(mr, list) and all(_valid_ref(m) for m in mr)
 
@@ -228,16 +270,25 @@ def _valid_item_note(e):
     if not (isinstance(e, dict)
             and set(e) == {"ref", "suggested_kind", "rationale", "confidence"}):
         return False
-    return (_valid_ref(e["ref"]) and _is_str(e["suggested_kind"])
-            and _is_str(e["rationale"]) and e["confidence"] in _CONF)
+    if not (_valid_ref(e["ref"]) and _is_str(e["suggested_kind"])
+            and _is_str(e["rationale"])):
+        return False
+    if (len(e["suggested_kind"]) > MAX_SUGGESTED_KIND_CHARS
+            or len(e["rationale"]) > MAX_RATIONALE_CHARS):
+        return False
+    return e["confidence"] in _CONF
 
 
 def _valid_backlog(e):
     if not (isinstance(e, dict)
             and set(e) == {"suggested_authority", "why", "confidence", "action"}):
         return False
-    return (_is_str(e["suggested_authority"]) and _is_str(e["why"])
-            and e["confidence"] in _CONF and e["action"] == _BACKLOG_ACTION)
+    if not (_is_str(e["suggested_authority"]) and _is_str(e["why"])):
+        return False
+    if (len(e["suggested_authority"]) > MAX_AUTHORITY_CHARS
+            or len(e["why"]) > MAX_WHY_CHARS):
+        return False
+    return e["confidence"] in _CONF and e["action"] == _BACKLOG_ACTION
 
 
 def _validate(parsed):
@@ -266,6 +317,9 @@ def _validate(parsed):
     if not (isinstance(grouping, list) and isinstance(notes, list)
             and isinstance(backlog, list)):
         return None
+    if (len(grouping) > MAX_GROUPINGS or len(notes) > MAX_ITEM_NOTES
+            or len(backlog) > MAX_BACKLOG_CANDIDATES):
+        return None                                       # egregious blowout only
     if not all(_valid_grouping(e) for e in grouping):
         return None
     if not all(_valid_item_note(e) for e in notes):
@@ -393,11 +447,19 @@ def _ref_reason(v):
     return None
 
 
+def _ceiling(label, n, cap):
+    return "%s_exceeds_ceiling: %d > %d" % (label, n, cap)
+
+
 def _grouping_reason(e):
     if not (isinstance(e, dict) and set(e) == {"theme", "member_refs", "explanation"}
             and _is_str(e["theme"]) and _is_str(e["explanation"])
             and isinstance(e["member_refs"], list)):
         return "malformed_entry_shape"
+    if len(e["theme"]) > MAX_THEME_CHARS:
+        return _ceiling("theme", len(e["theme"]), MAX_THEME_CHARS)
+    if len(e["explanation"]) > MAX_EXPLANATION_CHARS:
+        return _ceiling("explanation", len(e["explanation"]), MAX_EXPLANATION_CHARS)
     for m in e["member_refs"]:
         r = _ref_reason(m)
         if r:
@@ -414,6 +476,10 @@ def _item_note_reason(e):
         return r
     if not (_is_str(e["suggested_kind"]) and _is_str(e["rationale"])):
         return "malformed_entry_shape"
+    if len(e["suggested_kind"]) > MAX_SUGGESTED_KIND_CHARS:
+        return _ceiling("suggested_kind", len(e["suggested_kind"]), MAX_SUGGESTED_KIND_CHARS)
+    if len(e["rationale"]) > MAX_RATIONALE_CHARS:
+        return _ceiling("rationale", len(e["rationale"]), MAX_RATIONALE_CHARS)
     if e["confidence"] not in _CONF:
         return "invalid_confidence: %r" % (e["confidence"],)   # diagnostics: show value
     return None
@@ -425,6 +491,11 @@ def _backlog_reason(e):
         return "malformed_entry_shape"
     if not (_is_str(e["suggested_authority"]) and _is_str(e["why"])):
         return "malformed_entry_shape"
+    if len(e["suggested_authority"]) > MAX_AUTHORITY_CHARS:
+        return _ceiling("suggested_authority", len(e["suggested_authority"]),
+                        MAX_AUTHORITY_CHARS)
+    if len(e["why"]) > MAX_WHY_CHARS:
+        return _ceiling("why", len(e["why"]), MAX_WHY_CHARS)
     if e["confidence"] not in _CONF:
         return "invalid_confidence: %r" % (e["confidence"],)   # diagnostics: show value
     if e["action"] != _BACKLOG_ACTION:
@@ -448,6 +519,14 @@ def _validation_reason(parsed):
     for k in ("grouping", "item_notes", "coverage_backlog_candidates"):
         if not isinstance(parsed[k], list):
             return "non_list_top_level_value"
+    if len(parsed["grouping"]) > MAX_GROUPINGS:
+        return _ceiling("grouping_count", len(parsed["grouping"]), MAX_GROUPINGS)
+    if len(parsed["item_notes"]) > MAX_ITEM_NOTES:
+        return _ceiling("item_notes_count", len(parsed["item_notes"]), MAX_ITEM_NOTES)
+    if len(parsed["coverage_backlog_candidates"]) > MAX_BACKLOG_CANDIDATES:
+        return _ceiling("backlog_count",
+                        len(parsed["coverage_backlog_candidates"]),
+                        MAX_BACKLOG_CANDIDATES)
     for e in parsed["grouping"]:
         r = _grouping_reason(e)
         if r:

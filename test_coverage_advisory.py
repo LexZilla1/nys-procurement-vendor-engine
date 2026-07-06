@@ -348,6 +348,159 @@ def test_canonical_fixture_survives_strict_validation_and_renders():
 
 
 # --------------------------------------------------------------------------
+# Bounded-output ceilings (PR 4) — reject only egregious blowouts (2x targets)
+# --------------------------------------------------------------------------
+
+def _ref(src="needs_review", page=1):
+    return {"source": src, "page": page}
+
+
+def _grp(theme="Theme", expl="Short explanation.", refs=None):
+    return {"theme": theme, "explanation": expl,
+            "member_refs": refs if refs is not None else [_ref()]}
+
+
+def _note(kind="mwbe", rationale="Short rationale.", conf="low"):
+    return {"ref": _ref(), "suggested_kind": kind, "rationale": rationale,
+            "confidence": conf}
+
+
+def _bk(auth="Some Authority", why="Short why.", conf="low"):
+    return {"suggested_authority": auth, "why": why, "confidence": conf,
+            "action": "candidate for human capture"}
+
+
+def _adv(ng=1, ni=1, nb=1):
+    return {"grouping": [_grp() for _ in range(ng)],
+            "item_notes": [_note() for _ in range(ni)],
+            "coverage_backlog_candidates": [_bk() for _ in range(nb)]}
+
+
+def test_compact_advisory_at_prompt_target_survives_and_renders():
+    out = _adv(CA.TARGET_GROUPINGS, CA.TARGET_ITEM_NOTES, CA.TARGET_BACKLOG_CANDIDATES)
+    adv = _advise_out(out)
+    assert isinstance(adv, dict)
+    lines = CA.render_advisory(adv)                       # must not raise
+    assert any("ADVISORY (candidates" in ln for ln in lines)
+
+
+def test_between_target_and_ceiling_survives():
+    out = _adv(ng=CA.TARGET_GROUPINGS + 1)                # count between target & ceiling
+    out["grouping"][0]["explanation"] = "y" * (CA.TARGET_EXPLANATION_CHARS + 5)
+    assert CA.TARGET_EXPLANATION_CHARS < len(out["grouping"][0]["explanation"]) \
+        <= CA.MAX_EXPLANATION_CHARS
+    assert isinstance(_advise_out(out), dict)             # survives (drift allowed)
+
+
+def test_above_ceiling_fixture_rejects_to_null():
+    out = _adv(ng=CA.MAX_GROUPINGS + 1)
+    out["grouping"][0]["theme"] = "t" * (CA.MAX_THEME_CHARS + 1)
+    assert _advise_out(out) is None
+
+
+def test_grouping_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(ng=CA.MAX_GROUPINGS)), dict)
+    assert _advise_out(_adv(ng=CA.MAX_GROUPINGS + 1)) is None
+
+
+def test_item_notes_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(ni=CA.MAX_ITEM_NOTES)), dict)
+    assert _advise_out(_adv(ni=CA.MAX_ITEM_NOTES + 1)) is None
+
+
+def test_backlog_count_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_adv(nb=CA.MAX_BACKLOG_CANDIDATES)), dict)
+    assert _advise_out(_adv(nb=CA.MAX_BACKLOG_CANDIDATES + 1)) is None
+
+
+def _mut(setter):
+    out = _adv()
+    setter(out)
+    return out
+
+
+def test_theme_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "theme", "t" * CA.MAX_THEME_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "theme", "t" * (CA.MAX_THEME_CHARS + 1)))) is None
+
+
+def test_explanation_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * CA.MAX_EXPLANATION_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * (CA.MAX_EXPLANATION_CHARS + 1)))) is None
+
+
+def test_suggested_kind_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "suggested_kind", "k" * CA.MAX_SUGGESTED_KIND_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "suggested_kind", "k" * (CA.MAX_SUGGESTED_KIND_CHARS + 1)))) is None
+
+
+def test_rationale_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "rationale", "r" * CA.MAX_RATIONALE_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["item_notes"][0].__setitem__(
+        "rationale", "r" * (CA.MAX_RATIONALE_CHARS + 1)))) is None
+
+
+def test_suggested_authority_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0]
+        .__setitem__("suggested_authority", "a" * CA.MAX_AUTHORITY_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0].__setitem__(
+        "suggested_authority", "a" * (CA.MAX_AUTHORITY_CHARS + 1)))) is None
+
+
+def test_why_rejects_only_above_ceiling():
+    assert isinstance(_advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0]
+        .__setitem__("why", "w" * CA.MAX_WHY_CHARS))), dict)
+    assert _advise_out(_mut(lambda o: o["coverage_backlog_candidates"][0].__setitem__(
+        "why", "w" * (CA.MAX_WHY_CHARS + 1)))) is None
+
+
+def test_no_partial_salvage_one_over_ceiling_entry_nulls_all():
+    out = _adv(ng=3)                                      # 3 valid groupings...
+    out["grouping"][1]["theme"] = "t" * (CA.MAX_THEME_CHARS + 1)   # ...one over ceiling
+    assert _advise_out(out) is None                      # whole advisory nulled
+
+
+def test_diag_ceiling_reasons_report_exact_ceiling_and_value():
+    over = _adv(ng=CA.MAX_GROUPINGS + 1)
+    with _dummy_key():
+        d = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(over), stop_reason="end_turn")))
+    assert d["null_reason"] == "validation_error"
+    assert d["validation_reason"] == "grouping_count_exceeds_ceiling: %d > %d" % (
+        CA.MAX_GROUPINGS + 1, CA.MAX_GROUPINGS)
+    bad = _mut(lambda o: o["grouping"][0].__setitem__(
+        "explanation", "e" * (CA.MAX_EXPLANATION_CHARS + 1)))
+    with _dummy_key():
+        d2 = CA.advise_with_diagnostics(_report(), transport=_CountingTransport(
+            _FakeMsg(json.dumps(bad), stop_reason="end_turn")))
+    assert d2["validation_reason"] == "explanation_exceeds_ceiling: %d > %d" % (
+        CA.MAX_EXPLANATION_CHARS + 1, CA.MAX_EXPLANATION_CHARS)
+
+
+def test_prompt_contains_target_counts_and_concise_instruction():
+    s = CA.SYSTEM
+    assert ("at most %d groupings" % CA.TARGET_GROUPINGS) in s
+    assert ("at most %d item_notes" % CA.TARGET_ITEM_NOTES) in s
+    assert ("at most %d coverage_backlog_candidates" % CA.TARGET_BACKLOG_CANDIDATES) in s
+    assert "one short sentence" in s
+    assert "compact" in s.lower()
+
+
+def test_prompt_contains_confidence_discipline():
+    s = CA.SYSTEM
+    assert "Confidence discipline" in s
+    assert "unless the tender excerpt itself names" in s
+    assert "candidates for human source verification" in s
+
+
+# --------------------------------------------------------------------------
 # Disclaimer is wrapper-attached, never model-emitted
 # --------------------------------------------------------------------------
 
