@@ -534,3 +534,30 @@ Remaining open questions (golden-copy/connectors legal):
 - [ ] STEP 6 FILL: all 5 forms verified AcroForm (212 / 193 / 217 / 176 / 21
   fields). Client-side fill; no TIN/DOB persistence. AC 3237-S is the first
   module (brief to follow separately).
+
+## Chat-synced follow-ups (2026-07)
+Open items captured from session review (post concierge pilot #1 / PR-A). Append-only.
+
+### Coverage advisory — follow-ups
+- [ ] suggested_kind vocabulary constraint: restrict advisory
+  item_notes.suggested_kind to known_kinds (the mapped-rule vocabulary). DEPENDENCY:
+  PR-B1 must add the procurement_lobbying kind FIRST, else valid §139-j suggestions
+  would be rejected by the constraint.
+- [ ] Authority allowlist for advisory citations — DEFERRED. Revisit ONLY if
+  PR-B2's excerpt-substring citation constraint (a cited §/Article/Subpart id must
+  appear in the referenced excerpt) proves insufficient against wrong/over-precise
+  authorities (e.g. SDVOB "§36", Iran divestment "PAL §2879-a", "NYCRR Subpart 225-1").
+- [ ] Async advisory path for self-serve UI (post-concierge): move the Sonnet
+  advisory off the synchronous request path once the tool is self-serve rather than
+  concierge-run.
+- [ ] Advisory wording pass — conclusive-phrasing sweep: audit advisory output
+  wording to strip any conclusory phrasing while KEEPING responsiveness vocabulary
+  (it may describe responsiveness, never conclude a bid is responsive/compliant).
+
+### Data / automation — follow-ups
+- [ ] NYSCR ad-type labels are PROVISIONAL: need a dual-model cross-check before
+  hardening them into a relied-on classification vocabulary (cf. the 12 ad-type
+  labels noted under Architecture — pre-Triage gates).
+- [ ] Entity refresh -> monthly GitHub Action: schedule scripts/refresh_entities.py
+  as a monthly Action (same sanctioned pattern as the freshness check), instead of
+  a manual refresh.
