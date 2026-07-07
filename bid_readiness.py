@@ -128,6 +128,17 @@ _GROUNDING_CANDIDATES = {
         "source-stf-139-h-international-boycott.md",
         "Any such contract shall be rendered forfeit and void by the state "
         "comptroller"),
+    # §139-j/§139-k procurement lobbying grounds to §139-k subd. 5 — it carries
+    # the offerer-certification obligation ("complete, true and accurate") that
+    # attaches to every award subject to §139-j/§139-k. §139-j itself defines the
+    # restricted period but does not carry the bidder certification consequence.
+    "procurement_lobbying": (
+        "source-stf-139-k.md",
+        "Any procurement contract award subject to the provisions of this\n"
+        "section and section one hundred thirty-nine-j of this article shall\n"
+        "contain a certification by the offerer that all information provided to\n"
+        "the procuring governmental entity with respect to this section is\n"
+        "complete, true and accurate"),
 }
 
 # Static per-kind rule metadata. profile_key is the vendor-profile field that
@@ -207,6 +218,17 @@ _RULE_META = {
         "action": "Note the §139-h international-boycott clause — a material "
                   "condition of contracts over $5,000; you agree not to participate "
                   "in a prohibited international boycott."},
+    # §139-j/§139-k procurement lobbying. must=True per §139-k subd. 3: a failure
+    # to disclose accurate/complete information bears on responsibility and "No
+    # procurement contract shall be awarded to any such offerer" (no-award
+    # consequence). No dollar threshold gate in B1 (approved).
+    "procurement_lobbying": {
+        "label": "Procurement-lobbying certification (SFL §139-j/§139-k)",
+        "profile_key": "procurement_lobbying_certification_ready",
+        "must": True,
+        "action": "Complete the §139-j/§139-k Offerer's Certification of Compliance "
+                  "and Disclosure of Prior Non-Responsibility Determinations and "
+                  "submit it with your bid."},
 }
 
 _WEIGHT_MUST = 2

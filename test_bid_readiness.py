@@ -604,6 +604,64 @@ def test_verified_match_requires_obligation_cue_in_passage():
     assert wc.coverage == BR.VERIFIED_MATCH
 
 
+# --------------------------------------------------------------------------
+# PR-B1 — §139-j/§139-k procurement-lobbying wiring
+# --------------------------------------------------------------------------
+
+# The pilot p18-style passage. As one sentence the obligation cue ("must
+# submit") stays in the captured segment, so a grounded VERIFIED_MATCH row is
+# demonstrable end-to-end.
+_PL_P18 = ("Offerers must submit the Offerer's Certification of Compliance with "
+           "State Finance Law §139-j and §139-k and disclose any prior "
+           "non-responsibility determination with the bid.")
+
+
+def test_procurement_lobbying_becomes_mapped_scored_row():
+    """PR-B1 test (b): the p18-style §139-j/§139-k passage becomes a scored,
+    mapped row — NOT an UNMAPPED 'other' item and NOT a possible-authority
+    capture. (Before wiring it classified as the generic 'certification' kind,
+    which is not in _RULE_META, and landed in other_requirements.)"""
+    rep = _mk([_PL_P18])
+    pl = [r for r in rep.rows if r.kind == "procurement_lobbying"]
+    assert pl, "the §139-j/§139-k passage must produce a mapped row"
+    assert pl[0].status in (BR.GREEN, BR.YELLOW, BR.RED, BR.NA)   # a real scored row
+    assert pl[0].must is True                                     # per §139-k subd. 3
+    assert not rep.other_requirements                             # no longer UNMAPPED
+    assert not rep.possible_authorities                           # not a bare authority
+
+
+def test_procurement_lobbying_grounding_is_verbatim_and_verify_citable():
+    """PR-B1 test (c): the approved grounding quote is a verbatim substring of
+    source-stf-139-k.md and cite(..., VERIFY) passes today; _build_rules attaches
+    it (the fail-soft guard did not drop it)."""
+    import engine.golden_status as gs
+    src, quote = BR._GROUNDING_CANDIDATES["procurement_lobbying"]
+    assert src == "source-stf-139-k.md"
+    assert quote in GC.body(src)                                  # verbatim substring
+    assert GC.cite(src, quote, output_context=gs.OUTPUT_VERIFY) == quote
+    rules = BR._build_rules(GC)
+    assert rules["procurement_lobbying"]["grounding"] is not None
+    assert rules["procurement_lobbying"]["grounding"]["source_file"] == src
+
+
+def test_procurement_lobbying_verified_match_requires_cue():
+    """PR-B1 test (d): VERIFIED_MATCH invariant on the new kind — a grounded
+    procurement_lobbying passage WITH an obligation cue is VERIFIED_MATCH; the
+    same grounded kind reached WITHOUT a cue stays NEEDS_REVIEW."""
+    cued = _mk([_PL_P18])
+    row = [r for r in cued.rows if r.kind == "procurement_lobbying"][0]
+    assert row.grounding is not None and BR.has_obligation_cue(row.tender_excerpt)
+    assert row.coverage == BR.VERIFIED_MATCH
+    cueless = _mk(["This RFP describes the restricted period under State Finance "
+                   "Law section 139-j."])
+    r2 = [r for r in cueless.rows if r.kind == "procurement_lobbying"]
+    assert r2, "the keyword still maps to a row (not dropped)"
+    assert r2[0].grounding is not None
+    assert not BR.has_obligation_cue(r2[0].tender_excerpt)
+    assert r2[0].coverage == BR.NEEDS_REVIEW
+    assert r2[0].coverage != BR.VERIFIED_MATCH
+
+
 def test_advisory_render_does_not_change_report_or_gate():
     """PR 2 sibling-immutability: rendering WITH an advisory changes only the
     output; coverage_complete, counts, score, grounding, and to_dict() are
