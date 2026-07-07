@@ -1021,6 +1021,30 @@ def test_prompt_hardening_citation_fidelity_and_captured_rule():
     assert ("at most %d coverage_backlog_candidates" % CA.TARGET_BACKLOG_CANDIDATES) in s
 
 
+def test_documented_limitation_bare_numeric_id_collides_across_law_bodies():
+    """DOCUMENTED LIMITATION (not desired behavior) — regression target for the
+    backlogged law-body-aware fix. The captured-authority matcher keys on the bare
+    section identifier, so a bare-numeric id in a DIFFERENT law body is suppressed
+    against a captured same-number authority: "Education Law § 163" collides with
+    the captured SFL § 163, "Insurance Law § 57" with WCL § 57, "Highway Law § 112"
+    with SFL § 112, "Public Health Law § 314" with Exec Law § 314. This is
+    advisory-recall-only — it cannot create a false GREEN, cannot change
+    VERIFIED_MATCH or coverage_complete, and the wrongly-suppressed candidate is
+    PRESERVED in diagnostics (suppressed_captured). When law-body-aware matching
+    lands (see BACKLOG 'Law-body-aware suppression matching'), FLIP these
+    assertions: the cross-body candidate must then be RETAINED."""
+    rep = _report()
+    for cross_body in ("Education Law § 163", "Insurance Law § 57",
+                       "Highway Law § 112", "Public Health Law § 314"):
+        diag = CA.advise_with_diagnostics(
+            rep, llm=lambda payload, a=cross_body: _backlog_out(a))
+        # CURRENT (limitation) behavior: suppressed despite the different law body...
+        assert diag["advisory"]["coverage_backlog_candidates"] == [], cross_body
+        # ...but never lost — the suppressed candidate is kept in diagnostics.
+        assert len(diag["suppressed_captured"]) == 1, cross_body
+        assert diag["suppressed_captured"][0]["suggested_authority"] == cross_body
+
+
 def test_backlog_candidate_schema_has_no_excerpt_ref_precondition():
     # PR-B2 change-3 PRECONDITION (documented): coverage_backlog_candidates carry
     # NO deterministic link to a specific excerpt (no ref / page / source), so the

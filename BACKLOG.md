@@ -553,6 +553,14 @@ Open items captured from session review (post concierge pilot #1 / PR-A). Append
 - [ ] Advisory wording pass — conclusive-phrasing sweep: audit advisory output
   wording to strip any conclusory phrasing while KEEPING responsiveness vocabulary
   (it may describe responsiveness, never conclude a bid is responsive/compliant).
+- [ ] Law-body-aware suppression matching: bare numeric section ids
+  (163, 112, 57, 314) suppress across different law bodies; require law-body token
+  agreement before suppressing bare-numeric matches. Diagnostics currently preserve
+  wrongly suppressed candidates. (PR-B2 captured-authority backstop keys on the bare
+  section id, so e.g. "Education Law §163" is suppressed against SFL §163. Recall-only:
+  cannot create a false GREEN, change VERIFIED_MATCH, or change coverage_complete;
+  suppressed items stay in suppressed_captured diagnostics. Regression target:
+  test_documented_limitation_bare_numeric_id_collides_across_law_bodies.)
 
 ### Data / automation — follow-ups
 - [ ] NYSCR ad-type labels are PROVISIONAL: need a dual-model cross-check before
