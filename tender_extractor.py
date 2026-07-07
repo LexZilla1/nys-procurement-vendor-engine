@@ -234,27 +234,36 @@ def extract_pdf(path):
 
     stream_count = len(pages)
     leaf_count = _count_page_objects(data)
-    if leaf_count is None:
-        page_count = stream_count
-        page_count_source = "text-bearing content streams (no /Type /Page objects found)"
-    else:
+    page_count_exact = leaf_count is not None
+    if page_count_exact:
         page_count = leaf_count
         page_count_source = "/Type /Page page-tree leaf objects"
-
-    # Page numbers for passage refs are byte/stream ordinals. We cannot verify
-    # stdlib-safe that stream order == page-tree reading order, so they are
-    # BEST-EFFORT. A leaf-count vs stream-count mismatch is positive proof that a
-    # stream ordinal is not the real page number.
-    if leaf_count is not None and leaf_count != stream_count:
-        note = ("page numbers approximate: %d text-bearing content stream(s) vs %d "
-                "/Type /Page object(s) — stream ordinals are not real page numbers."
-                % (stream_count, leaf_count))
+        # Page numbers for passage refs are byte/stream ordinals. We cannot verify
+        # stdlib-safe that stream order == page-tree reading order, so they are
+        # BEST-EFFORT. A leaf-count vs stream-count mismatch is positive proof that
+        # a stream ordinal is not the real page number.
+        if leaf_count != stream_count:
+            note = ("page numbers approximate: %d text-bearing content stream(s) vs "
+                    "%d /Type /Page object(s) — stream ordinals are not real page "
+                    "numbers." % (stream_count, leaf_count))
+        else:
+            note = ("page numbers approximate: byte/stream order is not verified as "
+                    "page-tree reading order (stdlib-only; no page-tree walk).")
     else:
-        note = ("page numbers approximate: byte/stream order is not verified as "
-                "page-tree reading order (stdlib-only; no page-tree walk).")
+        # Could NOT count /Type /Page objects (unsupported compression / object-
+        # stream layout). Do NOT present the text-stream count as an exact page
+        # count — mark both the count and the refs as best-effort estimates.
+        page_count = stream_count
+        page_count_source = ("text-bearing content streams — /Type /Page objects "
+                             "not found; page count NOT exact")
+        note = ("page count and page numbers approximate: could not count "
+                "/Type /Page objects (unsupported compression / object-stream "
+                "layout); showing the text-bearing content stream count (%d) as a "
+                "best-effort estimate, not an exact PDF page count." % stream_count)
     return {
         "source": os.path.basename(path),
         "page_count": page_count,
+        "page_count_exact": page_count_exact,
         "page_count_source": page_count_source,
         "text_bearing_stream_count": stream_count,
         "pages": pages,
@@ -273,6 +282,7 @@ def extract_txt(path):
     return {
         "source": os.path.basename(path),
         "page_count": len(pages),
+        "page_count_exact": True,
         "page_count_source": "form-feed page breaks",
         "text_bearing_stream_count": len(pages),
         "pages": pages,
@@ -479,12 +489,18 @@ def _classify(text):
 
 # --- Bid-bond waiver / negation (PR-A finding 1) ---------------------------
 # A NARROW detector for the "no ... bond ... is required" negation (and the
-# "bond ... is not required" form). It deliberately does NOT match an
-# AFFIRMATIVE requirement that merely mentions waiver ("a bid bond is required
-# unless waived"), so a genuine bond requirement is never suppressed. Bounded by
-# [^.\n] so it never spans a sentence/line boundary.
+# "bond ... is not required" form). It deliberately does NOT match:
+#   * an AFFIRMATIVE requirement that merely mentions waiver ("a bid bond is
+#     required unless waived"); or
+#   * a comparative / deadline idiom whose "no" is not a bond negation
+#     ("No later than ... a bid bond ... is required"; "no less than", "no more
+#     than", "no earlier than", "no fewer than").
+# The `(?!\s+\w+\s+than\b)` lookahead rejects any "no <word> than" idiom head, so
+# only a genuine "no ... bond ... required" negation anchors. Bounded by [^.\n]
+# so it never spans a sentence/line boundary.
 _BOND_WAIVER_RE = re.compile(
-    r"\bno\b[^.\n]{0,80}?\bbond\b[^.\n]{0,80}?\brequired\b"   # "no ... bond ... required"
+    r"\bno\b(?!\s+\w+\s+than\b)"                              # not "no <word> than ..."
+    r"[^.\n]{0,80}?\bbond\b[^.\n]{0,80}?\brequired\b"         # "no ... bond ... required"
     r"|\bbond\b[^.\n]{0,40}?\bnot\s+required\b",              # "bond ... not required"
     re.IGNORECASE)
 
@@ -493,7 +509,9 @@ def is_bond_waiver(text):
     """True ONLY for a bid-bond WAIVER / negation ("no ... bond ... required" or
     "bond ... not required"). Narrow by construction: an affirmative requirement
     that merely mentions waiver ("a bid bond is required unless waived") is NOT a
-    waiver and returns False, so a genuine bond requirement is never suppressed."""
+    waiver, and a comparative/deadline idiom ("No later than ... a bid bond ... is
+    required", "no less than") is NOT a waiver — both return False, so a genuine
+    bond requirement is never suppressed."""
     return bool(_BOND_WAIVER_RE.search(text))
 
 

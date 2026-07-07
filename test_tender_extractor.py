@@ -280,14 +280,29 @@ _POSITIVE = "A bid bond of 5% of the bid amount shall accompany each bid."
 _GUARD = "A bond is required unless waived by the Commissioner."
 
 
+_DEADLINE = ("No later than the bid due date, a bid bond of 5% of the bid amount "
+             "is required.")
+
+
 def test_is_bond_waiver_is_narrow():
     # waiver / negation constructions -> True
     assert TE.is_bond_waiver(_WAIVER)
     assert TE.is_bond_waiver("A bid bond is not required for this solicitation.")
+    assert TE.is_bond_waiver("Bid bond is not required.")
     # affirmative requirement (even one mentioning waiver) -> False (not suppressed)
     assert not TE.is_bond_waiver(_POSITIVE)
     assert not TE.is_bond_waiver(_GUARD)                       # "required unless waived"
     assert not TE.is_bond_waiver("A bid bond is required unless waived by OGS.")
+
+
+def test_is_bond_waiver_ignores_comparative_deadline_idioms():
+    # "no <word> than" idioms are NOT bond negations — must return False so a real
+    # bond requirement with deadline/comparative phrasing is not suppressed.
+    assert not TE.is_bond_waiver(_DEADLINE)                     # "No later than ..."
+    assert not TE.is_bond_waiver("No earlier than award, a bid bond is required.")
+    assert not TE.is_bond_waiver("A bid bond of no less than 5% is required.")
+    assert not TE.is_bond_waiver("A bid bond of no more than 10% is required.")
+    assert not TE.is_bond_waiver("Submit no fewer than three references; a bid bond is required.")
 
 
 def test_find_requirements_routes_waiver_to_waiver_capture():
@@ -339,6 +354,7 @@ def test_page_count_from_page_objects_not_streams():
     finally:
         os.unlink(path)
     assert ex["page_count"] == 3, ex["page_count"]                 # /Type /Page objects
+    assert ex["page_count_exact"] is True
     assert ex["page_count_source"].startswith("/Type /Page")
     assert ex["text_bearing_stream_count"] == 2                    # not the vendor count
     assert ex["page_count"] != ex["text_bearing_stream_count"]
@@ -366,6 +382,29 @@ def test_page_numbers_flagged_approximate_when_order_unverified():
     assert "stream" in ex["page_number_note"].lower()
 
 
+def test_page_count_fallback_when_no_page_objects():
+    """When /Type /Page objects cannot be found (unsupported compression/object-
+    stream layout), the extractor must NOT present the text-stream count as an
+    exact page count: page_count_exact is False and the note says best-effort."""
+    # A PDF with a text-bearing content stream but NO /Type /Page objects anywhere.
+    data = (b"%PDF-1.7\n"
+            b"1 0 obj << /Length 30 >>\nstream\n"
+            b"(A bid bond shall be provided.) Tj\nendstream endobj\n"
+            b"trailer << >>\n%%EOF")
+    assert TE._count_page_objects(data) is None                # no page objects found
+    path = _write_bytes(data)
+    try:
+        ex = TE.extract_pdf(path)
+    finally:
+        os.unlink(path)
+    assert ex["page_count_exact"] is False
+    assert ex["page_numbers_approximate"] is True
+    assert ex["text_bearing_stream_count"] == 1
+    assert ex["page_count"] == 1                                # best-effort, not exact
+    assert "not exact" in ex["page_count_source"].lower() or "not found" in ex["page_count_source"].lower()
+    assert "best-effort" in ex["page_number_note"].lower()
+
+
 def test_txt_page_numbers_are_exact():
     path = _write_bytes(b"Page one text.\fPage two text.", suffix=".txt")
     try:
@@ -373,6 +412,7 @@ def test_txt_page_numbers_are_exact():
     finally:
         os.unlink(path)
     assert ex["page_count"] == 2 and ex["page_numbers_approximate"] is False
+    assert ex["page_count_exact"] is True
 
 
 def test_extraction_recall_unchanged_by_page_numbering():

@@ -796,6 +796,41 @@ def test_bid_bond_required_unless_waived_is_not_suppressed():
     assert rep.waivers == []                                     # NOT routed to waivers
 
 
+def test_deadline_idiom_bond_requirement_is_not_a_waiver():
+    # "No later than ... a bid bond ... is required" is a REAL requirement with
+    # deadline phrasing — must score RED (profile lacks bond), not route to waivers.
+    txt = ("No later than the bid due date, a bid bond of 5% of the bid amount "
+           "is required.")
+    rep = BR.score_bid(_ex(txt), {"vendor_name": "X", "contract_value_usd": 500000,
+                                  "bid_bond_available": False}, golden=GC)
+    bonding = [r for r in rep.rows if r.kind == "bonding"]
+    assert len(bonding) == 1 and bonding[0].status == BR.RED
+    assert any(r.kind == "bonding" for r in rep.blocking)
+    assert rep.waivers == []                                     # NOT a waiver
+    rendered = BR.render_bid_readiness(rep)
+    assert "tender states no bid bond required" not in rendered  # no waiver wording
+    assert "Secure a bid bond" in rendered                       # real requirement shown
+
+
+def test_fallback_page_count_rendered_best_effort():
+    # page_count_exact=False -> the "Read N page(s)" line must be marked approximate,
+    # not presented as an exact PDF page count.
+    ex = dict(_ex(_POSITIVE))
+    ex["page_count"] = 71
+    ex["page_count_exact"] = False
+    ex["page_numbers_approximate"] = True
+    rep = BR.score_bid(ex, {"vendor_name": "X", "contract_value_usd": 500000,
+                            "bid_bond_available": False}, golden=GC)
+    assert rep.page_count_exact is False
+    rendered = BR.render_bid_readiness(rep)
+    assert "~71 page(s) (approximate" in rendered
+    assert "/Type /Page count unavailable" in rendered
+    # exact path (default) does NOT carry the approximate page-count marker
+    rep2 = BR.score_bid(_ex(_POSITIVE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                         "bid_bond_available": False}, golden=GC)
+    assert "(approximate — /Type /Page count unavailable" not in BR.render_bid_readiness(rep2)
+
+
 # ---------------------------------------------------------------------------
 # PR-A finding 3 — coverage NEEDS_REVIEW wording split by grounding
 # ---------------------------------------------------------------------------

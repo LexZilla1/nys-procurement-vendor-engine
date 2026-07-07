@@ -515,7 +515,7 @@ class BidReadinessReport:
     def __init__(self, vendor_name, source, pages_read, requirements_found,
                  rows, other_requirements=None, possible_authorities=None,
                  waivers=None, page_numbers_approximate=False,
-                 page_number_note=None):
+                 page_number_note=None, page_count_exact=True):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
@@ -538,6 +538,9 @@ class BidReadinessReport:
         # are byte/stream ordinals unless verified as page-tree order.
         self.page_numbers_approximate = page_numbers_approximate
         self.page_number_note = page_number_note
+        # False when the /Type /Page count could not be determined (fallback to the
+        # text-stream count) — the page COUNT itself is then only best-effort.
+        self.page_count_exact = page_count_exact
         self.contract_value = None  # set by score_bid; None = not determined
 
     @staticmethod
@@ -737,6 +740,7 @@ class BidReadinessReport:
             "tender_source": self.source,
             "work_summary": {
                 "pages_read": self.pages_read,
+                "page_count_exact": self.page_count_exact,
                 "page_numbers_approximate": self.page_numbers_approximate,
                 "page_number_note": self.page_number_note,
                 "requirements_found": self.requirements_found,
@@ -954,7 +958,8 @@ def score_bid(extracted, profile, golden=None):
         rows=rows, other_requirements=other,
         possible_authorities=possible_authorities, waivers=waivers,
         page_numbers_approximate=extracted.get("page_numbers_approximate", False),
-        page_number_note=extracted.get("page_number_note"))
+        page_number_note=extracted.get("page_number_note"),
+        page_count_exact=extracted.get("page_count_exact", True))
     report.contract_value = contract_value
     return report
 
@@ -975,9 +980,12 @@ def render_bid_readiness(report, advisory=None):
     cv = ("${:,}".format(report.contract_value) if report.contract_value
           else "NOT DETERMINED (threshold-gated rules verified, not skipped)")
     L.append("Contract value: {}".format(cv))
-    L.append("Read {} page(s), found {} requirement passage(s) → {} matched to a "
+    _pc = ("{} page(s)".format(report.pages_read) if report.page_count_exact
+           else "~{} page(s) (approximate — /Type /Page count unavailable; "
+                "text-stream estimate)".format(report.pages_read))
+    L.append("Read {}, found {} requirement passage(s) → {} matched to a "
              "known rule, {} other; checked {} against your profile.".format(
-                 report.pages_read, report.requirements_found, len(report.rows),
+                 _pc, report.requirements_found, len(report.rows),
                  len(report.other_requirements), len(report.checkable_rows)))
     if report.page_numbers_approximate:
         L.append("NOTE: {}".format(
