@@ -61,10 +61,11 @@ def main(argv=None):
     print("fixture        : {}".format(fixture))
     print("coverage buckets: {}".format(dict(report.coverage_counts)))
     print("payload counts : needs_review={} unmapped={} possible_authorities={} "
-          "known_kinds={}".format(len(payload["needs_review"]),
-                                  len(payload["unmapped"]),
-                                  len(payload["possible_authorities"]),
-                                  len(payload["known_kinds"])))
+          "captured_authorities={} known_kinds={}".format(
+              len(payload["needs_review"]), len(payload["unmapped"]),
+              len(payload["possible_authorities"]),
+              len(payload.get("captured_authorities", [])),
+              len(payload["known_kinds"])))
 
     if not (os.environ.get("ANTHROPIC_API_KEY") or "").strip():
         print("\nANTHROPIC_API_KEY is not set — no API call made.\n"
@@ -80,6 +81,10 @@ def main(argv=None):
     print("stop_reason      : {}".format(diag["stop_reason"]))
     print("usage            : {}".format(diag["usage"]))
     print("latency_seconds  : {}".format(diag["latency_seconds"]))
+    print("suppressed_captured           : {}".format(
+        json.dumps(diag.get("suppressed_captured", []), ensure_ascii=False)))
+    print("captured_authorities_unnormalized: {}".format(
+        diag.get("captured_authorities_unnormalized", [])))
     advisory = diag["advisory"]
     print("advisory         :")
     print(json.dumps(advisory, indent=2, ensure_ascii=False)

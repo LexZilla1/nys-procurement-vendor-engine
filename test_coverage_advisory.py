@@ -907,6 +907,136 @@ def test_live_advisory_returns_none_or_valid_dict():
 
 
 # --------------------------------------------------------------------------
+# PR-B2 — captured-authority awareness + citation-risk hardening
+# --------------------------------------------------------------------------
+
+def _backlog_out(*authorities):
+    """A schema-valid model output whose backlog nominates the given authorities."""
+    return {"grouping": [], "item_notes": [],
+            "coverage_backlog_candidates": [
+                {"suggested_authority": a, "why": "appears in an unmapped passage",
+                 "confidence": "low", "action": "candidate for human capture"}
+                for a in authorities]}
+
+
+def test_build_payload_includes_captured_authorities():
+    # Change 1: build_payload carries a golden-derived captured_authorities list
+    # that names the real golden sources (spot-check §139-j, §139-k, Art. 15-A).
+    p = CA.build_payload(_report())
+    caps = p["captured_authorities"]
+    assert isinstance(caps, list) and caps
+    assert all(isinstance(a, str) for a in caps)
+    assert any("139-j" in a for a in caps)
+    assert any("139-k" in a for a in caps)
+    assert any("15-A" in a for a in caps)
+    # golden-derived, never a hardcoded literal list: it tracks the source headers.
+    assert any("Labor Law" in a or "220-i" in a for a in caps)
+    # no golden-copy body / file path leaks into the payload.
+    blob = json.dumps(p)
+    assert "source_file" not in blob and "citation_quote" not in blob
+
+
+def test_captured_authority_backlog_candidate_is_suppressed_and_counted():
+    # Change 2: a backlog candidate naming a CAPTURED authority (and a formatting
+    # variant) is suppressed from the rendered advisory; diagnostics count it.
+    rep = _report()
+    for auth in ("State Finance Law § 139-j", "SFL §139-j"):
+        adv = CA.advise(rep, llm=lambda payload, a=auth: _backlog_out(a))
+        assert isinstance(adv, dict)
+        assert adv["coverage_backlog_candidates"] == []          # suppressed
+        section = "\n".join(CA.render_advisory(adv))
+        assert "139-j" not in section                            # not rendered
+        diag = CA.advise_with_diagnostics(rep, llm=lambda payload, a=auth: _backlog_out(a))
+        assert len(diag["suppressed_captured"]) == 1             # counted
+        assert diag["suppressed_captured"][0]["suggested_authority"] == auth
+
+
+def test_captured_authority_article_variant_suppressed():
+    # "Art. 15-A" == "Article 15-A" — Executive Law Article 15-A is captured.
+    rep = _report()
+    adv = CA.advise(rep, llm=lambda payload: _backlog_out("Article 15-A"))
+    assert isinstance(adv, dict) and adv["coverage_backlog_candidates"] == []
+
+
+def test_uncaptured_authority_backlog_candidate_is_retained():
+    # An authority NOT in the golden copy is kept — suppression is a dedupe of
+    # captured authorities only, never a blanket drop.
+    rep = _report()
+    adv = CA.advise(rep, llm=lambda payload: _backlog_out("Education Law § 2-d"))
+    assert isinstance(adv, dict)
+    assert len(adv["coverage_backlog_candidates"]) == 1
+    assert adv["coverage_backlog_candidates"][0]["suggested_authority"] \
+        == "Education Law § 2-d"
+
+
+def test_suppression_of_one_candidate_does_not_null_advisory():
+    # One captured + one uncaptured: the advisory survives and the uncaptured
+    # candidate still renders (never reject-to-null).
+    rep = _report()
+    adv = CA.advise(rep, llm=lambda payload: _backlog_out(
+        "State Finance Law § 139-k", "Education Law § 2-d"))
+    assert isinstance(adv, dict)                                 # NOT nulled
+    remaining = [c["suggested_authority"] for c in adv["coverage_backlog_candidates"]]
+    assert remaining == ["Education Law § 2-d"]
+    section = "\n".join(CA.render_advisory(adv))
+    assert "Education Law § 2-d" in section and "139-k" not in section
+
+
+def test_suppression_runs_after_validate_strict_checks_still_apply():
+    # The backstop runs AFTER _validate, so a schema-invalid output still nulls —
+    # suppression never salvages a malformed advisory.
+    bad = _backlog_out("State Finance Law § 139-j")
+    bad["extra"] = "x"                                           # unknown top-level key
+    assert CA.advise(_report(), llm=lambda payload: bad) is None
+
+
+def test_authority_id_normalization_is_format_robust():
+    # The identifier match underpinning suppression: formatting variants collapse.
+    assert CA._authority_ids("§139-j") == CA._authority_ids("State Finance Law § 139-j")
+    assert CA._authority_ids("SFL 139-j") == CA._authority_ids("§139-j")
+    assert CA._authority_ids("Art. 15-A") == CA._authority_ids("Article 15-A")
+    # a general body with no specific identifier yields no id (nothing to match).
+    assert CA._authority_ids("NYCRR, Title 6 ECL") == frozenset()
+
+
+def test_captured_authorities_unnormalized_reported_not_used_for_suppression():
+    # Sources that are citable but whose authority cannot be normalized confidently
+    # are reported in diagnostics only (never drive suppression).
+    diag = CA.advise_with_diagnostics(
+        _report(), llm=lambda payload: _backlog_out("Education Law § 2-d"))
+    assert isinstance(diag["captured_authorities_unnormalized"], list)
+    # they are source filenames, and none of them suppressed the uncaptured item.
+    assert diag["advisory"]["coverage_backlog_candidates"]        # retained
+
+
+def test_prompt_hardening_citation_fidelity_and_captured_rule():
+    # Change 4: prompt tells the model to cite only what the excerpt names, never
+    # invent a section number, and not to re-nominate captured authorities.
+    s = CA.SYSTEM
+    assert "Citation fidelity" in s
+    assert "Never invent a section" in s
+    assert "captured_authorities" in s
+    # existing bounds / discipline instructions are preserved (minimal diff).
+    assert "Confidence discipline" in s
+    assert ("at most %d coverage_backlog_candidates" % CA.TARGET_BACKLOG_CANDIDATES) in s
+
+
+def test_backlog_candidate_schema_has_no_excerpt_ref_precondition():
+    # PR-B2 change-3 PRECONDITION (documented): coverage_backlog_candidates carry
+    # NO deterministic link to a specific excerpt (no ref / page / source), so the
+    # excerpt-substring citation constraint cannot be applied against a referenced
+    # excerpt without an OUTPUT-schema change. Change 3 was therefore NOT
+    # implemented in B2 (schema addition is out of scope).
+    bk = {"suggested_authority": "X", "why": "y", "confidence": "low",
+          "action": "candidate for human capture"}
+    assert CA._valid_backlog(bk)
+    assert "ref" not in bk and "page" not in bk and "source" not in bk
+    bk2 = dict(bk)
+    bk2["ref"] = {"source": "unmapped", "page": 1}
+    assert not CA._valid_backlog(bk2)                            # schema rejects a link
+
+
+# --------------------------------------------------------------------------
 # Runner
 # --------------------------------------------------------------------------
 
