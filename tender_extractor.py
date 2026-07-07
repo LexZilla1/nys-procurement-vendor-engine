@@ -509,12 +509,31 @@ def _classify(text):
 #     ("No later than ... a bid bond ... is required"; "no less than", "no more
 #     than", "no earlier than", "no fewer than").
 # The `(?!\s+\w+\s+than\b)` lookahead rejects any "no <word> than" idiom head, so
-# only a genuine "no ... bond ... required" negation anchors. Bounded by [^.\n]
-# so it never spans a sentence/line boundary.
+# only a genuine "no ... bond ... required" negation anchors.
+#
+# Sentence-scoped bond-waiver detection. The span between tokens is bounded to a
+# SINGLE sentence/clause — [^.;:\n] stops at a sentence terminator (., ;, :, or a
+# line break), matching the segmenter's own boundaries — rather than a fixed
+# character count. A fixed count fails the next tender with a longer clause: the
+# real IFB 23447 waiver enumerates several instruments ("...no performance,
+# payment or Bid bond, or negotiable irrevocable letter of credit or other form
+# of security ... is required") between "bond" and "required" (~116 chars), which
+# a {0,80} span missed. Sentence-scoping catches any instrument list of any length
+# within one sentence.
+#
+# The "no"->"bond" run is TEMPERED: it may traverse a noun/instrument list but
+# STOPS at a finite/auxiliary verb, which marks a separate clause. That keeps a
+# stray leading negation from a different clause ("No bid MAY be withdrawn, and a
+# bid bond is required") from being read as a bond waiver, while still matching a
+# genuine negated instrument list ("no performance, payment or Bid bond ... is
+# required").
+_BOND_WAIVER_VERB = (r"(?:is|are|was|were|be|been|being|shall|will|would|may|"
+                     r"might|must|can|could|has|have|had|does|do|did)")
 _BOND_WAIVER_RE = re.compile(
     r"\bno\b(?!\s+\w+\s+than\b)"                              # not "no <word> than ..."
-    r"[^.\n]{0,80}?\bbond\b[^.\n]{0,80}?\brequired\b"         # "no ... bond ... required"
-    r"|\bbond\b[^.\n]{0,40}?\bnot\s+required\b",              # "bond ... not required"
+    r"(?:(?!\b" + _BOND_WAIVER_VERB + r"\b)[^.;:\n])*?"       # noun/list run, stop at a verb
+    r"\bbond\b[^.;:\n]*?\brequired\b"                         # "no ... bond ... required" (one sentence)
+    r"|\bbond\b[^.;:\n]*?\bnot\s+required\b",                 # "bond ... not required" (one sentence)
     re.IGNORECASE)
 
 

@@ -870,6 +870,36 @@ def test_deadline_idiom_bond_requirement_is_not_a_waiver():
     assert "Secure a bid bond" in rendered                       # real requirement shown
 
 
+# The EXACT sentence tender_extractor produces from IFB 23447 (captured from a
+# real extraction run; see test_tender_extractor for provenance/SHA). Its long
+# multi-instrument enumeration defeated the prior fixed-span waiver regex, so it
+# rendered as a RED "Bid bond" blocker in pilot #2. This is the end-to-end guard.
+_IFB23447_BOND_WAIVER = (
+    "The Commissioner of OGS has determined that no performance, payment or Bid "
+    "bond, or negotiable irrevocable letter of credit or other form of security "
+    "for the faithful performance of the Contract is required at any time during "
+    "the term of the resulting Contract.")
+
+
+def test_ifb23447_bond_waiver_is_non_blocking_not_red():
+    rep = BR.score_bid(_ex(_IFB23447_BOND_WAIVER),
+                       {"vendor_name": "X", "contract_value_usd": 500000,
+                        "bid_bond_available": False}, golden=GC)
+    # no bonding row at all -> no RED, nothing blocking
+    assert not any(r.kind == "bonding" for r in rep.rows)
+    assert rep.blocking == []
+    # routed to the waiver review channel
+    assert len(rep.waivers) == 1 and rep.waivers[0]["kind"] == "bonding"
+    rendered = BR.render_bid_readiness(rep)
+    assert "NOTED WAIVERS" in rendered
+    assert "tender states no bid bond required" in rendered
+    # the false-RED strings from pilot #2 must be gone
+    assert "[RED] Bid bond" not in rendered
+    assert "[RED   ] Bid bond" not in rendered
+    assert "Secure a bid bond" not in rendered
+    assert "This tender requires Bid bond" not in rendered
+
+
 def test_fallback_page_count_rendered_best_effort():
     # page_count_exact=False -> the "Read N page(s)" line must be marked approximate,
     # not presented as an exact PDF page count.

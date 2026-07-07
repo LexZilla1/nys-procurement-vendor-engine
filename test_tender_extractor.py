@@ -348,6 +348,52 @@ def test_find_requirements_keeps_positive_bond_as_signal():
     assert not any(r.get("capture") == "waiver" for r in reqs)
 
 
+# The EXACT sentence tender_extractor produces from IFB 23447 (OGS Group 05602,
+# revised 2026-06-23; PDF SHA-256 e1f26e19cd5e71db4d6303875648a2548b4e2d1ddc4fb8
+# fff2def45e1d86e246), captured verbatim from a real extraction run — NOT a
+# hand-typed approximation. It enumerates multiple security instruments between
+# "bond" and "required" (~116 chars), which the prior fixed-span waiver regex
+# ({0,80}) missed, so the waiver rendered as a RED "Bid bond" blocker in pilot #2.
+_IFB23447_BOND_WAIVER = (
+    "The Commissioner of OGS has determined that no performance, payment or Bid "
+    "bond, or negotiable irrevocable letter of credit or other form of security "
+    "for the faithful performance of the Contract is required at any time during "
+    "the term of the resulting Contract.")
+
+
+def test_is_bond_waiver_true_on_exact_ifb23447_sentence():
+    # Regression: the real IFB 23447 clause MUST be detected as a waiver. This is
+    # the exact extractor output (long multi-instrument enumeration), the string
+    # that defeated the {0,80}-span regex live in pilot #2.
+    assert TE.is_bond_waiver(_IFB23447_BOND_WAIVER)
+
+
+def test_ifb23447_bond_clause_routes_to_waiver_not_bonding_signal():
+    ex = {"source": "fx", "page_count": 1, "pages": [_IFB23447_BOND_WAIVER],
+          "has_text_layer": True}
+    reqs = TE.find_requirements(ex)
+    assert len(reqs) == 1 and reqs[0]["capture"] == "waiver"
+    assert reqs[0]["kind"] == "bonding"
+    assert reqs[0]["text"] == _IFB23447_BOND_WAIVER
+    # It is NOT captured as a scored bonding signal.
+    assert not any(r.get("capture") == "signal" for r in reqs)
+
+
+def test_bond_waiver_is_sentence_scoped_not_cross_clause():
+    # Sentence-scoping guard: a stray leading negation in a DIFFERENT clause (joined
+    # by a comma/'and', or split by a colon/semicolon) must NOT read as a bond
+    # waiver — the tempered no->bond run stops at a verb, and [.;:] bound the match.
+    assert not TE.is_bond_waiver(
+        "No bid may be withdrawn after opening, and a bid bond is required.")
+    assert not TE.is_bond_waiver(
+        "No proposal shall be withdrawn, and a bid bond is required.")
+    assert not TE.is_bond_waiver("No exceptions: a bid bond is required.")
+    # ...but a genuine negated instrument list, long or short, still matches.
+    assert TE.is_bond_waiver("no bid bond will be required for this procurement.")
+    assert TE.is_bond_waiver(
+        "no performance, payment or Bid bond of any kind is required.")
+
+
 # ---------------------------------------------------------------------------
 # PR-A finding 2 — page count from /Type /Page objects; best-effort page numbers
 # ---------------------------------------------------------------------------
