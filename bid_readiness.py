@@ -435,6 +435,18 @@ def _issue_and_fix(meta, status, vendor_has, grounded, shortfall):
             base_fix or "Review this requirement against the original tender.")
 
 
+def _needs_review_reason(row):
+    """Why a MAPPED row is NEEDS_REVIEW (not VERIFIED_MATCH), split BY GROUNDING.
+    VERIFIED_MATCH needs grounding AND an obligation cue, so a NEEDS_REVIEW row is
+    either ungrounded, or grounded-but-cue-less. A grounded row must NOT be told
+    'no verified golden-copy rule backs this' — that is false for it. (Wording
+    only; the coverage gate / VERIFIED_MATCH invariant are unchanged.)"""
+    if row.grounding:
+        return ("rule is verified in the golden copy, but this tender passage "
+                "lacks an explicit obligation cue; review to confirm applicability.")
+    return "no verified golden-copy rule backs this; review required."
+
+
 class RequirementRow:
     def __init__(self, kind, label, tender_excerpt, page, vendor_has, status,
                  grounding, must, issue=None, fix=None, note=None, detail=None):
@@ -501,7 +513,9 @@ class RequirementRow:
 
 class BidReadinessReport:
     def __init__(self, vendor_name, source, pages_read, requirements_found,
-                 rows, other_requirements=None, possible_authorities=None):
+                 rows, other_requirements=None, possible_authorities=None,
+                 waivers=None, page_numbers_approximate=False,
+                 page_number_note=None):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
@@ -516,6 +530,14 @@ class BidReadinessReport:
         # rather than mixed into the scored UNMAPPED passages (they are uncertain
         # by construction). Still counted as unverified coverage.
         self.possible_authorities = possible_authorities or []
+        # Bid-bond waiver / negation passages ("no ... bond ... required") — an
+        # unscored review channel with waiver-specific wording. Never a scored row
+        # (never RED/blocking/N/A/GREEN), never silently dropped.
+        self.waivers = waivers or []
+        # Page-number attribution honesty (PR-A finding 2): passage "page N" refs
+        # are byte/stream ordinals unless verified as page-tree order.
+        self.page_numbers_approximate = page_numbers_approximate
+        self.page_number_note = page_number_note
         self.contract_value = None  # set by score_bid; None = not determined
 
     @staticmethod
@@ -538,6 +560,10 @@ class BidReadinessReport:
     def cluster_possible_authorities(self, limit=8):
         """De-dupe the possible-authority references → (unique_count, samples)."""
         return self._cluster(self.possible_authorities, limit)
+
+    def cluster_waivers(self, limit=8):
+        """De-dupe the bid-bond waiver passages → (unique_count, samples)."""
+        return self._cluster(self.waivers, limit)
 
     @property
     def checkable_rows(self):
@@ -596,10 +622,13 @@ class BidReadinessReport:
         verified, needs_review = self.coverage_buckets
         unmapped_unique, _ = self.cluster_other()
         possible_unique, _ = self.cluster_possible_authorities()
+        waiver_unique, _ = self.cluster_waivers()
         return {
             VERIFIED_MATCH: len(verified),
             NEEDS_REVIEW: len(needs_review),
-            UNMAPPED: unmapped_unique + possible_unique,
+            # Waivers are unverified RFQ items needing human confirmation, so they
+            # keep coverage fail-closed (NOT COMPLETE) just like unmapped items.
+            UNMAPPED: unmapped_unique + possible_unique + waiver_unique,
         }
 
     @property
@@ -666,6 +695,17 @@ class BidReadinessReport:
             "samples": samples,
         }
 
+    def _waivers_dict(self):
+        unique, samples = self.cluster_waivers()
+        return {
+            "detected": len(self.waivers),
+            "unique": unique,
+            "note": "Bid-bond waiver / negation language detected in the tender "
+                    "(the tender states a bond is not required). Not scored and not "
+                    "a blocker; confirm against the original tender.",
+            "samples": samples,
+        }
+
     def _coverage_dict(self):
         verified, needs_review = self.coverage_buckets
         return {
@@ -677,10 +717,12 @@ class BidReadinessReport:
                  "source_file": r.grounding["source_file"]} for r in verified],
             "needs_review": [
                 {"requirement": r.label, "status": r.status,
-                 "reason": "kind-mapped but not verified in the golden copy"}
+                 "grounded": bool(r.grounding),
+                 "reason": _needs_review_reason(r)}
                 for r in needs_review],
             "unmapped": self._other_dict(),
             "possible_authorities": self._possible_authorities_dict(),
+            "waivers": self._waivers_dict(),
             "note": "Reliability/coverage status, not legal advice. VERIFIED means "
                     "grounded in verbatim golden copy; NEEDS_REVIEW / UNMAPPED "
                     "items are NOT confirmed and do not mean 'no requirement'. "
@@ -695,6 +737,8 @@ class BidReadinessReport:
             "tender_source": self.source,
             "work_summary": {
                 "pages_read": self.pages_read,
+                "page_numbers_approximate": self.page_numbers_approximate,
+                "page_number_note": self.page_number_note,
                 "requirements_found": self.requirements_found,
                 "mapped_findings": len(self.rows),
                 "requirements_checked_against_profile": len(self.checkable_rows),
@@ -702,6 +746,7 @@ class BidReadinessReport:
                 "requirements_not_applicable": len(self.na_rows),
                 "other_requirements_detected": len(self.other_requirements),
                 "possible_authorities_detected": len(self.possible_authorities),
+                "bond_waivers_detected": len(self.waivers),
             },
             # Top-level fail-closed gate — literal, derived from item counts.
             "coverage_complete": self.coverage_complete,
@@ -717,6 +762,7 @@ class BidReadinessReport:
             "action_list": self.actions,
             "blocking_count": len(self.blocking),
             "other_requirements": self._other_dict(),
+            "bond_waivers": self._waivers_dict(),
             "disclaimer": (
                 "Information and document-readiness only. Requirement excerpts are "
                 "quoted from the uploaded tender (not legal advice); only rules "
@@ -755,9 +801,18 @@ def score_bid(extracted, profile, golden=None):
     rows = []
     other = []
     possible_authorities = []
+    waivers = []
     seen_kinds = set()
     seen_other = set()
     for req in requirements:
+        # Bid-bond waiver / negation (PR-A finding 1). A "no ... bond ... required"
+        # passage is NOT a vendor obligation: never a scored row (so it can never
+        # be RED/blocking, N/A, or GREEN-as-satisfied) and never silently dropped —
+        # it goes to its own unscored waiver review bucket with waiver wording.
+        if req.get("capture") == "waiver":
+            waivers.append({"text": req["text"], "page": req["page"],
+                            "kind": req["kind"]})
+            continue
         # Authority/form reference captured without mandatory language (silent-
         # drop fix). Uncertain by construction → its own possible-authority
         # bucket, never a scored requirement row.
@@ -897,7 +952,9 @@ def score_bid(extracted, profile, golden=None):
         pages_read=extracted.get("page_count", 0),
         requirements_found=len(requirements),
         rows=rows, other_requirements=other,
-        possible_authorities=possible_authorities)
+        possible_authorities=possible_authorities, waivers=waivers,
+        page_numbers_approximate=extracted.get("page_numbers_approximate", False),
+        page_number_note=extracted.get("page_number_note"))
     report.contract_value = contract_value
     return report
 
@@ -922,6 +979,10 @@ def render_bid_readiness(report, advisory=None):
              "known rule, {} other; checked {} against your profile.".format(
                  report.pages_read, report.requirements_found, len(report.rows),
                  len(report.other_requirements), len(report.checkable_rows)))
+    if report.page_numbers_approximate:
+        L.append("NOTE: {}".format(
+            report.page_number_note
+            or "page numbers below are approximate (best-effort; not verified)."))
     c = report.counts
     na = len(report.na_rows)
     score_caveat = ("" if report.coverage_complete
@@ -943,7 +1004,9 @@ def render_bid_readiness(report, advisory=None):
         flag = "MUST" if r.must else "goal"
         L.append("[{}] {} ({})".format(_MARK[r.status], r.label, flag))
         L.append('   tender : "{}"'.format(r.tender_excerpt))
-        L.append("   from   : this tender, page {}".format(r.page))
+        _pg = "this tender, page {}{}".format(
+            r.page, " (approx)" if report.page_numbers_approximate else "")
+        L.append("   from   : {}".format(_pg))
         if r.grounding:
             L.append("   rule   : {} (confirmed)".format(r.grounding["source_file"]))
             L.append('   cite   : "{}"'.format(r.grounding["citation_quote"]))
@@ -987,11 +1050,11 @@ def render_bid_readiness(report, advisory=None):
         L.append("  ✓ {} — {}".format(r.label, r.grounding["source_file"]))
     if not verified:
         L.append("  (none)")
-    L.append("NEEDS REVIEW — kind-mapped but NOT verified in the golden copy ({}):"
+    L.append("NEEDS REVIEW — mapped, but not a confident VERIFIED_MATCH (ungrounded, "
+             "or grounded without an explicit obligation cue) ({}):"
              .format(cc[NEEDS_REVIEW]))
     for r in needs_review:
-        L.append("  ? {} — no verified golden-copy rule backs this; review "
-                 "required.".format(r.label))
+        L.append("  ? {} — {}".format(r.label, _needs_review_reason(r)))
     if not needs_review:
         L.append("  (none)")
     if report.other_requirements:
@@ -1016,6 +1079,19 @@ def render_bid_readiness(report, advisory=None):
         for s in samples:
             txt = s["text"] if len(s["text"]) <= 90 else s["text"][:87] + "..."
             L.append("  • [p{}] {}".format(s["page"], txt))
+        if unique > len(samples):
+            L.append("  ...and {} more.".format(unique - len(samples)))
+    if report.waivers:
+        unique, samples = report.cluster_waivers()
+        L.append("NOTED WAIVERS — REVIEW ({} passage(s), {} unique):".format(
+            len(report.waivers), unique))
+        L.append("  The tender states a bond is NOT required. Not scored and not a "
+                 "blocker — confirm against the original tender before relying on it.")
+        for s in samples:
+            txt = s["text"] if len(s["text"]) <= 90 else s["text"][:87] + "..."
+            pg = "p{}{}".format(s["page"], "~" if report.page_numbers_approximate else "")
+            L.append("  • [{}] tender states no bid bond required — confirm against "
+                     "the original tender: \"{}\"".format(pg, txt))
         if unique > len(samples):
             L.append("  ...and {} more.".format(unique - len(samples)))
     # -------- ADVISORY (sibling, read-only) — appended AFTER coverage. Only

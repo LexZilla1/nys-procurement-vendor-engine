@@ -270,6 +270,127 @@ def test_existing_signal_captures_still_tagged_signal():
     assert all(r.get("capture") == "signal" for r in reqs)
 
 
+# ---------------------------------------------------------------------------
+# PR-A finding 1 — bid-bond waiver / negation detection (extractor level)
+# ---------------------------------------------------------------------------
+
+_WAIVER = ("The Commissioner of OGS has determined that no performance, payment "
+           "or Bid bond of any kind is required for this procurement.")
+_POSITIVE = "A bid bond of 5% of the bid amount shall accompany each bid."
+_GUARD = "A bond is required unless waived by the Commissioner."
+
+
+def test_is_bond_waiver_is_narrow():
+    # waiver / negation constructions -> True
+    assert TE.is_bond_waiver(_WAIVER)
+    assert TE.is_bond_waiver("A bid bond is not required for this solicitation.")
+    # affirmative requirement (even one mentioning waiver) -> False (not suppressed)
+    assert not TE.is_bond_waiver(_POSITIVE)
+    assert not TE.is_bond_waiver(_GUARD)                       # "required unless waived"
+    assert not TE.is_bond_waiver("A bid bond is required unless waived by OGS.")
+
+
+def test_find_requirements_routes_waiver_to_waiver_capture():
+    ex = {"source": "fx", "page_count": 1, "pages": [_WAIVER], "has_text_layer": True}
+    reqs = TE.find_requirements(ex)
+    assert len(reqs) == 1 and reqs[0]["capture"] == "waiver"
+    assert reqs[0]["kind"] == "bonding" and reqs[0]["text"] == _WAIVER
+
+
+def test_find_requirements_keeps_positive_bond_as_signal():
+    ex = {"source": "fx", "page_count": 1, "pages": [_POSITIVE], "has_text_layer": True}
+    reqs = TE.find_requirements(ex)
+    assert any(r["kind"] == "bonding" and r["capture"] == "signal" for r in reqs)
+    assert not any(r.get("capture") == "waiver" for r in reqs)
+
+
+# ---------------------------------------------------------------------------
+# PR-A finding 2 — page count from /Type /Page objects; best-effort page numbers
+# ---------------------------------------------------------------------------
+
+# 3 /Type /Page LEAF objects, /Type /Pages Count 3, but only 2 text-bearing
+# content streams (page 5 has no /Contents). Leaf count (3) != stream count (2).
+_PDF_3PAGES_2STREAMS = (
+    b"%PDF-1.7\n"
+    b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+    b"2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >> endobj\n"
+    b"3 0 obj << /Type /Page /Parent 2 0 R /Contents 6 0 R >> endobj\n"
+    b"4 0 obj << /Type /Page /Parent 2 0 R /Contents 7 0 R >> endobj\n"
+    b"5 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+    b"6 0 obj << /Length 40 >>\nstream\n"
+    b"(The vendor shall submit an EEO policy statement.) Tj\nendstream endobj\n"
+    b"7 0 obj << /Length 40 >>\nstream\n"
+    b"(Workers compensation coverage shall be maintained.) Tj\nendstream endobj\n"
+    b"trailer << /Root 1 0 R >>\n%%EOF")
+
+
+def _write_bytes(data, suffix=".pdf"):
+    import tempfile
+    fh = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    fh.write(data)
+    fh.close()
+    return fh.name
+
+
+def test_page_count_from_page_objects_not_streams():
+    path = _write_bytes(_PDF_3PAGES_2STREAMS)
+    try:
+        ex = TE.extract_pdf(path)
+    finally:
+        os.unlink(path)
+    assert ex["page_count"] == 3, ex["page_count"]                 # /Type /Page objects
+    assert ex["page_count_source"].startswith("/Type /Page")
+    assert ex["text_bearing_stream_count"] == 2                    # not the vendor count
+    assert ex["page_count"] != ex["text_bearing_stream_count"]
+
+
+def test_page_count_counts_objects_in_compressed_object_streams():
+    import zlib
+    inner = b"<< /Type /Page >> << /Type /Page >>"                 # two page objs, compressed
+    comp = zlib.compress(inner)
+    data = (b"1 0 obj << /Type /Page >> endobj\n"                  # one uncompressed page
+            b"2 0 obj << /Type /ObjStm /Filter /FlateDecode /Length %d >>\nstream\n"
+            % len(comp) + comp + b"\nendstream endobj\n")
+    assert TE._count_page_objects(data) == 3                       # 1 raw + 2 compressed
+
+
+def test_page_numbers_flagged_approximate_when_order_unverified():
+    path = _write_bytes(_PDF_3PAGES_2STREAMS)
+    try:
+        ex = TE.extract_pdf(path)
+    finally:
+        os.unlink(path)
+    assert ex["page_numbers_approximate"] is True
+    assert "approximate" in ex["page_number_note"].lower()
+    # the mismatch is called out explicitly (stream ordinals are not page numbers)
+    assert "stream" in ex["page_number_note"].lower()
+
+
+def test_txt_page_numbers_are_exact():
+    path = _write_bytes(b"Page one text.\fPage two text.", suffix=".txt")
+    try:
+        ex = TE.extract_txt(path)
+    finally:
+        os.unlink(path)
+    assert ex["page_count"] == 2 and ex["page_numbers_approximate"] is False
+
+
+def test_extraction_recall_unchanged_by_page_numbering():
+    """The page-count change must NOT drop any extracted requirement text: the
+    text-bearing pages and the requirements found are exactly the stream-extractor
+    output (both requirement strings survive)."""
+    path = _write_bytes(_PDF_3PAGES_2STREAMS)
+    try:
+        ex = TE.extract_pdf(path)
+    finally:
+        os.unlink(path)
+    assert ex["pages"] == ["The vendor shall submit an EEO policy statement.",
+                           "Workers compensation coverage shall be maintained."]
+    reqs = TE.find_requirements(ex)
+    texts = " ".join(r["text"] for r in reqs)
+    assert "EEO policy statement" in texts and "Workers compensation" in texts
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]
