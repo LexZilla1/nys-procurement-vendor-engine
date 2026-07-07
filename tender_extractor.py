@@ -170,12 +170,56 @@ def _dehyphenate(text):
     return text
 
 
-def extract_pdf(path):
-    """Extract text-layer content from a PDF, one entry per text-bearing page.
+# --- Page-object counting (PR-A finding 2) ---------------------------------
+# The vendor-visible page count comes from the /Type /Page page-tree LEAF objects
+# (order-independent, exact) — NOT from the number of text-bearing content
+# streams (which over/under-counts: multi-stream pages, form XObjects, blank
+# pages). Page NUMBERS attached to passages remain byte/stream ordinals: mapping
+# a content stream to its real page-tree position is NOT stdlib-safe for a
+# linearized / object-stream PDF, so those numbers are BEST-EFFORT (flagged).
+_PAGE_OBJ_RE = re.compile(rb"/Type\s*/Page(?![a-zA-Z])")   # /Page, not /Pages
 
-    Returns {"source", "page_count", "pages": [str, ...], "has_text_layer"}.
-    has_text_layer is False for a scanned/image PDF we cannot read — the caller
-    must then say "not confirmed", never guess.
+
+def _decompress_bytes(chunk):
+    """Best-effort inflate of a stream to raw bytes (zlib or raw DEFLATE). Returns
+    the inflated bytes, or the original chunk when it is not zlib-compressed."""
+    try:
+        return zlib.decompress(chunk)
+    except zlib.error:
+        pass
+    try:
+        return zlib.decompressobj(-zlib.MAX_WBITS).decompress(chunk)
+    except zlib.error:
+        return chunk  # already uncompressed / not inflatable — scan as-is
+
+
+def _count_page_objects(data):
+    """Count /Type /Page LEAF page objects (excluding /Pages tree nodes),
+    order-independent. Scans raw bytes AND decompressed streams, since page
+    objects may live in compressed object streams (/ObjStm) in linearized/modern
+    PDFs. Returns an int, or None when no page object is found (caller falls
+    back to the text-bearing-stream count and flags it)."""
+    total = len(_PAGE_OBJ_RE.findall(data))
+    for chunk in _iter_raw_streams(data):
+        dec = _decompress_bytes(chunk)
+        if dec is chunk:
+            continue  # not compressed → already counted in the raw-bytes pass
+        total += len(_PAGE_OBJ_RE.findall(dec))
+    return total or None
+
+
+def extract_pdf(path):
+    """Extract text-layer content from a PDF, one entry per text-bearing content
+    stream (recall-preserving — unchanged from the stream extractor).
+
+    Returns {"source", "page_count", "page_count_source",
+    "text_bearing_stream_count", "pages", "has_text_layer",
+    "page_numbers_approximate", "page_number_note"}.
+
+    page_count is the exact /Type /Page leaf count (order-independent). Passage
+    "page N" refs use the stream ordinal and are BEST-EFFORT: unless verified,
+    page_numbers_approximate is True. has_text_layer is False for a scanned/image
+    PDF we cannot read — the caller must then say "not confirmed", never guess.
     """
     with open(path, "rb") as fh:
         data = fh.read()
@@ -187,11 +231,45 @@ def extract_pdf(path):
         text = _text_from_content(decoded)
         if text:
             pages.append(_dehyphenate(text))
+
+    stream_count = len(pages)
+    leaf_count = _count_page_objects(data)
+    page_count_exact = leaf_count is not None
+    if page_count_exact:
+        page_count = leaf_count
+        page_count_source = "/Type /Page page-tree leaf objects"
+        # Page numbers for passage refs are byte/stream ordinals. We cannot verify
+        # stdlib-safe that stream order == page-tree reading order, so they are
+        # BEST-EFFORT. A leaf-count vs stream-count mismatch is positive proof that
+        # a stream ordinal is not the real page number.
+        if leaf_count != stream_count:
+            note = ("page numbers approximate: %d text-bearing content stream(s) vs "
+                    "%d /Type /Page object(s) — stream ordinals are not real page "
+                    "numbers." % (stream_count, leaf_count))
+        else:
+            note = ("page numbers approximate: byte/stream order is not verified as "
+                    "page-tree reading order (stdlib-only; no page-tree walk).")
+    else:
+        # Could NOT count /Type /Page objects (unsupported compression / object-
+        # stream layout). Do NOT present the text-stream count as an exact page
+        # count — mark both the count and the refs as best-effort estimates.
+        page_count = stream_count
+        page_count_source = ("text-bearing content streams — /Type /Page objects "
+                             "not found; page count NOT exact")
+        note = ("page count and page numbers approximate: could not count "
+                "/Type /Page objects (unsupported compression / object-stream "
+                "layout); showing the text-bearing content stream count (%d) as a "
+                "best-effort estimate, not an exact PDF page count." % stream_count)
     return {
         "source": os.path.basename(path),
-        "page_count": len(pages),
+        "page_count": page_count,
+        "page_count_exact": page_count_exact,
+        "page_count_source": page_count_source,
+        "text_bearing_stream_count": stream_count,
         "pages": pages,
         "has_text_layer": bool(pages),
+        "page_numbers_approximate": True,
+        "page_number_note": note,
     }
 
 
@@ -204,8 +282,14 @@ def extract_txt(path):
     return {
         "source": os.path.basename(path),
         "page_count": len(pages),
+        "page_count_exact": True,
+        "page_count_source": "form-feed page breaks",
+        "text_bearing_stream_count": len(pages),
         "pages": pages,
         "has_text_layer": bool(pages),
+        # Form feeds are literal page breaks, so page numbers are EXACT here.
+        "page_numbers_approximate": False,
+        "page_number_note": "page numbers exact: form-feed page breaks in pasted text.",
     }
 
 
@@ -403,6 +487,34 @@ def _classify(text):
     return "general"
 
 
+# --- Bid-bond waiver / negation (PR-A finding 1) ---------------------------
+# A NARROW detector for the "no ... bond ... is required" negation (and the
+# "bond ... is not required" form). It deliberately does NOT match:
+#   * an AFFIRMATIVE requirement that merely mentions waiver ("a bid bond is
+#     required unless waived"); or
+#   * a comparative / deadline idiom whose "no" is not a bond negation
+#     ("No later than ... a bid bond ... is required"; "no less than", "no more
+#     than", "no earlier than", "no fewer than").
+# The `(?!\s+\w+\s+than\b)` lookahead rejects any "no <word> than" idiom head, so
+# only a genuine "no ... bond ... required" negation anchors. Bounded by [^.\n]
+# so it never spans a sentence/line boundary.
+_BOND_WAIVER_RE = re.compile(
+    r"\bno\b(?!\s+\w+\s+than\b)"                              # not "no <word> than ..."
+    r"[^.\n]{0,80}?\bbond\b[^.\n]{0,80}?\brequired\b"         # "no ... bond ... required"
+    r"|\bbond\b[^.\n]{0,40}?\bnot\s+required\b",              # "bond ... not required"
+    re.IGNORECASE)
+
+
+def is_bond_waiver(text):
+    """True ONLY for a bid-bond WAIVER / negation ("no ... bond ... required" or
+    "bond ... not required"). Narrow by construction: an affirmative requirement
+    that merely mentions waiver ("a bid bond is required unless waived") is NOT a
+    waiver, and a comparative/deadline idiom ("No later than ... a bid bond ... is
+    required", "no less than") is NOT a waiver — both return False, so a genuine
+    bond requirement is never suppressed."""
+    return bool(_BOND_WAIVER_RE.search(text))
+
+
 def _segments(page_text):
     """Split a page into candidate requirement segments (lines + sentences)."""
     segs = []
@@ -434,6 +546,17 @@ def find_requirements(extracted):
     for idx, page_text in enumerate(extracted.get("pages", []), start=1):
         for seg in _segments(_stitch_wraps(page_text)):
             kind = _classify(seg)
+            # Bid-bond waiver / negation: a "no ... bond ... required" passage is
+            # NOT a vendor obligation and must not be scored as one. Capture it
+            # (never silently drop it) as an unscored waiver review item; downstream
+            # routes it to a waiver-specific review channel with its own wording.
+            if kind == "bonding" and is_bond_waiver(seg):
+                key = ("waiver", seg.lower())
+                if key not in seen:
+                    seen.add(key)
+                    rows.append({"text": seg, "page": idx, "kind": kind,
+                                 "capture": "waiver"})
+                continue
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":
                 # Silent-drop fix (PR #45): rescue a WHOLE authority/form

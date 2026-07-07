@@ -746,6 +746,164 @@ def test_citation_audit_still_end_to_end_yes_after_pr45():
     assert "ENFORCED END-TO-END: YES" in ga.render(rep)
 
 
+# ---------------------------------------------------------------------------
+# PR-A finding 1 — bid-bond waiver / negation (scoring + render)
+# ---------------------------------------------------------------------------
+
+_WAIVER = ("The Commissioner of OGS has determined that no performance, payment "
+           "or Bid bond of any kind is required for this procurement.")
+_POSITIVE = "A bid bond of 5% of the bid amount shall accompany each bid."
+_BB_UNLESS = "A bid bond is required unless waived by the Commissioner."
+
+
+def _ex(text):
+    return {"source": "fx", "page_count": 1, "text_bearing_stream_count": 1,
+            "pages": [text], "has_text_layer": True,
+            "page_numbers_approximate": False, "page_number_note": "exact"}
+
+
+def test_bond_waiver_not_scored_and_surfaces_in_review():
+    # bid_bond_available=False would previously RED-flag the WAIVER as unmet.
+    rep = BR.score_bid(_ex(_WAIVER), {"vendor_name": "X", "contract_value_usd": 500000,
+                                      "bid_bond_available": False}, golden=GC)
+    # not a scored row: no bonding row at all -> no RED, no blocking
+    assert not any(r.kind == "bonding" for r in rep.rows)
+    assert rep.blocking == []
+    # surfaced in the waiver review channel, not silently dropped
+    assert len(rep.waivers) == 1 and rep.waivers[0]["kind"] == "bonding"
+    rendered = BR.render_bid_readiness(rep)
+    assert "Secure a bid bond" not in rendered            # the false action is gone
+    assert "NOTED WAIVERS" in rendered
+    assert "tender states no bid bond required" in rendered
+    # fail-closed: an unconfirmed waiver keeps coverage NOT complete
+    assert rep.coverage_complete is False
+
+
+def test_positive_bond_still_red_when_profile_lacks_it():
+    rep = BR.score_bid(_ex(_POSITIVE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                        "bid_bond_available": False}, golden=GC)
+    bonding = [r for r in rep.rows if r.kind == "bonding"]
+    assert len(bonding) == 1 and bonding[0].status == BR.RED
+    assert any(r.kind == "bonding" for r in rep.blocking)
+    assert rep.waivers == []
+
+
+def test_bid_bond_required_unless_waived_is_not_suppressed():
+    rep = BR.score_bid(_ex(_BB_UNLESS), {"vendor_name": "X", "contract_value_usd": 500000,
+                                         "bid_bond_available": False}, golden=GC)
+    bonding = [r for r in rep.rows if r.kind == "bonding"]
+    assert len(bonding) == 1 and bonding[0].status == BR.RED     # a real requirement
+    assert rep.waivers == []                                     # NOT routed to waivers
+
+
+def test_deadline_idiom_bond_requirement_is_not_a_waiver():
+    # "No later than ... a bid bond ... is required" is a REAL requirement with
+    # deadline phrasing — must score RED (profile lacks bond), not route to waivers.
+    txt = ("No later than the bid due date, a bid bond of 5% of the bid amount "
+           "is required.")
+    rep = BR.score_bid(_ex(txt), {"vendor_name": "X", "contract_value_usd": 500000,
+                                  "bid_bond_available": False}, golden=GC)
+    bonding = [r for r in rep.rows if r.kind == "bonding"]
+    assert len(bonding) == 1 and bonding[0].status == BR.RED
+    assert any(r.kind == "bonding" for r in rep.blocking)
+    assert rep.waivers == []                                     # NOT a waiver
+    rendered = BR.render_bid_readiness(rep)
+    assert "tender states no bid bond required" not in rendered  # no waiver wording
+    assert "Secure a bid bond" in rendered                       # real requirement shown
+
+
+def test_fallback_page_count_rendered_best_effort():
+    # page_count_exact=False -> the "Read N page(s)" line must be marked approximate,
+    # not presented as an exact PDF page count.
+    ex = dict(_ex(_POSITIVE))
+    ex["page_count"] = 71
+    ex["page_count_exact"] = False
+    ex["page_numbers_approximate"] = True
+    rep = BR.score_bid(ex, {"vendor_name": "X", "contract_value_usd": 500000,
+                            "bid_bond_available": False}, golden=GC)
+    assert rep.page_count_exact is False
+    rendered = BR.render_bid_readiness(rep)
+    assert "~71 page(s) (approximate" in rendered
+    assert "/Type /Page count unavailable" in rendered
+    # exact path (default) does NOT carry the approximate page-count marker
+    rep2 = BR.score_bid(_ex(_POSITIVE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                         "bid_bond_available": False}, golden=GC)
+    assert "(approximate — /Type /Page count unavailable" not in BR.render_bid_readiness(rep2)
+
+
+# ---------------------------------------------------------------------------
+# PR-A finding 3 — coverage NEEDS_REVIEW wording split by grounding
+# ---------------------------------------------------------------------------
+
+_WC_NOCUE = "The contractor's workers' compensation coverage."
+
+
+def test_needs_review_wording_grounded_row_is_not_told_unbacked():
+    # grounded (workers' comp) BUT cue-less -> NEEDS_REVIEW; must NOT say "no
+    # verified golden-copy rule backs this".
+    rep = BR.score_bid(_ex(_WC_NOCUE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                        "workers_compensation_coverage": True}, golden=GC)
+    row = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert row.grounding is not None and row.coverage == BR.NEEDS_REVIEW
+    nr = rep._coverage_dict()["needs_review"]
+    assert len(nr) == 1 and nr[0]["grounded"] is True
+    assert "lacks an explicit obligation cue" in nr[0]["reason"]
+    assert "no verified golden-copy rule backs this" not in nr[0]["reason"]
+    rendered = BR.render_bid_readiness(rep)
+    # the per-requirement section still (correctly) shows it as grounded/confirmed
+    assert "(confirmed)" in rendered
+    # the coverage NEEDS REVIEW line for this grounded row must NOT claim unbacked
+    nr_lines = [ln for ln in rendered.splitlines()
+                if ln.strip().startswith("? Workers' compensation")]
+    assert nr_lines and "no verified golden-copy rule backs this" not in nr_lines[0]
+    assert "lacks an explicit obligation cue" in nr_lines[0]
+
+
+def test_needs_review_wording_ungrounded_row_still_says_unbacked():
+    # bonding has NO grounding; vendor value unknown -> YELLOW, NEEDS_REVIEW,
+    # ungrounded -> the ORIGINAL "no verified golden-copy rule backs this" wording.
+    rep = BR.score_bid(_ex(_POSITIVE), {"vendor_name": "X",
+                                        "contract_value_usd": 500000}, golden=GC)
+    row = [r for r in rep.rows if r.kind == "bonding"][0]
+    assert row.grounding is None and row.coverage == BR.NEEDS_REVIEW
+    nr = [d for d in rep._coverage_dict()["needs_review"] if d["requirement"] == row.label][0]
+    assert nr["grounded"] is False
+    assert nr["reason"] == "no verified golden-copy rule backs this; review required."
+
+
+def test_verified_match_invariant_unchanged():
+    # grounded + obligation cue -> VERIFIED_MATCH (gate/invariant preserved).
+    cued = "The vendor shall maintain workers' compensation coverage."
+    rep = BR.score_bid(_ex(cued), {"vendor_name": "X", "contract_value_usd": 500000,
+                                   "workers_compensation_coverage": True}, golden=GC)
+    row = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert row.grounding is not None and row.coverage == BR.VERIFIED_MATCH
+    # grounded but NO cue -> NEEDS_REVIEW (still not a confident VERIFIED_MATCH)
+    rep2 = BR.score_bid(_ex(_WC_NOCUE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                         "workers_compensation_coverage": True}, golden=GC)
+    row2 = [r for r in rep2.rows if r.kind == "insurance_workers"][0]
+    assert row2.grounding is not None and row2.coverage == BR.NEEDS_REVIEW
+
+
+# ---------------------------------------------------------------------------
+# PR-A finding 2 — page-number approximate flag surfaces in the render
+# ---------------------------------------------------------------------------
+
+def test_render_flags_page_numbers_approximate():
+    ex = dict(_ex(_POSITIVE)); ex["page_numbers_approximate"] = True
+    ex["page_number_note"] = "page numbers approximate: test note."
+    rep = BR.score_bid(ex, {"vendor_name": "X", "contract_value_usd": 500000,
+                            "bid_bond_available": False}, golden=GC)
+    rendered = BR.render_bid_readiness(rep)
+    assert "NOTE: page numbers approximate" in rendered
+    assert "page 1 (approx)" in rendered
+    # exact path: no approximate marker
+    rep2 = BR.score_bid(_ex(_POSITIVE), {"vendor_name": "X", "contract_value_usd": 500000,
+                                         "bid_bond_available": False}, golden=GC)
+    rendered2 = BR.render_bid_readiness(rep2)
+    assert "(approx)" not in rendered2 and "NOTE: page numbers approximate" not in rendered2
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]
