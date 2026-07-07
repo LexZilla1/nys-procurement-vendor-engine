@@ -48,6 +48,22 @@ config. Everything else waits.
 Note: PRs #29–#34 were merged under prompts that pre-authorized squash-merge;
 this policy applies from this PR forward.
 
+## Durability — never lose work (cloud/ephemeral sessions)
+Cloud sessions run in ephemeral containers: **unpushed work may be lost** when
+the container is reclaimed. Pushing a branch is always safe; only merging needs
+approval (see Merge policy).
+- Push the working branch to origin at every natural checkpoint: the first
+  passing test run, before any long-running step, and before session end.
+- Before ending any implementation session: commit the PR-scope changes, push
+  the branch, and — if tests pass — open a draft PR.
+- If tests do NOT pass, or a PR should not be opened, explicitly report:
+  uncommitted changes, staged changes, local-only (unpushed) commits, the
+  branch name, the upstream/push status, and the exact reason nothing was
+  pushed / no PR was opened. Never end silently with work only on the local
+  branch.
+- Read-only / investigation sessions must NOT commit, push, or open PRs — they
+  report findings only.
+
 ## Compliance wording check
 Any PR that adds or changes vendor-facing output text (verdicts, notices,
 interest/eligibility wording, form-fill notices) must include a self-review
