@@ -23,6 +23,7 @@ default claude-sonnet-4-6). No Sonnet 5 here; no output_config.format.
 """
 
 import json
+import os
 import re
 
 # Which report bucket a referenced item came from (provenance for refs).
@@ -103,6 +104,153 @@ def _known_kinds():
 
 
 # ---------------------------------------------------------------------------
+# Captured-authority awareness (PR-B2). A conservative, GOLDEN-DERIVED list of
+# the authorities already verified/citable in the golden copy, plus a
+# normalization-robust identifier match used ONLY as a display-layer dedupe
+# backstop (never a reject-to-null; runs after _validate). Nothing here calls
+# GoldenCopy.cite() — it reads source `**Name:**` headers + the derived
+# citation-eligibility status only. Derived from the golden sources, not
+# hardcoded.
+# ---------------------------------------------------------------------------
+
+# A statute/reg identifier: a hyphenated section id anywhere ("139-j", "15-a",
+# "220-i", "2879-a", "17-0303"), OR a bare number that directly follows a
+# section/article/part cue ("§ 314", "Article 15", "Subpart 225-1"). Matching on
+# the identifier makes "§139-j" == "State Finance Law § 139-j" == "SFL 139-j" and
+# "Art. 15-A" == "Article 15-A".
+_ID_HYPHEN_RE = re.compile(r"\b(\d+-[0-9a-z]+)\b", re.IGNORECASE)
+_ID_CUE_RE = re.compile(
+    r"(?:§+|\bsection\b|\barticle\b|\bart\.?|\bsubpart\b|\bpart\b)\s*"
+    r"(\d+(?:-[0-9a-z]+)?)", re.IGNORECASE)
+_NAME_RE = re.compile(r"^- \*\*Name:\*\*\s*(.+)$", re.M)
+
+# Sources whose derived status is verified/citable (normally OR gated). PARTIAL /
+# PENDING / DIVERGENT / STALE / None are NOT treated as captured. Resolved lazily
+# so importing this module never needs engine.golden_status.
+_CITABLE_STATUSES = None
+_CAPTURED_CACHE = {}     # sources_dir -> (labels, unnormalized)
+
+
+def _authority_ids(text):
+    """Frozenset of normalized statute/reg identifiers named in `text`."""
+    if not text:
+        return frozenset()
+    ids = set()
+    for m in _ID_HYPHEN_RE.finditer(text):
+        ids.add(m.group(1).lower())
+    for m in _ID_CUE_RE.finditer(text):
+        ids.add(m.group(1).lower())
+    return frozenset(ids)
+
+
+def _authority_label(raw):
+    """The primary authority name from a source's `**Name:**` header — the part
+    before the first em dash, so a trailing '(Article 11)'-style context does not
+    over-normalize into a second identifier. None when there is no Name header."""
+    m = _NAME_RE.search(raw or "")
+    if not m:
+        return None
+    name = m.group(1).strip()
+    i = name.find("—")                    # em dash
+    if i != -1:
+        name = name[:i].strip()
+    return name[:TARGET_AUTHORITY_CHARS] or None
+
+
+def _load_golden_safe():
+    """A GoldenCopy, or None. Import-guarded so importing/using this module never
+    hard-depends on validator."""
+    try:
+        from validator import GoldenCopy
+        return GoldenCopy()
+    except Exception:
+        return None
+
+
+def _derive_captured(golden):
+    """Return (labels, unnormalized) derived from VERIFIED/CITABLE golden sources.
+
+      labels        — sorted authority-name strings that normalized to at least
+                      one identifier (used for the payload AND for suppression);
+      unnormalized  — sorted source filenames that are citable but whose
+                      authority did NOT normalize confidently (DIAGNOSTICS ONLY,
+                      never used for suppression).
+
+    Conservative: a source is skipped entirely unless its derived status is
+    citable, and an authority is only 'captured' when a specific identifier is
+    extracted. Cached per sources_dir."""
+    global _CITABLE_STATUSES
+    if golden is None:
+        return [], []
+    key = getattr(golden, "sources_dir", None)
+    if key in _CAPTURED_CACHE:
+        return _CAPTURED_CACHE[key]
+    try:
+        from engine import golden_status as gs
+        if _CITABLE_STATUSES is None:
+            _CITABLE_STATUSES = gs.CITABLE_NORMALLY | gs.CITABLE_GATED_ONLY
+    except Exception:
+        _CAPTURED_CACHE[key] = ([], [])
+        return [], []
+    try:
+        names = sorted(n for n in os.listdir(key)
+                       if n.startswith("source-") and n.endswith(".md"))
+    except Exception:
+        names = []
+    labels, unnormalized = [], []
+    for name in names:
+        try:
+            status = golden.status_of(name)
+        except Exception:
+            status = None
+        if status not in _CITABLE_STATUSES:
+            continue                            # not verified/citable -> not captured
+        raw = getattr(golden, "_raw", {}).get(name)
+        if raw is None:
+            try:
+                with open(os.path.join(key, name), encoding="utf-8") as fh:
+                    raw = fh.read()
+            except Exception:
+                raw = ""
+        label = _authority_label(raw)
+        if label and _authority_ids(label):
+            labels.append(label)
+        else:
+            unnormalized.append(name)           # citable but not confidently normalized
+    result = (sorted(set(labels)), sorted(unnormalized))
+    _CAPTURED_CACHE[key] = result
+    return result
+
+
+def _captured_id_set(labels):
+    ids = set()
+    for lab in labels or []:
+        ids |= _authority_ids(lab)
+    return frozenset(ids)
+
+
+def _suppress_captured_backlog(advisory, captured_labels):
+    """Display-layer dedupe backstop (PR-B2 change 2). Drop any
+    coverage_backlog_candidate whose suggested_authority names an authority
+    already captured in the golden copy (identifier match, normalization-robust).
+    Runs AFTER _validate/_finalize so the strict key-set checks are untouched, and
+    NEVER nulls the advisory — it only filters the backlog list. Returns
+    (advisory, suppressed)."""
+    if not advisory:
+        return advisory, []
+    cap_ids = _captured_id_set(captured_labels)
+    kept, suppressed = [], []
+    for c in advisory.get("coverage_backlog_candidates", []):
+        cand_ids = _authority_ids((c or {}).get("suggested_authority", ""))
+        if cand_ids and (cand_ids & cap_ids):
+            suppressed.append(c)
+        else:
+            kept.append(c)
+    advisory["coverage_backlog_candidates"] = kept
+    return advisory, suppressed
+
+
+# ---------------------------------------------------------------------------
 # Payload — built from the finished report ONLY (vendor's own tender text +
 # reliability flags). No golden-copy body; grounding is passed as a FLAG, never
 # the grounded quote, so this module never needs GoldenCopy.cite().
@@ -112,6 +260,7 @@ def build_payload(report):
     _verified, needs_review = report.coverage_buckets
     _unmapped_unique, unmapped_samples = report.cluster_other()
     _poss_unique, poss_samples = report.cluster_possible_authorities()
+    captured, _unnormalized = _derive_captured(_load_golden_safe())
     return {
         "tender_file": report.source,   # document metadata only — NOT a ref source
         "contract_value": report.contract_value,
@@ -123,6 +272,11 @@ def build_payload(report):
                      for s in unmapped_samples],
         "possible_authorities": [{"page": s["page"], "text": s["text"]}
                                  for s in poss_samples],
+        # Authorities already verified/citable in the golden copy (golden-derived,
+        # not hardcoded). The model is told NOT to nominate any of these as a
+        # backlog candidate; a deterministic backstop suppresses any that slip
+        # through (see _suppress_captured_backlog).
+        "captured_authorities": captured,
         "known_kinds": _known_kinds(),
     }
 
@@ -145,6 +299,14 @@ _COMPACT_RULES = (
     "medium or low confidence for any inferred authority or backlog candidate. "
     "All backlog authorities are candidates for human source verification, not "
     "verified citations.\n"
+    "- Citation fidelity: cite ONLY the authority the tender excerpt itself "
+    "names. Never invent a section, subpart, or part number, and never narrow to "
+    "a more specific identifier than the excerpt contains; if you are unsure of "
+    "the precise citation, name only the general body (the statute or regulation "
+    "title) and set confidence low.\n"
+    "- Do NOT nominate as a coverage_backlog_candidate any authority already "
+    "listed in the payload's captured_authorities; those are already captured in "
+    "the golden copy.\n"
     % (TARGET_GROUPINGS, TARGET_ITEM_NOTES, TARGET_BACKLOG_CANDIDATES))
 
 SYSTEM = (
@@ -420,8 +582,16 @@ def advise(report, llm=None, transport=None):
             parsed = llm(payload)
         except Exception:
             return None
-        return _finalize(parsed)
-    return _live(payload, transport=transport)
+        advisory = _finalize(parsed)
+    else:
+        advisory = _live(payload, transport=transport)
+    if advisory is None:
+        return None
+    # Deterministic captured-authority dedupe backstop — display layer only, after
+    # validation; never nulls the advisory (PR-B2 change 2).
+    advisory, _suppressed = _suppress_captured_backlog(
+        advisory, payload.get("captured_authorities"))
+    return advisory
 
 
 # ---------------------------------------------------------------------------
@@ -553,21 +723,45 @@ def _usage_of(msg):
     return {"input_tokens": it, "output_tokens": ot}
 
 
-def advise_with_diagnostics(report, transport=None):
+def advise_with_diagnostics(report, transport=None, llm=None):
     """SMOKE / DEBUG ONLY. Performs the SAME live call and the SAME validation as
     advise(report), but returns a diagnostic dict instead of a bare advisory-or-
     None:
         {advisory, null_reason, validation_reason, model, stop_reason, usage,
-         latency_seconds, error_type}
+         latency_seconds, error_type, suppressed_captured,
+         captured_authorities_unnormalized}
     null_reason is one of NULL_REASONS or None (success). Truncation is detected
     mechanically: stop_reason == 'max_tokens' AND a parse failure -> 'truncated'
-    (never 'parse_error'). This never alters advise()/_live/_validate and its
-    fields are never rendered to a vendor."""
+    (never 'parse_error'). suppressed_captured lists the backlog candidates the
+    captured-authority backstop removed (PR-B2); captured_authorities_unnormalized
+    lists citable sources whose authority did not normalize confidently. This
+    never alters advise()/_live/_validate and its fields are never rendered to a
+    vendor. `llm` is an injection seam (mirrors advise) for offline diagnostics."""
     import time
     diag = {"advisory": None, "null_reason": None, "validation_reason": None,
             "model": None, "stop_reason": None, "usage": None,
-            "latency_seconds": None, "error_type": None}
+            "latency_seconds": None, "error_type": None,
+            "suppressed_captured": [], "captured_authorities_unnormalized": []}
     payload = build_payload(report)
+    diag["captured_authorities_unnormalized"] = _derive_captured(
+        _load_golden_safe())[1]
+    if llm is not None:
+        try:
+            parsed = llm(payload)
+        except Exception as exc:
+            diag["error_type"] = type(exc).__name__
+            diag["null_reason"] = "api_error"
+            return diag
+        vr = _validation_reason(parsed)
+        if vr is not None:
+            diag["null_reason"] = "validation_error"
+            diag["validation_reason"] = vr
+            return diag
+        adv, sup = _suppress_captured_backlog(
+            _finalize(parsed), payload.get("captured_authorities"))
+        diag["advisory"] = adv
+        diag["suppressed_captured"] = sup
+        return diag
     try:
         from llm_config import get_anthropic_api_key
         key = get_anthropic_api_key(required=False)
@@ -624,7 +818,10 @@ def advise_with_diagnostics(report, transport=None):
             diag["null_reason"] = "validation_error"
             diag["validation_reason"] = vr
             return diag
-        diag["advisory"] = _finalize(parsed)         # identical to advise()
+        adv, sup = _suppress_captured_backlog(       # identical to advise()
+            _finalize(parsed), payload.get("captured_authorities"))
+        diag["advisory"] = adv
+        diag["suppressed_captured"] = sup
         return diag
     diag["latency_seconds"] = round(time.monotonic() - t0, 3)
     diag["null_reason"] = "transient_exhausted"
