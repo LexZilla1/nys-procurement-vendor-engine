@@ -114,6 +114,35 @@ def test_public_work_boilerplate_does_not_trigger_220i():
         == "public_work_registration"
 
 
+def test_procurement_lobbying_classification():
+    # PR-B1 test (a): a §139-j / restricted-period / offerer-certification passage
+    # classifies as procurement_lobbying — NOT the generic 'certification' kind
+    # (which routes to UNMAPPED) and not 'general'.
+    hit = TE._classify(
+        "Offerers are advised of the restricted period under State Finance Law "
+        "§139-j; the Offerer's Certification of Compliance with §139-j and "
+        "§139-k and Disclosure of Prior Non-Responsibility Determinations must "
+        "be submitted.")
+    assert hit == "procurement_lobbying", hit
+    # §139-k alone, procurement-lobbying, and prior-non-responsibility all route here.
+    assert TE._classify("procurement lobbying restrictions apply (139-k)") \
+        == "procurement_lobbying"
+    assert TE._classify("disclose any prior non-responsibility determination") \
+        == "procurement_lobbying"
+    # It wins over the generic 'certification' entry (placed after it, first-match).
+    assert TE._classify("the Offerer's certification is required") \
+        == "procurement_lobbying"
+
+
+def test_procurement_lobbying_negative_bare_terms():
+    # PR-B1 test (e): bare 'contacts' / 'period' / 'restricted' in unrelated
+    # boilerplate must NOT trip the §139-j/§139-k keyword.
+    for seg in ("The vendor contacts the help desk for support.",
+                "The warranty period is one year.",
+                "Access to the site is restricted to badged personnel."):
+        assert TE._classify(seg) != "procurement_lobbying", seg
+
+
 def test_pdf_string_unescape_octal_and_parens():
     assert TE._unescape_pdf_string(r"a\(b\)c") == "a(b)c"
     assert TE._unescape_pdf_string(r"line\nbreak") == "line\nbreak"

@@ -472,6 +472,19 @@ _KIND_KEYWORDS = [
         re.IGNORECASE)),
     ("international_boycott", re.compile(
         r"\b(international boycott|139-h|export administration)\b", re.IGNORECASE)),
+    # §139-j/§139-k procurement-lobbying: restricted-period contact rules and the
+    # offerer's certification / prior-non-responsibility disclosure. Placed BEFORE
+    # the generic "certification" entry so an "Offerer's Certification of
+    # Compliance with §139-j/§139-k" routes here (first match wins), not to the
+    # unmapped generic "certification" kind.
+    ("procurement_lobbying", re.compile(
+        r"\b(?:139-j|139-k|"
+        r"procurement lobbying|"
+        r"restricted period|"
+        r"permissible (?:subject )?contacts|"
+        r"offerer(?:'s)? (?:certification|disclosure)|"
+        r"non-?responsibility (?:determination|finding)|"
+        r"prior non-?responsibility)\b", re.IGNORECASE)),
     ("registration", re.compile(r"\b(vendor file|registered in the nys|"
                                 r"vendor registration)\b", re.IGNORECASE)),
     ("certification", re.compile(r"\b(certif(?:ied|ication)|certificate)\b",
