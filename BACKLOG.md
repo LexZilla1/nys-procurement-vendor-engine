@@ -562,6 +562,12 @@ Open items captured from session review (post concierge pilot #1 / PR-A). Append
   suppressed items stay in suppressed_captured diagnostics. Regression target:
   test_documented_limitation_bare_numeric_id_collides_across_law_bodies.)
 
+### Deterministic extractor — follow-ups
+- [ ] Bond-waiver residual phrasings: negation-before-"required" forms are not
+  detected — e.g. "No vendor is required to provide a bid bond", "there is no
+  requirement for a bid bond". Failure direction is false-RED (safe, recoverable
+  in review). Extend is_bond_waiver when a real tender exhibits these forms.
+
 ### Data / automation — follow-ups
 - [ ] NYSCR ad-type labels are PROVISIONAL: need a dual-model cross-check before
   hardening them into a relied-on classification vocabulary (cf. the 12 ad-type
