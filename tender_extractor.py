@@ -39,8 +39,22 @@ import zlib
 
 # A content-stream string-show operator: a (...) literal before Tj, or a [...]
 # array before TJ. Strings may contain escaped parens / backslashes.
+#
+# The TJ-array alternative must treat each (...) string literal as an atomic unit,
+# because a string may itself contain a '[' or ']' GLYPH (e.g. the real IFB 23447
+# line "...Procurement Lobbying Law [State Finance Law § 139-j..."). A char class
+# that merely excluded [ and ] would stop at that in-string bracket and drop the
+# rest of the array's text (the "witState" defect: the array showing "h the
+# Procurement Lobbying Law [" was silently swallowed, concatenating "wit"+"State").
+# So inside the array we match either a whole (...) literal (any content, escapes
+# respected) or any non-bracket char (the numeric kerning adjustments) — only a
+# top-level ] closes the array.
+# The array fallback class excludes ( ) as well as [ ] so a '(' can only be
+# consumed by the (...) string alternative — this removes the alternation
+# ambiguity that would otherwise cause catastrophic regex backtracking.
 _SHOW_RE = re.compile(
-    r"(\((?:[^()\\]|\\.)*\)|\[(?:[^\[\]\\]|\\.)*\])\s*(Tj|TJ)", re.DOTALL)
+    r"(\((?:[^()\\]|\\.)*\)|"
+    r"\[(?:\((?:[^()\\]|\\.)*\)|[^\[\]()])*\])\s*(Tj|TJ)", re.DOTALL)
 _STR_RE = re.compile(r"\((?:[^()\\]|\\.)*\)", re.DOTALL)
 # Operators that move to a new line; we emit a newline when one precedes a show.
 _NEWLINE_OP_RE = re.compile(r"(?:^|\s)(T\*|Td|TD|')(?=\s|$)")

@@ -96,6 +96,40 @@ def test_dehyphenate_rejoins_words_split_across_lines():
     assert TE._dehyphenate("utiliza-\ntion plan") == "utilization plan"
 
 
+def test_dehyphenate_rejoins_end_of_line_hyphenation():
+    """End-of-line hyphenation rejoins the split word; a capitalized continuation
+    keeps the hyphen (a real compound), never dropping characters."""
+    assert TE._dehyphenate("require-\nment") == "requirement"
+    assert TE._dehyphenate("Service-\nDisabled") == "Service-Disabled"
+
+
+def test_tj_array_bracket_glyph_not_swallowed():
+    """A '[' GLYPH inside a TJ-array string must not break array parsing.
+
+    Regression for the real IFB 23447 "witState" defect: the TJ array showing
+    "h the Procurement Lobbying Law [" ended with a '[' string literal, which the
+    old array regex mis-parsed — dropping that array's text and concatenating
+    "wit" + "State" into "witState". The corrected text (derived from the PDF
+    bytes) keeps every character."""
+    raw = ("[(In accordance wit)]TJ\nET\nq\nBT\n/T 1 Tf\n10 0 0 10 259 518 Tm\n"
+           "[(h the Procurement Lobbying Law )([)]TJ\n[(State Finance Law )]TJ")
+    out = TE._text_from_content(raw)
+    assert "witState" not in out
+    assert "In accordance with the Procurement Lobbying Law [State Finance Law" in out
+
+
+def test_tj_array_bracket_at_string_edges_preserved():
+    """A ']' glyph at a string edge is preserved; no character is dropped."""
+    assert TE._text_from_content("[(a)(])(b)]TJ") == "a]b"
+
+
+def test_plain_line_break_separates_not_swallows():
+    """A non-hyphenated line break (Td) separates words with a newline — both
+    words survive; characters are never swallowed by concatenation."""
+    out = TE._text_from_content("[(foo)]TJ\n0 -12 Td\n[(bar)]TJ")
+    assert "foo" in out and "bar" in out
+
+
 def test_workforce_one_word_does_not_trigger_eeo():
     # The WIOA false positive: "Workforce" (one word) must NOT classify as EEO.
     assert TE._classify("Under the Workforce Innovation and Opportunity Act") != "eeo"
