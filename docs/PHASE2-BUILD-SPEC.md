@@ -34,9 +34,9 @@ rule requires and whether the document meets it.
 4. **Information, not advice.** Output states what the rule requires and whether the document conforms.
    It must not tell the user to file a claim, pursue the State, take a legal position, or arrange
    financing. This is a hard product boundary (see §7, Compliance).
-5. **FINRA-safe by construction.** No feature requires vendor logins, credential scraping, or automated
+5. **State-system-safe by construction.** No feature requires vendor logins, credential scraping, or automated
    submission into State systems on the vendor's behalf. The engine reads documents the user provides
-   and reports on them. Nothing that creates regulatory exposure for a FINRA-registered founder.
+   and reports on them. Nothing that creates regulatory exposure.
 6. **Freshness is mandatory, not optional.** A rule verified on a date is verified as of that date. The
    engine must know each rule's capture date and must refuse to present a rule as authoritative if the
    freshness-checker has flagged it as drifted (see §4).
@@ -209,8 +209,8 @@ For each document checked, the engine returns:
   rule and the published rate, and must pass licensed-attorney review before launch. Its output is
   framed as information about the rule, with a clear note that whether interest is actually due and
   payable depends on facts and a determination the tool cannot make.
-- **FINRA note (founder-specific):** because the founder is FINRA-registered, nothing in the engine may
-  create securities/financial-services exposure. The recovery feature stays strictly on the
+- **Financial-advice boundary:** nothing in the engine may create securities/financial-services
+  exposure. The recovery feature stays strictly on the
   rule-information side of the line; if a future version would touch financing of receivables or
   similar, that is a separate product with its own compliance review, not an extension of this engine.
 

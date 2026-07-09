@@ -176,7 +176,7 @@ later. v2 proves the upload→readiness loop across vendor types first.
 ## 10. COMPLIANCE FRAME (binding)
 Information / document-validation tool only. Not legal or financial advice. The tool states what a
 rule requires and whether a document meets it; the vendor approves everything. No auto-submission to
-State portals. This protects the FINRA position. (Per RISK-MAP compliance frame.)
+State portals. (Per RISK-MAP compliance frame.)
 
 ## 11. DATA SENSITIVITY & TRUST (build in from day one — not an afterthought)
 The vendor uploads sensitive material to use this tool: tax returns, ownership/financial documents,
@@ -195,7 +195,7 @@ Requirements:
   Where document content must be processed, prefer handling that doesn't retain or train on it.
 - **Be explicit in the demo** about this — it's a trust-builder, not fine print. For these vendors,
   "your documents stay private and aren't used to train anything" is itself part of the wow.
-- This is consistent with the §10 compliance frame and the FINRA-safe posture: the product is a
+- This is consistent with the §10 compliance frame and the information-only posture: the product is a
   private document-validation tool, not a data pipeline.
 
 ---
@@ -246,7 +246,7 @@ with junk and the loop dies from neglect:
 - Net effect: every real tender either confirms coverage or hands the manager a prioritized,
   pre-researched candidate rule to verify. Completeness becomes evidence-driven and continuous.
 
-### Guardrails (FINRA / liability — load-bearing, not fine print)
+### Guardrails (compliance / liability — load-bearing, not fine print)
 - Showing AI "here's what the rule might be" is closer to advice than showing a verbatim statute.
   The "unverified / not legal advice / verify yourself" framing must be airtight and PROMINENT on
   every Track 3 item — it's what keeps this feature behind the advice line.
@@ -303,7 +303,7 @@ against each requirement — presence AND apparent match, not just presence.
 - Difficulty: HARDEST — requires parsing the vendor's own (messy) submission documents, a second
   document-reading job on top of the RFP reading. This is the deepest verification and strongest moat.
 - **REGULATORY BOUNDARY (build in from the start, non-negotiable):** "reviewing compliance" edges
-  toward legal judgment. Safe framing, consistent with the FINRA-safe information-tool posture: the
+  toward legal judgment. Safe framing, consistent with the information-tool posture: the
   tool states "here is what this RFP requires this document to contain; here is whether yours appears
   to contain it; verify with counsel." It checks presence and apparent match against the stated
   requirement — it does NOT render a legal compliance opinion. Bake this boundary in, don't bolt on.
