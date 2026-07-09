@@ -1064,6 +1064,92 @@ def test_backlog_candidate_schema_has_no_excerpt_ref_precondition():
 # Runner
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Rank 2 — deterministic demotion of over-precise subdivision-tail citations
+# --------------------------------------------------------------------------
+
+def _backlog(auth, why="x", confidence="medium"):
+    return {"grouping": [], "item_notes": [],
+            "coverage_backlog_candidates": [
+                {"suggested_authority": auth, "why": why,
+                 "confidence": confidence, "action": "candidate for human capture"}]}
+
+
+def test_strip_unverified_tail_unit_cases():
+    # parenthetical subdivision absent from corpus -> stripped to the general body
+    assert CA._strip_unverified_tail("§ 165-a(3)", "no match here") == ("§ 165-a", True)
+    # parenthetical present verbatim -> kept
+    assert CA._strip_unverified_tail(
+        "§ 165-a(3)", "see § 165-a(3) of the law") == ("§ 165-a(3)", False)
+    # no subdivision tail at all -> untouched
+    assert CA._strip_unverified_tail(
+        "State Finance Law § 163", "anything") == ("State Finance Law § 163", False)
+    # Subpart number present in corpus -> kept
+    assert CA._strip_unverified_tail(
+        "6 NYCRR Subpart 225", "6 NYCRR Subpart 225") == ("6 NYCRR Subpart 225", False)
+    # Subpart number absent -> tail stripped
+    assert CA._strip_unverified_tail(
+        "6 NYCRR Subpart 225", "NYCRR, Title 6 ECL") == ("6 NYCRR", True)
+
+
+def test_demote_subpart_tail_absent_from_excerpts():
+    rep = _mk(["The contractor shall comply with NYCRR, Title 6 ECL as stated herein."])
+    adv = CA.advise(rep, llm=lambda p: _backlog("6 NYCRR Subpart 225", why="fuel sulfur"))
+    assert adv is not None
+    c = adv["coverage_backlog_candidates"][0]
+    assert c["suggested_authority"] == "6 NYCRR"
+    assert CA._DEMOTE_NOTE in c["why"]
+    assert c["confidence"] == "low"
+
+
+def test_demote_recorded_in_diagnostics():
+    rep = _mk(["The contractor shall comply with NYCRR, Title 6 ECL as stated herein."])
+    diag = CA.advise_with_diagnostics(rep, llm=lambda p: _backlog("6 NYCRR Subpart 225"))
+    assert diag["demoted_citations"] == [
+        {"before": "6 NYCRR Subpart 225", "after": "6 NYCRR"}]
+
+
+def test_no_demotion_when_identifier_present_verbatim():
+    rep = _mk(["The contractor shall comply with 6 NYCRR Subpart 225 as stated herein."])
+    adv = CA.advise(rep, llm=lambda p: _backlog("6 NYCRR Subpart 225"))
+    c = adv["coverage_backlog_candidates"][0]
+    assert c["suggested_authority"] == "6 NYCRR Subpart 225"     # untouched
+    assert CA._DEMOTE_NOTE not in c["why"] and c["confidence"] == "medium"
+
+
+def test_no_demotion_when_no_subdivision_tail():
+    rep = _mk(["The contractor shall file all documents as stated herein."])
+    adv = CA.advise(rep, llm=lambda p: _backlog("Agriculture and Markets Law § 500"))
+    c = adv["coverage_backlog_candidates"][0]
+    assert c["suggested_authority"] == "Agriculture and Markets Law § 500"
+    assert c["confidence"] == "medium"
+
+
+def test_demotion_and_suppression_compose_on_one_output():
+    # corpus lacks '225'; one CAPTURED authority (SFL §163 -> suppressed) plus one
+    # over-precise tail (-> demoted). Both fire; advisory stays non-null.
+    rep = _mk(["The contractor shall comply with NYCRR, Title 6 ECL as stated herein."])
+    def fake(p):
+        return {"grouping": [], "item_notes": [],
+                "coverage_backlog_candidates": [
+                    {"suggested_authority": "State Finance Law § 163", "why": "a",
+                     "confidence": "medium", "action": "candidate for human capture"},
+                    {"suggested_authority": "6 NYCRR Subpart 225", "why": "b",
+                     "confidence": "medium", "action": "candidate for human capture"}]}
+    diag = CA.advise_with_diagnostics(rep, llm=fake)
+    assert diag["advisory"] is not None
+    assert "State Finance Law § 163" in [
+        x["suggested_authority"] for x in diag["suppressed_captured"]]
+    assert diag["demoted_citations"] == [
+        {"before": "6 NYCRR Subpart 225", "after": "6 NYCRR"}]
+    remaining = [c["suggested_authority"]
+                 for c in diag["advisory"]["coverage_backlog_candidates"]]
+    assert remaining == ["6 NYCRR"]                              # demoted one still renders
+    rendered = "\n".join(CA.render_advisory(diag["advisory"]))
+    assert "6 NYCRR" in rendered and CA._DEMOTE_NOTE in rendered
+    assert "Subpart 225" not in rendered
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]

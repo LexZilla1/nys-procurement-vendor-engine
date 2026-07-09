@@ -250,6 +250,84 @@ def _suppress_captured_backlog(advisory, captured_labels):
     return advisory, suppressed
 
 
+# --- Rank 2: deterministic demotion of over-precise subdivision-tail citations --
+# Interim measure (the durable fix is the excerpt-ref schema, still on backlog).
+# Backlog candidates sometimes cite a subdivision the tender text never stated
+# (pilots: "6 NYCRR Subpart 225" when the excerpts said only "NYCRR, Title 6 ECL";
+# "SDVOB §36"; "PAL §2879-a"). Candidates carry no excerpt refs yet, so the interim
+# rule is payload-wide and strictly conservative: patterns are derived narrowly
+# from the failure examples — a parenthetical subdivision on a section id, or a
+# Subpart/Part phrase with a number. Anything else is left untouched.
+_DEMOTE_NOTE = "[specific subdivision unverified against tender text]"
+_PAREN_TAIL_RE = re.compile(r"(§+\s*\d+[0-9a-z\-]*)((?:\([0-9a-z]+\))+)", re.IGNORECASE)
+_SUBPART_TAIL_RE = re.compile(r"\b((?:Sub)?[Pp]art)\s+(\d+(?:[.\-][0-9a-z]+)*)",
+                              re.IGNORECASE)
+
+
+def _norm_id(s):
+    return re.sub(r"\s+", "", s or "").lower()
+
+
+def _num_in_corpus(num, corpus):
+    """True when the bare number token appears in corpus with DIGIT boundaries, so
+    '225' does not spuriously match '1225' / '2250'."""
+    return re.search(r"(?<!\d)%s(?!\d)" % re.escape(num), corpus) is not None
+
+
+def _strip_unverified_tail(auth, corpus):
+    """Return (new_auth, changed). Strip an over-precise subdivision tail from
+    `auth` ONLY when the specific identifier does not appear in `corpus`. Narrow:
+    a parenthetical subdivision on a section id, or a Subpart/Part number. Never
+    returns an empty authority (if stripping would empty it, leave it unchanged)."""
+    ncorpus = _norm_id(corpus)
+    m = _PAREN_TAIL_RE.search(auth)
+    if m and _norm_id(m.group(1) + m.group(2)) not in ncorpus:
+        stripped = (auth[:m.start(2)] + auth[m.end(2):]).strip()
+        if stripped:
+            return stripped, True
+    m = _SUBPART_TAIL_RE.search(auth)
+    if m and not _num_in_corpus(m.group(2), corpus):
+        stripped = (auth[:m.start()] + auth[m.end():]).strip().rstrip(",").strip()
+        if stripped:
+            return stripped, True
+    return auth, False
+
+
+def _excerpt_corpus(payload):
+    """All tender-excerpt text sent to the model (needs_review + unmapped +
+    possible_authorities), joined — the ground truth a cited identifier must
+    appear in for its subdivision precision to be verifiable."""
+    parts = []
+    for r in payload.get("needs_review", []):
+        parts.append(r.get("excerpt") or "")
+    for u in payload.get("unmapped", []):
+        parts.append(u.get("text") or "")
+    for p in payload.get("possible_authorities", []):
+        parts.append(p.get("text") or "")
+    return "\n".join(parts)
+
+
+def _demote_unverifiable_tails(advisory, corpus):
+    """Demote backlog candidates citing an over-precise subdivision the tender text
+    never states. Display-layer, runs AFTER _validate like the suppression backstop:
+    NEVER nulls the advisory, NEVER drops a candidate — it edits only the authority
+    tail, appends a visible annotation to `why`, and forces confidence to low.
+    Returns (advisory, demoted) where demoted lists {before, after} authorities."""
+    if not advisory:
+        return advisory, []
+    demoted = []
+    for c in advisory.get("coverage_backlog_candidates", []):
+        auth = (c or {}).get("suggested_authority", "")
+        new_auth, changed = _strip_unverified_tail(auth, corpus)
+        if changed and new_auth != auth:
+            demoted.append({"before": auth, "after": new_auth})
+            c["suggested_authority"] = new_auth
+            c["why"] = ((c.get("why") or "") + " " + _DEMOTE_NOTE).strip()
+            if "confidence" in c:
+                c["confidence"] = "low"
+    return advisory, demoted
+
+
 # ---------------------------------------------------------------------------
 # Payload — built from the finished report ONLY (vendor's own tender text +
 # reliability flags). No golden-copy body; grounding is passed as a FLAG, never
@@ -591,6 +669,9 @@ def advise(report, llm=None, transport=None):
     # validation; never nulls the advisory (PR-B2 change 2).
     advisory, _suppressed = _suppress_captured_backlog(
         advisory, payload.get("captured_authorities"))
+    # Interim over-precise-citation demotion (Rank 2), composed AFTER suppression.
+    advisory, _demoted = _demote_unverifiable_tails(
+        advisory, _excerpt_corpus(payload))
     return advisory
 
 
@@ -741,7 +822,8 @@ def advise_with_diagnostics(report, transport=None, llm=None):
     diag = {"advisory": None, "null_reason": None, "validation_reason": None,
             "model": None, "stop_reason": None, "usage": None,
             "latency_seconds": None, "error_type": None,
-            "suppressed_captured": [], "captured_authorities_unnormalized": []}
+            "suppressed_captured": [], "demoted_citations": [],
+            "captured_authorities_unnormalized": []}
     payload = build_payload(report)
     diag["captured_authorities_unnormalized"] = _derive_captured(
         _load_golden_safe())[1]
@@ -759,8 +841,10 @@ def advise_with_diagnostics(report, transport=None, llm=None):
             return diag
         adv, sup = _suppress_captured_backlog(
             _finalize(parsed), payload.get("captured_authorities"))
+        adv, dem = _demote_unverifiable_tails(adv, _excerpt_corpus(payload))
         diag["advisory"] = adv
         diag["suppressed_captured"] = sup
+        diag["demoted_citations"] = dem
         return diag
     try:
         from llm_config import get_anthropic_api_key
@@ -820,8 +904,10 @@ def advise_with_diagnostics(report, transport=None, llm=None):
             return diag
         adv, sup = _suppress_captured_backlog(       # identical to advise()
             _finalize(parsed), payload.get("captured_authorities"))
+        adv, dem = _demote_unverifiable_tails(adv, _excerpt_corpus(payload))
         diag["advisory"] = adv
         diag["suppressed_captured"] = sup
+        diag["demoted_citations"] = dem
         return diag
     diag["latency_seconds"] = round(time.monotonic() - t0, 3)
     diag["null_reason"] = "transient_exhausted"
