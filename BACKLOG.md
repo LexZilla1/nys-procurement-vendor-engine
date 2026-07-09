@@ -585,13 +585,22 @@ Open items captured from session review (post concierge pilot #1 / PR-A). Append
   detected — e.g. "No vendor is required to provide a bid bond", "there is no
   requirement for a bid bond". Failure direction is false-RED (safe, recoverable
   in review). Extend is_bond_waiver when a real tender exhibits these forms.
-- [ ] Excerpt text artifacts (extraction-layer, SEPARATE from anchor selection):
-  (a) dehyphenation/word-join artifacts, e.g. "witState" for "with State" in the
-  §139-j excerpt of IFB 23447; (b) cp1252 mojibake (\x92 apostrophe, \x93/\x94
-  quotes) surfaced in longer IFB 23447 excerpts after cue-bearing anchor selection
-  (the substitution only exposes pre-existing extraction bytes verbatim — it does
-  not introduce them). Both are text-extraction defects with a different root cause
-  than anchor selection; fix in the extractor, not in bid_readiness.
+- [x] Word-join swallow ("witState") — DONE (branch claude/extraction-dehyphenation).
+  Root cause was NOT dehyphenation: the _SHOW_RE TJ-array regex could not handle a
+  '[' or ']' GLYPH inside a (...) string literal, so a whole array (the real IFB 23447
+  "h the Procurement Lobbying Law [") was dropped, concatenating "wit"+"State" ->
+  "witState". Fixed by parsing (...) string literals as atomic units inside the array
+  (parens excluded from the fallback class to keep the regex linear). Recovered text
+  is verbatim; the corrected line is "...with the Procurement Lobbying Law [State
+  Finance Law § 139-j(2)(a)]...". Coverage on IFB 23447 unchanged (5/3/294).
+- [ ] Remaining excerpt text artifacts (extraction-layer, LOWER priority — recoverable
+  noise, not a swallowed/invented misquote): (a) cp1252 control-byte mojibake
+  (\x92 apostrophe, \x93/\x94 quotes) from the latin-1 decode of Windows-1252
+  punctuation — a decode-layer change with broad blast radius; itemize every
+  extraction shift before touching it. (b) intra-word spurious spaces from
+  kerning-split glyphs ("B idder", "provi des"): per the conservative rule (prefer a
+  spurious space over a wrong merge) these stay unless a provably-safe merge heuristic
+  is found.
 - [ ] Head-fragment noise in the UNMAPPED pile (~10% of unmapped passages are
   line-wrap head fragments that begin mid-sentence). The current is_incomplete_fragment
   guard checks the TAIL only (`_looks_fragmentary` head/tail check is wired only to
