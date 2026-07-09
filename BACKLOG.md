@@ -550,6 +550,77 @@ Remaining open questions (golden-copy/connectors legal):
 ## Chat-synced follow-ups (2026-07)
 Open items captured from session review (post concierge pilot #1 / PR-A). Append-only.
 
+### Session capture (2026-07-09) — what merged, what's next
+Merged this session (all squash-merged to main, checkpoint-verified on real IFB 23447,
+coverage 5/3/294 unchanged, full suite green): #55 cue-bearing anchor selection (evidence
+quality); #56 freshness runtime wiring (DIVERGENT -> not-citable via the existing gate);
+#57 TJ-array bracket parse fix (the "witState" swallow); #58 interim demotion of
+over-precise advisory citations. Concierge product gate: PASSED and verified.
+
+PRIORITY GUIDANCE (agreed): do the SMALL safety subset next; defer the rest on real-vendor
+signal; do NOT "fix everything".
+- DO NEXT (genuine defects / safety gaps):
+  1. This backlog capture (durable tracking) — done by this note.
+  2. Enum + citation-shape seam fixes (below) — one small PR, one design decision each.
+  3. Freshness live-fire — NOT a code fix: wire the monthly Action to run
+     `scripts/freshness_check.py --write-state` with the existing NYSLEG_API_KEY secret and
+     open a PR when a per-source verdict CHANGES. Completes the never-green story end-to-end
+     (today the committed freshness-state.json is an all-OK SEED, so the tripwire is inert).
+- DEFER (improvements gated on a real vendor's document, NOT fixes): durable excerpt-ref
+  schema (the permanent replacement for #58's interim demotion — design it AFTER a real
+  tender so it does not overfit one OGS diesel IFB); wrong suggested_kind root-cause;
+  contract-value profile field (operational, never-green: a human supplies the value, not
+  code); cosmetics (cp1252 mojibake, "B idder" spurious spaces, head-fragment noise,
+  cross-document dedup).
+
+### Cross-module seams (coherence audit 2026-07) — track/fix before integration
+Two latent HIGH inconsistencies (dormant today — nothing wires these paths together — but
+they will error the moment something does; surfaced by the coherence audit, not previously
+tracked):
+- [ ] Triage verdict enum mismatch: producers emit `NON_BIDDABLE` (step1_triage.py:49,
+  pipeline/llm_classifier.py:33) but the state machine only accepts `NOT_BIDDABLE`
+  (engine/state_machine.py:58,60; TRIAGE_VERDICTS). Feeding a triage verdict into
+  TenderStateMachine.transition raises. Fix = one canonical value or a tested mapping shim.
+  Also EDGE/HUMAN_REVIEW/OUT_OF_SCOPE have no state-machine equivalent, and the machine's
+  VERIFY has no triage equivalent — decide the full mapping.
+- [ ] Citation dict shape drift: gap_analysis.py:324 emits `{"source_file","quote"}` while
+  validator.py / cert_renewal.py use `{"source_file","citation_quote"}`. A consumer reading
+  the wrong key KeyErrors across that seam. Fix = one canonical serialization (or an adapter
+  at the seam) with a test.
+
+### Adaptive tool — design direction (tender-first collaboration, 2026-07-09)
+Framing agreed with the founder: "concierge" here means the ENGINE and the VENDOR collaborate
+(the vendor is the domain expert, not the operator). The engine does the verifiable work and
+the human fills genuine gaps. Design principle, grounded in a real tender run (IFB 23447):
+MOST facts are already IN the tender, so EXTRACT-FIRST and ask a human ONLY for what the
+document genuinely does not state. Every requirement has three layers with three sources:
+  1. The RULE (what is demanded) -> engine + golden copy (already works).
+  2. The TENDER-FACT (the specifics: due date, contract period, value, goal %, limit) ->
+     EXTRACT from the tender; ask a human only if truly absent.
+  3. The VENDOR-FACT (can the vendor meet it: insurance held? MWBE-certified? VendRep
+     current?) -> genuine human question.
+The adaptive tool may ask the human ONLY for layer 3 and the true residue of layer 2. Asking
+for a fact the tender already states is a BUG.
+
+Concrete finding from the IFB 23447 run (the reason to start from a real tender): the
+SUBMISSION DEADLINE is in the text ("Due date for Bids 7/9/2026 1:30 PM ET") and the
+CONTRACT PERIOD ("CONTRACT PERIOD: August 21, ...") — both extractable, NEITHER surfaced
+today. For a bid-readiness tool the due date is the single most valuable fact. Genuinely
+absent from this tender's text: a total contract $ value, MWBE/SDVOB numeric goals, insurance
+minimum $ (unit-price supply IFB).
+
+Build order (deferred until a real vendor's document informs it; deterministic + testable
+like the rest):
+- [ ] TENDER FACT-SHEET extractor FIRST: structured due date/time, contract period, stated
+  value (if any), goals, limits, delivery terms. Highest immediate value = the deadline.
+- [ ] INTERACTION / collaboration loop SECOND: present the report, surface ONLY the genuine
+  gaps (layer 3 + absent layer 2) as targeted answerable questions (not an open chat box),
+  capture structured answers, merge into the profile, re-run score_bid, repeat until nothing
+  is unanswered. Remember answers across tenders. (Maps to the existing "Collaboration layer"
+  and "Readiness-assessment funnel" backlog items; the clarification_questions module and the
+  never-green VERIFY/NEEDS_REVIEW flags are the seed.) Safety unchanged: the human supplies
+  FACTS; the engine still owns RULES via the golden copy — nobody bluffs.
+
 ### Coverage advisory — follow-ups
 - [ ] suggested_kind vocabulary constraint: restrict advisory
   item_notes.suggested_kind to known_kinds (the mapped-rule vocabulary). DEPENDENCY:
