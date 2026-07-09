@@ -577,20 +577,29 @@ signal; do NOT "fix everything".
 Two latent HIGH inconsistencies (dormant today — nothing wires these paths together — but
 they will error the moment something does; surfaced by the coherence audit, not previously
 tracked):
-- [ ] Triage verdict enum mismatch: producers emit `NON_BIDDABLE` (step1_triage.py:49,
-  pipeline/llm_classifier.py:33) but the state machine only accepts `NOT_BIDDABLE`
-  (engine/state_machine.py:58,60; TRIAGE_VERDICTS). Feeding a triage verdict into
-  TenderStateMachine.transition raises. Fix = one canonical value or a tested mapping shim.
-  Also EDGE/HUMAN_REVIEW/OUT_OF_SCOPE have no state-machine equivalent, and the machine's
-  VERIFY has no triage equivalent — decide the full mapping.
-  GATE (HIGH, fix-before-wiring): must be resolved — single canonical enum + tests — BEFORE
-  any PR wires triage output into TenderStateMachine.transition.
-- [ ] Citation dict shape drift: gap_analysis.py:324 emits `{"source_file","quote"}` while
-  validator.py / cert_renewal.py use `{"source_file","citation_quote"}`. A consumer reading
-  the wrong key KeyErrors across that seam. Fix = one canonical serialization (or an adapter
-  at the seam) with a test.
-  GATE (HIGH, fix-before-wiring): canonical shape decision + adapter/tests BEFORE any PR
-  joins these citation paths.
+- [x] Triage verdict enum mismatch — RESOLVED (PR #61). The two spellings are DISTINCT
+  vocabularies at two layers (triage class {BIDDABLE,NON_BIDDABLE,EDGE,HUMAN_REVIEW,
+  OUT_OF_SCOPE} vs lifecycle verdict {BIDDABLE,NOT_BIDDABLE,VERIFY}), so they are NOT merged
+  into one constant — a single mapping shim (TRIAGE_CLASS_TO_VERDICT + lifecycle_verdict_for
+  in step1_triage.py; engine.state_machine unmodified) translates class -> verdict, with
+  EDGE/HUMAN_REVIEW/OUT_OF_SCOPE -> VERIFY per never-green. Guard test is the permanent seam
+  tripwire (every class maps to a valid non-None verdict). No schema/fixture migration
+  (nyscr_ad_types.json and tender.schema.json correctly carry their own layer's vocabulary).
+- [x] Citation dict shape drift — RESOLVED (PR #61). gap_analysis now emits the validation-
+  family shape {source_file, citation_quote} (matching validator.py / cert_renewal.py); its
+  renderer reads the same key; internal-consistency + family-alignment test added.
+  RATIONALE — clarification_questions intentionally left OUT: _gap_citation deliberately
+  ignores golden-copy citation dicts (it wants the RFP page/section LOCATION, not the
+  STATE-law citation) and consumes a different gap-record shape entirely, so there is no
+  cross-module consumer and no round-trip — the original "KeyError across the seam" premise
+  did not hold against the code.
+- [ ] Citation family unification (deferred, LARGER refactor — NOT a latent-seam fix). Unify
+  the engine Citation vocabulary ("quote": {source_id, source_type, locator, quote,
+  captured_at}) and the validation-family vocabulary ("citation_quote": {source_file,
+  citation_quote, confirmed}) into one repo-wide citation shape. Touches engine/citation.py
+  from_dict, the vendor-facing bid_readiness to_dict() report JSON, and the tender/citation
+  schemas — a behavior-changing PR with its own review. gap_analysis was aligned to the
+  validation family in PR #61; this item unifies the two families.
 
 ### Adaptive tool — design direction (tender-first collaboration, 2026-07-09)
 Framing agreed with the founder: "concierge" here means the ENGINE and the VENDOR collaborate

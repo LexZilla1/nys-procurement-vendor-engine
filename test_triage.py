@@ -530,6 +530,30 @@ def test_live_llm_ambiguous_text_is_human_review():
 
 
 # --------------------------------------------------------------------------
+# Seam tripwire — triage CLASS -> lifecycle VERDICT mapping (fix-before-wiring)
+# --------------------------------------------------------------------------
+
+def test_every_triage_class_maps_to_a_valid_lifecycle_verdict():
+    """Permanent seam tripwire: every triage class must map to a valid, non-None
+    lifecycle triage_verdict. Adding a new triage label without wiring it here (or
+    a mapping value the state machine does not accept) fails this test."""
+    from engine import state_machine as sm
+    # keys are EXACTLY the triage class set — no class left unmapped
+    assert set(T.TRIAGE_CLASS_TO_VERDICT) == T.TRIAGE_CLASSES
+    # the canonical class set matches the module's class constants (no stray label)
+    assert {BIDDABLE, NON_BIDDABLE, EDGE, HUMAN_REVIEW, OUT_OF_SCOPE} == T.TRIAGE_CLASSES
+    # every mapped verdict is accepted by the state machine and never None
+    for cls, verdict in T.TRIAGE_CLASS_TO_VERDICT.items():
+        assert verdict in sm.TRIAGE_VERDICTS and verdict is not None, cls
+    # explicit mappings (never-green: every non-confident class -> VERIFY / human)
+    assert T.lifecycle_verdict_for(BIDDABLE) == sm.BIDDABLE
+    assert T.lifecycle_verdict_for(NON_BIDDABLE) == sm.NOT_BIDDABLE
+    assert T.lifecycle_verdict_for(EDGE) == sm.VERIFY
+    assert T.lifecycle_verdict_for(HUMAN_REVIEW) == sm.VERIFY
+    assert T.lifecycle_verdict_for(OUT_OF_SCOPE) == sm.VERIFY
+
+
+# --------------------------------------------------------------------------
 # Runner
 # --------------------------------------------------------------------------
 

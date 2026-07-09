@@ -224,6 +224,24 @@ def test_gap_catalog_is_confident_gated_both_directions():
     assert G._GC.cite(mwbe, q, output_context=gs.OUTPUT_VERIFY) == q
 
 
+def test_gap_citation_uses_canonical_validation_family_shape():
+    """Seam fix: gap_analysis emits the validation-family golden-citation shape
+    {source_file, citation_quote} (matching validator.py / cert_renewal.py), NOT the
+    old {source_file, quote}; and its own renderer reads that same key. There is no
+    cross-module consumer — clarification_questions deliberately ignores golden
+    citation dicts (RFP-location vs STATE-law) — so this is internal-consistency +
+    family-alignment, not a round-trip."""
+    r = G.evaluate_requirement("mwbe-certification", "2026-09-01", [_mwbe("2022-03-01")])
+    assert r["citation"] is not None
+    assert set(r["citation"]) == {"source_file", "citation_quote"}   # canonical shape
+    assert "quote" not in r["citation"]                              # old key gone
+    assert r["citation"]["citation_quote"]                           # non-empty
+    # internal consistency: the renderer reads the same key, no KeyError
+    bundle = G.analyze(["mwbe-certification"], "2026-09-01", [_mwbe("2022-03-01")])
+    out = G.render(bundle)
+    assert r["citation"]["citation_quote"] in out
+
+
 # --------------------------------------------------------------------------
 # Built-in runner
 # --------------------------------------------------------------------------
