@@ -66,7 +66,7 @@ Independent project. NOT LexZilla — do not use that name anywhere. LexZilla1 i
 
 ## CONSTRAINTS (always apply)
 
-- FINRA/securities registration: NOT relevant to this product — do not raise. Compliance concerns that DO apply: unauthorized practice of law (UPL), data privacy, accuracy/reliability liability.
+- Compliance concerns that apply: unauthorized practice of law (UPL), data privacy, accuracy/reliability liability.
 - London relocation: off the table. Do not reference.
 - LexZilla framing: never apply to this project. LexZilla1 = GitHub org handle only.
 - Model guidance: Fable 5 for investigative/architectural tasks; Opus 4.8 for scoped build/mechanical work.
