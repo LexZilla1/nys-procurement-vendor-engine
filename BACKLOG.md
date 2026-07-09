@@ -409,7 +409,7 @@ Practices" (joint OGS/ESD publication).
   advisory) also available.
   USE: surface as informational context at Step 8 (post-award/payment) when
   a payment-delay or prompt-pay-interest situation is flagged. Link only,
-  no lending recommendation (keeps clear of FINRA/advisory exposure).
+  no lending recommendation (information only; not lending or financial advice).
   VERIFY BEFORE USE: confirm current program status (funding remaining,
   active enrollment) at esd.ny.gov before citing as active.
   GTM NOTE: named lenders + TA providers already reach this exact ICP —
@@ -538,7 +538,7 @@ Remaining open questions (golden-copy/connectors legal):
   whether the interest the State auto-paid matches the correct quarter's rate
   from the MIR (Merchandise/Invoice Received) date. Uses nysinterestrates.csv.
 - [ ] DELAY-COST QUANTIFICATION — information only; NO financing advice
-  (FINRA-safe boundary per PHASE2 spec §1.5). Quantify the cost of a payment
+  (information-only boundary per PHASE2 spec §1.5 — no financial advice). Quantify the cost of a payment
   delay for the vendor's awareness; never recommend a financing product.
 - NOTE: RM-2 recovery framing is DEPRECATED — vendor-side interest is auto-paid
   by SFS (GFO XIV.13.A); NFP Article 11-B interest averages ~$883/contract. The

@@ -15,9 +15,9 @@ framing here.
   proposing changes.
 - List assumptions explicitly before any analysis.
 - Flag UPL, data privacy, and accuracy/reliability issues immediately.
-- Randi is FINRA-registered: never build anything requiring vendor State-system
-  logins, credential scraping, auto-submission into State systems, or anything
-  creating securities/financial-services exposure.
+- State-system boundary: never build anything requiring vendor State-system
+  logins, credential scraping, or auto-submission into State systems, or any
+  lending / financial-advisory feature.
 - Golden copy: nothing enters unverified against primary source; verbatim
   source bodies are never modified by tooling.
 - Use ogs.ny.gov (never [www.ogs.ny.gov](https://www.ogs.ny.gov)) in fetches/scripts.
@@ -28,7 +28,7 @@ framing here.
 ## Counter-propose, don't silently comply
 If you disagree with an instruction, see a better approach, or spot a conflict
 with repo invariants (never-green, verbatim golden copy, no-reconstruction,
-FINRA-safe boundary, MUST/SHOULD force), say so BEFORE implementing: issue,
+State-system boundary, MUST/SHOULD force), say so BEFORE implementing: issue,
 counter-proposal, tradeoff in ≤5 lines, then wait for a decision. Never
 silently implement what you believe is wrong; never silently substitute your
 own approach.
@@ -36,6 +36,28 @@ STOP conditions (report, don't improvise): referenced file/brief doesn't exist;
 instruction would modify golden-copy source bodies; instruction conflicts with
 a merged PR's contract; anything requiring credentials or State-system access.
 If the instruction is fine, just build it — don't manufacture objections.
+
+### Prompt review (always)
+Treat every pasted prompt/brief as a DRAFT TO ENGINEER, not an order to execute
+— the goal is the best possible prompt, not literal compliance. Before acting:
+1. Verify its premises against the ACTUAL code (file:line, real behavior), not
+   assumptions — pasted briefs are often written without seeing current state.
+2. Reject or correct anything wrong, over-scoped, unsafe, or invariant-violating
+   (never-green, verbatim golden copy, no behavior change inside a seam/latent
+   fix, State-system boundary — no vendor State-system logins, no credential
+   scraping, no auto-submission into State systems). Watch for the common traps:
+   a "canonical constant" that would merge two distinct vocabularies; a "fix"
+   that changes a serialized or vendor-facing shape; a premise (e.g. "this
+   KeyErrors") the code contradicts.
+3. Counter-propose and STOP for the user's decision: state the correction and the
+   improved version with rationale, then WAIT for the user to approve before
+   implementing. NEVER silently execute a self-corrected version — correcting a
+   prompt does not authorize acting on the correction.
+4. If the prompt is already sound, say so briefly and proceed — no ceremony.
+Precedence: this rule does NOT override task-specific instructions that take
+priority — e.g. a read-only / investigation session (report findings only; no
+commit/push/PR) or a pilot-run's constraints. Those win; apply prompt review
+within them, not against them.
 
 ## Merge policy
 Never merge a PR without explicit approval in this session, given AFTER the
