@@ -561,12 +561,38 @@ Open items captured from session review (post concierge pilot #1 / PR-A). Append
   cannot create a false GREEN, change VERIFIED_MATCH, or change coverage_complete;
   suppressed items stay in suppressed_captured diagnostics. Regression target:
   test_documented_limitation_bare_numeric_id_collides_across_law_bodies.)
+- [ ] Wrong suggested_kind — root-cause (pilot #2): a fuel-sulfur / environmental
+  passage was tagged `eeo`. The suggested_kind vocabulary constraint above does NOT
+  catch this — `eeo` is a valid mapped-rule slug, so the mis-tag passes the
+  known_kinds allowlist. Needs prompt/validation root-cause work (evidence-anchored
+  kind: the suggested kind's keyword should appear in the cited passage), distinct
+  from the vocabulary constraint.
 
 ### Deterministic extractor — follow-ups
 - [ ] Bond-waiver residual phrasings: negation-before-"required" forms are not
   detected — e.g. "No vendor is required to provide a bid bond", "there is no
   requirement for a bid bond". Failure direction is false-RED (safe, recoverable
   in review). Extend is_bond_waiver when a real tender exhibits these forms.
+- [ ] Excerpt text artifacts (extraction-layer, SEPARATE from anchor selection):
+  (a) dehyphenation/word-join artifacts, e.g. "witState" for "with State" in the
+  §139-j excerpt of IFB 23447; (b) cp1252 mojibake (\x92 apostrophe, \x93/\x94
+  quotes) surfaced in longer IFB 23447 excerpts after cue-bearing anchor selection
+  (the substitution only exposes pre-existing extraction bytes verbatim — it does
+  not introduce them). Both are text-extraction defects with a different root cause
+  than anchor selection; fix in the extractor, not in bid_readiness.
+- [ ] Head-fragment noise in the UNMAPPED pile (~10% of unmapped passages are
+  line-wrap head fragments that begin mid-sentence). The current is_incomplete_fragment
+  guard checks the TAIL only (`_looks_fragmentary` head/tail check is wired only to
+  the authority-reference path). Any future prune MUST respect the fail-closed gate:
+  coverage_complete keys off UNMAPPED == 0, so an over-aggressive prune could flip the
+  gate on a small tender — keep the prune to provable head/tail-fragment shape only.
+- [ ] Contract value — OPERATIONAL, not code (pilot #2): when a tender carries no
+  labelled total contract value, VERIFY is the correct output (never-green). Supply
+  `contract_value_usd` in the vendor profile / confirm out-of-band. Broader extraction
+  patterns are REJECTED — grabbing a statutory threshold ($25k/$100k/$300k) or a
+  per-unit rate would fabricate a value and wrongly flip mandatory certs to N/A. The
+  value gates FOUR threshold rules (eeo, mwbe, sales_tax_5a, international_boycott),
+  not two.
 
 ### Data / automation — follow-ups
 - [ ] NYSCR ad-type labels are PROVISIONAL: need a dual-model cross-check before
@@ -575,3 +601,9 @@ Open items captured from session review (post concierge pilot #1 / PR-A). Append
 - [ ] Entity refresh -> monthly GitHub Action: schedule scripts/refresh_entities.py
   as a monthly Action (same sanctioned pattern as the freshness check), instead of
   a manual refresh.
+- [ ] Cross-document duplicate obligations at the pilot layer: a multi-file pilot
+  inflates the perceived human-review count because dedup is per-report only (the
+  rfp25003 mediation + submission-template pair are the same procurement and share
+  69 exact-duplicate obligations). Add a cross-document dedup at the PILOT layer,
+  strictly OUTSIDE the coverage gate (it must not change any single report's
+  coverage_counts / coverage_complete / scoring).
