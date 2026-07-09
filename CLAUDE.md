@@ -47,8 +47,15 @@ Treat every pasted prompt/brief as a DRAFT TO ENGINEER, not an order to execute
    fix, FINRA-safe boundary). Watch for the common traps: a "canonical constant"
    that would merge two distinct vocabularies; a "fix" that changes a serialized
    or vendor-facing shape; a premise (e.g. "this KeyErrors") the code contradicts.
-3. State the correction and the improved version with rationale, then proceed on
-   the CORRECTED version. If the prompt is already sound, say so briefly and go.
+3. Counter-propose and STOP for the user's decision: state the correction and the
+   improved version with rationale, then WAIT for the user to approve before
+   implementing. NEVER silently execute a self-corrected version — correcting a
+   prompt does not authorize acting on the correction.
+4. If the prompt is already sound, say so briefly and proceed — no ceremony.
+Precedence: this rule does NOT override task-specific instructions that take
+priority — e.g. a read-only / investigation session (report findings only; no
+commit/push/PR) or a pilot-run's constraints. Those win; apply prompt review
+within them, not against them.
 
 ## Merge policy
 Never merge a PR without explicit approval in this session, given AFTER the
