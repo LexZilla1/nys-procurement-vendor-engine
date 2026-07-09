@@ -34,6 +34,7 @@ import os
 import sys
 
 from engine import golden_status as gs
+from engine import freshness_state as fs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -184,7 +185,7 @@ class GoldenCopy:
     H_CITATIONS = "## CITATIONS"
     H_AGENCY_GUIDANCE = "## AGENCY GUIDANCE"
 
-    def __init__(self, sources_dir=None, freshness=None):
+    def __init__(self, sources_dir=None, freshness=None, freshness_state_path=None):
         self.sources_dir = sources_dir or os.path.join(HERE, "golden-copy", "sources")
         if not os.path.isdir(self.sources_dir):
             alt = os.path.join("/mnt/project", "golden-copy", "sources")
@@ -192,9 +193,22 @@ class GoldenCopy:
                 self.sources_dir = alt
         self._raw = {}     # file -> full file text
         self._body = {}    # file -> STATE TEXT body
-        # Optional freshness overlay {source_file: (verdict, sunset_stale)} — lets
-        # the status guardrail see DIVERGENT/STALE. Absent -> metadata-only status.
-        self._freshness = dict(freshness or {})
+        # Freshness overlay {source_file: (verdict, sunset_stale)} feeding the
+        # citation-eligibility gate (golden_status). An EXPLICIT overlay (tests)
+        # wins and skips disk. Otherwise READ the checked-in freshness state file
+        # (no network, ever): a source flagged DIVERGENT becomes not-citable. A
+        # missing/malformed file fails OPEN on citation and is surfaced as a render
+        # warning via freshness_state_available. self._freshness_rich carries the
+        # per-source {verdict, checked_date, detail} for rendering (never gates).
+        if freshness is not None:
+            self._freshness = dict(freshness)
+            self._freshness_rich = {}
+            self.freshness_state_available = True
+        else:
+            overlay, rich, available = fs.load_state(freshness_state_path)
+            self._freshness = overlay
+            self._freshness_rich = rich
+            self.freshness_state_available = available
         self._status = {}  # file -> derived status (cache)
         self._load()
 
@@ -241,6 +255,12 @@ class GoldenCopy:
             self._status[source_file] = gs.derive_status(
                 raw, freshness_verdict=verdict, sunset_stale=stale)[0]
         return self._status[source_file]
+
+    def freshness_of(self, source_file):
+        """The rich freshness record {verdict, checked_date, detail} for a source,
+        or None if absent/unknown. For rendering per-source warnings — it NEVER
+        gates a citation (eligibility is decided only via status_of/derive_status)."""
+        return self._freshness_rich.get(source_file)
 
     def cite(self, source_file, quote, output_context=None):
         """Return `quote` only if it is a verbatim substring of the source file's

@@ -39,6 +39,8 @@ API_BASE = "https://legislation.nysenate.gov/api/3/laws"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCES_DIR = os.path.join(REPO_ROOT, "golden-copy", "sources")
 REPORT_DIR = os.path.join(REPO_ROOT, "docs", "freshness")
+sys.path.insert(0, REPO_ROOT)
+from engine import freshness_state as fs  # noqa: E402  (needs REPO_ROOT on path)
 # Sanctioned statute-capture registry (scripts/statute_capture.py). Sections
 # captured through the manual capture workflow become "freshness-registered"
 # here: any target whose golden file EXISTS on disk is merged into the monthly
@@ -288,6 +290,21 @@ def has_drift(results):
     return any(r["verdict"] == "DIVERGENT" or r["sunset_flags"] for r in results)
 
 
+def results_to_state(results, date_str):
+    """Convert a run()'s per-source results into the engine freshness-state shape
+    {source_file: {verdict, checked_date, detail}} that engine/freshness_state.py
+    reads. Only the audited (statute-class) sources appear; every other golden
+    source is absent -> citable, exactly today's behavior."""
+    sources = {}
+    for r in results:
+        detail = "; ".join(r.get("sunset_flags") or []) or "live audit"
+        sources[r["file"]] = {"verdict": r["verdict"], "checked_date": date_str,
+                              "detail": detail}
+    return {"generated": date_str,
+            "note": "Live freshness run via scripts/freshness_check.py --write-state.",
+            "sources": sources}
+
+
 def render_report(results, date_str):
     drift = has_drift(results)
     counts = {}
@@ -469,10 +486,23 @@ def main(argv=None):
     ap.add_argument("--selftest", action="store_true",
                     help="run offline against synthesized API responses (no key)")
     ap.add_argument("--date", help="override report date (YYYY-MM-DD)")
+    ap.add_argument("--write-state", metavar="PATH",
+                    help="after a live run, also write the engine freshness-state "
+                         "JSON to PATH (e.g. data/config/freshness-state.json)")
+    ap.add_argument("--seed-all-ok", metavar="PATH",
+                    help="offline: write an all-OK (FULL-MATCH) seed state to PATH "
+                         "and exit (no network, no key)")
     args = ap.parse_args(argv)
 
     if args.selftest:
         return _selftest()
+
+    if args.seed_all_ok:
+        date_str = args.date or datetime.date.today().isoformat()
+        fs.write_state(args.seed_all_ok, fs.seed_all_ok(date_str))
+        print("seed-all-ok freshness state written: %s (%s)"
+              % (args.seed_all_ok, date_str))
+        return 0
 
     key = os.environ.get("NYSLEG_API_KEY")
     if not key:
@@ -490,6 +520,9 @@ def main(argv=None):
     drift = has_drift(results)
     emit_output(drift, date_str, path)
     print("freshness check %s: drift=%s report=%s" % (date_str, drift, path))
+    if args.write_state:
+        fs.write_state(args.write_state, results_to_state(results, date_str))
+        print("freshness-state written: %s" % args.write_state)
     return 0
 
 

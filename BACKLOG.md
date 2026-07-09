@@ -294,6 +294,18 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   committed form PDF from its canonical OSC URL, diff the AcroForm field
   inventory against tests/fixtures/, open a freshness-drift PR on mismatch —
   same pattern as statute drift.
+- [ ] Monthly freshness Action should WRITE data/config/freshness-state.json from
+  the live run (scripts/freshness_check.py --write-state) and open a PR when any
+  per-source verdict CHANGES, so the runtime tripwire (engine/freshness_state.py)
+  tracks the audit automatically instead of the current committed all-OK seed.
+  Gate the PR on a verdict diff, not on every run.
+- [ ] DIVERGENT false-positive review procedure: a documented human
+  re-verification path to CLEAR a DIVERGENT verdict (re-read the primary source vs
+  the golden STATE TEXT; if the golden text is still verbatim-correct, record the
+  re-verification and set the source back to FULL-MATCH; if the source genuinely
+  drifted, do a Phase-3-style re-capture). Until cleared, DIVERGENT correctly
+  withholds citations (rows show NEEDS_REVIEW with the withheld reason) — this is
+  fail-closed and must not be bypassed by editing state without re-verification.
 
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.

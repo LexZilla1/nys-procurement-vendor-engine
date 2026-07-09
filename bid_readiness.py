@@ -31,8 +31,9 @@ import os
 import re
 import sys
 
-from validator import GoldenCopy, FAIL, WARN, PASS, INFO
+from validator import GoldenCopy, GoldenEligibilityError, FAIL, WARN, PASS, INFO
 from engine import golden_status as gs
+from engine import freshness_state as fs
 from tender_extractor import has_obligation_cue, is_incomplete_fragment
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -238,13 +239,24 @@ _DOLLAR_RE = re.compile(r"\$\s?([\d][\d,]*)")
 
 
 def _build_rules(golden):
-    """Attach verified grounding to each kind; downgrade unverifiable quotes."""
+    """Attach verified grounding to each kind; downgrade unverifiable quotes.
+
+    Freshness tripwire: a grounding source flagged DIVERGENT in the freshness state
+    is not citable, so golden.cite(...) raises GoldenEligibilityError and grounding
+    fails soft to None — the EXACT same mechanism as a paraphrase drop, so the
+    coverage gate is untouched. The row then falls to NEEDS_REVIEW and carries a
+    distinct 'citation withheld' reason. A source flagged with a suspect-but-citable
+    verdict (FRAGMENT / EMPTY-STORED / UNREACHABLE) keeps its grounding and carries a
+    freshness WARNING. FULL-MATCH / absent: byte-identical to before."""
     rules = {}
     for kind, meta in _RULE_META.items():
-        grounding = None
+        rule = dict(meta)
+        rule["grounding"] = None
+        rule["freshness_note"] = None
         cand = _GROUNDING_CANDIDATES.get(kind)
         if cand:
             src, quote = cand
+            fresh = golden.freshness_of(src)
             try:
                 # Vendor-facing readiness grounding. Gated at the VERIFY floor so a
                 # gated source (e.g. the EEO rule's mwbe-5nycrr INTERIM_VERIFY
@@ -252,11 +264,19 @@ def _build_rules(golden):
                 # never confident, and any source not citable at VERIFY is dropped
                 # (grounding=None) rather than shown — fail-soft, no false citation.
                 golden.cite(src, quote, output_context=gs.OUTPUT_VERIFY)
-                grounding = {"source_file": src, "citation_quote": quote}
+                rule["grounding"] = {"source_file": src, "citation_quote": quote}
+                if fresh and fresh.get("verdict") in fs.WARN_VERDICTS:
+                    rule["freshness_note"] = dict(fresh, mode="warning",
+                                                  source_file=src)
+            except GoldenEligibilityError:
+                # Not-citable status (e.g. DIVERGENT): grounding is dropped exactly
+                # as a paraphrase would be, AND we record why so the row shows the
+                # freshness reason instead of a generic 'ungrounded'.
+                rule["grounding"] = None
+                rule["freshness_note"] = dict(fresh or {}, mode="withheld",
+                                              source_file=src)
             except Exception:
-                grounding = None
-        rule = dict(meta)
-        rule["grounding"] = grounding
+                rule["grounding"] = None
         rules[kind] = rule
     return rules
 
@@ -463,6 +483,11 @@ def _needs_review_reason(row):
     either ungrounded, or grounded-but-cue-less. A grounded row must NOT be told
     'no verified golden-copy rule backs this' — that is false for it. (Wording
     only; the coverage gate / VERIFIED_MATCH invariant are unchanged.)"""
+    fn = getattr(row, "freshness_note", None)
+    if fn and fn.get("mode") == "withheld":
+        d = fn.get("checked_date") or "date unavailable"
+        return ("golden-copy source under freshness review (content drift detected "
+                "{}); citation withheld pending human re-verification.".format(d))
     if row.grounding:
         return ("rule is verified in the golden copy, but this tender passage "
                 "lacks an explicit obligation cue; review to confirm applicability.")
@@ -484,6 +509,10 @@ class RequirementRow:
         self.fix = fix              # concrete action to resolve it (non-green only)
         self.note = note
         self.detail = detail        # extracted specific number (goal %, $ limit)
+        # Freshness tripwire annotation (dict or None): mode "withheld" (grounding
+        # dropped because the source is DIVERGENT) or "warning" (suspect but still
+        # citable). Rendering/reason only — never affects the coverage gate.
+        self.freshness_note = None
 
     @property
     def checkable(self):
@@ -537,7 +566,8 @@ class BidReadinessReport:
     def __init__(self, vendor_name, source, pages_read, requirements_found,
                  rows, other_requirements=None, possible_authorities=None,
                  waivers=None, page_numbers_approximate=False,
-                 page_number_note=None, page_count_exact=True):
+                 page_number_note=None, page_count_exact=True,
+                 freshness_state_available=True):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
@@ -563,6 +593,9 @@ class BidReadinessReport:
         # False when the /Type /Page count could not be determined (fallback to the
         # text-stream count) — the page COUNT itself is then only best-effort.
         self.page_count_exact = page_count_exact
+        # False when the freshness state file was missing/malformed at load — the
+        # per-source drift tripwire is OFF for this run; surfaced as a render note.
+        self.freshness_state_available = freshness_state_available
         self.contract_value = None  # set by score_bid; None = not determined
 
     @staticmethod
@@ -1028,6 +1061,15 @@ def score_bid(extracted, profile, golden=None):
         row.tender_excerpt = sub["text"]
         row.page = sub["page"]
 
+    # Freshness tripwire: carry any withheld/warning note from the rule onto its row
+    # so the renderer can explain a DIVERGENT-withheld grounding or warn on a
+    # suspect-but-citable source. Coverage is already decided (grounding was set or
+    # dropped in _build_rules); this is annotation only and never re-touches the gate.
+    for row in rows:
+        note = rules.get(row.kind, {}).get("freshness_note")
+        if note:
+            row.freshness_note = note
+
     report = BidReadinessReport(
         vendor_name=profile.get("vendor_name", "(unnamed vendor)"),
         source=extracted.get("source", "(unknown)"),
@@ -1037,7 +1079,8 @@ def score_bid(extracted, profile, golden=None):
         possible_authorities=possible_authorities, waivers=waivers,
         page_numbers_approximate=extracted.get("page_numbers_approximate", False),
         page_number_note=extracted.get("page_number_note"),
-        page_count_exact=extracted.get("page_count_exact", True))
+        page_count_exact=extracted.get("page_count_exact", True),
+        freshness_state_available=golden.freshness_state_available)
     report.contract_value = contract_value
     return report
 
@@ -1069,6 +1112,10 @@ def render_bid_readiness(report, advisory=None):
         L.append("NOTE: {}".format(
             report.page_number_note
             or "page numbers below are approximate (best-effort; not verified)."))
+    if not report.freshness_state_available:
+        L.append("NOTE: freshness state unavailable — the freshness-state file "
+                 "could not be read; the per-source drift tripwire is OFF for this "
+                 "run (citations shown as usual; human verification unchanged).")
     c = report.counts
     na = len(report.na_rows)
     score_caveat = ("" if report.coverage_complete
@@ -1099,6 +1146,19 @@ def render_bid_readiness(report, advisory=None):
         else:
             L.append("   rule   : NOT CONFIRMED — no golden-copy rule backs this "
                      "tender requirement")
+        _fn = r.freshness_note
+        if _fn and _fn.get("mode") == "withheld":
+            L.append("   ! fresh : golden-copy source {} flagged DIVERGENT (content "
+                     "drift detected {}); citation withheld pending human "
+                     "re-verification.".format(
+                         _fn.get("source_file", "?"),
+                         _fn.get("checked_date") or "date unavailable"))
+        elif _fn and _fn.get("mode") == "warning":
+            L.append("   ! fresh : golden-copy source {} under freshness review "
+                     "({}, checked {}); citation still shown — verify against "
+                     "source.".format(
+                         _fn.get("source_file", "?"), _fn.get("verdict") or "suspect",
+                         _fn.get("checked_date") or "date unavailable"))
         if r.detail:
             L.append("   detail : {}".format(r.detail))
         if r.vendor_has is None:
