@@ -583,10 +583,14 @@ tracked):
   TenderStateMachine.transition raises. Fix = one canonical value or a tested mapping shim.
   Also EDGE/HUMAN_REVIEW/OUT_OF_SCOPE have no state-machine equivalent, and the machine's
   VERIFY has no triage equivalent — decide the full mapping.
+  GATE (HIGH, fix-before-wiring): must be resolved — single canonical enum + tests — BEFORE
+  any PR wires triage output into TenderStateMachine.transition.
 - [ ] Citation dict shape drift: gap_analysis.py:324 emits `{"source_file","quote"}` while
   validator.py / cert_renewal.py use `{"source_file","citation_quote"}`. A consumer reading
   the wrong key KeyErrors across that seam. Fix = one canonical serialization (or an adapter
   at the seam) with a test.
+  GATE (HIGH, fix-before-wiring): canonical shape decision + adapter/tests BEFORE any PR
+  joins these citation paths.
 
 ### Adaptive tool — design direction (tender-first collaboration, 2026-07-09)
 Framing agreed with the founder: "concierge" here means the ENGINE and the VENDOR collaborate
