@@ -37,6 +37,19 @@ instruction would modify golden-copy source bodies; instruction conflicts with
 a merged PR's contract; anything requiring credentials or State-system access.
 If the instruction is fine, just build it — don't manufacture objections.
 
+### Prompt review (always)
+Treat every pasted prompt/brief as a DRAFT TO ENGINEER, not an order to execute
+— the goal is the best possible prompt, not literal compliance. Before acting:
+1. Verify its premises against the ACTUAL code (file:line, real behavior), not
+   assumptions — pasted briefs are often written without seeing current state.
+2. Reject or correct anything wrong, over-scoped, unsafe, or invariant-violating
+   (never-green, verbatim golden copy, no behavior change inside a seam/latent
+   fix, FINRA-safe boundary). Watch for the common traps: a "canonical constant"
+   that would merge two distinct vocabularies; a "fix" that changes a serialized
+   or vendor-facing shape; a premise (e.g. "this KeyErrors") the code contradicts.
+3. State the correction and the improved version with rationale, then proceed on
+   the CORRECTED version. If the prompt is already sound, say so briefly and go.
+
 ## Merge policy
 Never merge a PR without explicit approval in this session, given AFTER the
 PR is opened. For every PR, post: the PR link, a plain-English summary of
