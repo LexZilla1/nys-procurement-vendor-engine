@@ -42,6 +42,8 @@ import json
 import os
 import re
 
+from engine import state_machine as _sm
+
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 # -- triage classes -----------------------------------------------------------
@@ -50,6 +52,32 @@ NON_BIDDABLE = "NON_BIDDABLE"
 EDGE = "EDGE"
 HUMAN_REVIEW = "HUMAN_REVIEW"
 OUT_OF_SCOPE = "OUT_OF_SCOPE"
+TRIAGE_CLASSES = frozenset({BIDDABLE, NON_BIDDABLE, EDGE, HUMAN_REVIEW, OUT_OF_SCOPE})
+
+# Triage CLASS (this module, 5-valued) -> lifecycle triage_verdict
+# (engine.state_machine, 3-valued: BIDDABLE / NOT_BIDDABLE / VERIFY). These are two
+# DISTINCT vocabularies at two layers, so they are NOT merged into one constant —
+# this shim is the ONE place that translates class -> verdict, so a future PR wiring
+# triage output into TenderStateMachine.transition is safe. engine.state_machine is
+# not modified. Per never-green, every non-confident class (EDGE / HUMAN_REVIEW /
+# OUT_OF_SCOPE) maps to VERIFY (a human confirms) — discarding is the risky
+# alternative, so we never auto-decline.
+TRIAGE_CLASS_TO_VERDICT = {
+    BIDDABLE: _sm.BIDDABLE,          # confident open competitive solicitation
+    NON_BIDDABLE: _sm.NOT_BIDDABLE,  # confident award / exemption / RFI / surplus notice
+    EDGE: _sm.VERIFY,                # borderline ad-type -> human confirms
+    HUMAN_REVIEW: _sm.VERIFY,        # explicitly low-confidence / provisional -> human
+    OUT_OF_SCOPE: _sm.VERIFY,        # not NY-state / unclassifiable -> human confirms
+}
+
+
+def lifecycle_verdict_for(triage_class):
+    """Translate a triage CLASS (this module's vocabulary) into a lifecycle
+    triage_verdict (engine.state_machine's vocabulary). Raises KeyError on an
+    unmapped class; the guard test asserts every class maps to a valid, non-None
+    verdict, so a new triage label cannot be added without wiring it here."""
+    return TRIAGE_CLASS_TO_VERDICT[triage_class]
+
 
 # -- jurisdiction values ------------------------------------------------------
 J_STATE = "STATE"

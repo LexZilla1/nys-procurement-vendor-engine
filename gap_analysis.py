@@ -321,7 +321,11 @@ def evaluate_requirement(requirement_id, rfp_deadline, profile, sunset_status_fn
                        "Requirement is not in the golden catalog — new/unverified; queued for "
                        "primary-source verification.", None)
 
-    citation = {"source_file": entry_meta.source_file, "quote": entry_meta.citation_quote}
+    # Canonical golden-copy citation shape (validation family: matches validator.py /
+    # cert_renewal.py). Uses "citation_quote", not "quote" — see BACKLOG for the
+    # deferred engine("quote")-vs-validation("citation_quote") family unification.
+    citation = {"source_file": entry_meta.source_file,
+                "citation_quote": entry_meta.citation_quote}
     name = entry_meta.name
 
     # Step 2 — vendor has a matching entry?
@@ -469,7 +473,7 @@ def render(bundle):
         lines.append("     reason  : {}".format(r["reason"]))
         if r["citation"]:
             lines.append('     citation: {} — "{}"'.format(
-                r["citation"]["source_file"], r["citation"]["quote"]))
+                r["citation"]["source_file"], r["citation"]["citation_quote"]))
         else:
             lines.append("     citation: (none — not grounded in the golden copy)")
         if r["attorney_review_required"]:
