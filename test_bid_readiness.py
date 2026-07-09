@@ -16,8 +16,10 @@ Covers:
   * "Show the work" summary counts (pages read / found / checked).
 """
 
+import json
 import os
 import sys
+import tempfile
 
 import validator as V
 import bid_readiness as BR
@@ -1067,6 +1069,116 @@ def test_coverage_complete_formula_unchanged_after_substitution():
     # formula is exactly: complete iff nothing unmapped AND nothing needs review
     assert rep.coverage_complete == (c[BR.UNMAPPED] == 0 and c[BR.NEEDS_REVIEW] == 0)
     assert rep.coverage_complete is False
+
+
+# ---------------------------------------------------------------------------
+# Freshness runtime wiring — audit verdicts made effective at citation time
+# ---------------------------------------------------------------------------
+
+# A cue-bearing §139-j passage that is VERIFIED_MATCH when its grounding source
+# (source-stf-139-k.md) is citable — so a DIVERGENT verdict visibly degrades it.
+_PROC_LOBBY_CUE = ("Bidders must comply with the procurement lobbying restrictions "
+                   "of State Finance Law section 139-j during the restricted period, "
+                   "and each offerer shall certify compliance.")
+
+
+def _state_entry(verdict):
+    return {"verdict": verdict, "checked_date": "2026-07-09", "detail": "test"}
+
+
+def _golden_with_state(sources):
+    """A GoldenCopy backed by a temp freshness-state file: {fn: {verdict,...}}."""
+    d = tempfile.mkdtemp(prefix="fresh-state-")
+    p = os.path.join(d, "freshness-state.json")
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"generated": "2026-07-09", "sources": sources}, fh)
+    return V.GoldenCopy(freshness_state_path=p)
+
+
+def test_freshness_divergent_source_withholds_grounding_row_degrades():
+    """A grounding source flagged DIVERGENT becomes not-citable: its rule loses
+    grounding, the row drops VERIFIED_MATCH -> NEEDS_REVIEW with the withheld
+    freshness reason, coverage shifts, and coverage_complete stays False."""
+    base = BR.score_bid(_ex(_PROC_LOBBY_CUE), {}, golden=V.GoldenCopy())
+    brow = [r for r in base.rows if r.kind == "procurement_lobbying"][0]
+    assert brow.coverage == BR.VERIFIED_MATCH             # citable baseline
+
+    g = _golden_with_state({"source-stf-139-k.md": _state_entry("DIVERGENT")})
+    rep = BR.score_bid(_ex(_PROC_LOBBY_CUE), {}, golden=g)
+    row = [r for r in rep.rows if r.kind == "procurement_lobbying"][0]
+    assert row.grounding is None                          # withheld via existing fail-soft
+    assert row.coverage == BR.NEEDS_REVIEW
+    assert row.freshness_note and row.freshness_note["mode"] == "withheld"
+    assert (base.coverage_counts[BR.VERIFIED_MATCH] - 1
+            == rep.coverage_counts[BR.VERIFIED_MATCH])
+    assert rep.coverage_complete is False
+    assert "citation withheld pending human re-verification" in BR.render_bid_readiness(rep)
+
+
+def test_freshness_fragment_source_stays_citable_with_warning():
+    """A suspect-but-citable verdict (FRAGMENT) keeps grounding and status, and
+    surfaces a per-source warning line in the rendered report."""
+    g = _golden_with_state({"source-stf-139-k.md": _state_entry("FRAGMENT")})
+    rep = BR.score_bid(_ex(_PROC_LOBBY_CUE), {}, golden=g)
+    row = [r for r in rep.rows if r.kind == "procurement_lobbying"][0]
+    assert row.grounding is not None                      # still citable
+    assert row.coverage == BR.VERIFIED_MATCH              # status unchanged
+    assert row.freshness_note and row.freshness_note["mode"] == "warning"
+    rendered = BR.render_bid_readiness(rep)
+    assert "under freshness review" in rendered and "FRAGMENT" in rendered
+
+
+def test_freshness_all_ok_state_matches_absent_state():
+    """All-OK state must render byte-identically to an absent overlay: no drift
+    tripwire fires and no freshness lines appear."""
+    seed = BR.render_bid_readiness(
+        BR.score_bid(extract(PDF), _profile(), golden=V.GoldenCopy()))
+    absent = BR.render_bid_readiness(
+        BR.score_bid(extract(PDF), _profile(), golden=V.GoldenCopy(freshness={})))
+    assert seed == absent
+    assert "! fresh" not in seed and "freshness state unavailable" not in seed
+
+
+def test_freshness_malformed_state_is_absent_with_warning_never_blocks():
+    """A malformed state file never crashes and never blocks a citation on the
+    parse error alone; the report notes the state is unavailable."""
+    d = tempfile.mkdtemp(prefix="fresh-bad-")
+    p = os.path.join(d, "freshness-state.json")
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write("{ not valid json ]")
+    g = V.GoldenCopy(freshness_state_path=p)
+    assert g.freshness_state_available is False
+    rep = BR.score_bid(_ex(_PROC_LOBBY_CUE), {}, golden=g)
+    row = [r for r in rep.rows if r.kind == "procurement_lobbying"][0]
+    assert row.grounding is not None and row.coverage == BR.VERIFIED_MATCH  # fail-open
+    assert "freshness state unavailable" in BR.render_bid_readiness(rep)
+
+
+def test_freshness_missing_state_file_notes_unavailable():
+    g = V.GoldenCopy(freshness_state_path="/no/such/freshness-state.json")
+    assert g.freshness_state_available is False
+    rep = BR.score_bid(_ex(_PROC_LOBBY_CUE), {}, golden=g)
+    assert "freshness state unavailable" in BR.render_bid_readiness(rep)
+
+
+def test_freshness_state_reader_roundtrip_and_malformed():
+    """engine.freshness_state.load_state: a valid file parses to overlay+rich; a
+    malformed/missing file returns available=False without raising."""
+    from engine import freshness_state as efs
+    d = tempfile.mkdtemp(prefix="fresh-reader-")
+    good = os.path.join(d, "good.json")
+    with open(good, "w", encoding="utf-8") as fh:
+        json.dump({"sources": {"source-x.md": {"verdict": "DIVERGENT",
+                   "checked_date": "2026-07-09", "detail": "d"}}}, fh)
+    overlay, rich, avail = efs.load_state(good)
+    assert avail is True
+    assert overlay["source-x.md"] == ("DIVERGENT", False)
+    assert rich["source-x.md"]["verdict"] == "DIVERGENT"
+    bad = os.path.join(d, "bad.json")
+    with open(bad, "w", encoding="utf-8") as fh:
+        fh.write("nope")
+    assert efs.load_state(bad) == ({}, {}, False)
+    assert efs.load_state("/no/such/file.json") == ({}, {}, False)
 
 
 def _run():
