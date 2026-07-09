@@ -992,6 +992,83 @@ def test_render_flags_page_numbers_approximate():
     assert "(approx)" not in rendered2 and "NOTE: page numbers approximate" not in rendered2
 
 
+# ---------------------------------------------------------------------------
+# Rank 1 — cue-bearing anchor selection (PR-A deferred item)
+# A mapped row whose provenance anchor is a heading/fragment is upgraded to a
+# COMPLETE-SENTENCE extracted segment of the SAME kind. Bucket flips are a
+# first-class reviewed outcome, gated to only-upward and only-via-a-real-cue.
+# ---------------------------------------------------------------------------
+
+# insurance_workers is a grounded kind reachable by "workers' compensation".
+_WC_HEADING_FRAGMENT = "52 6.20 Workers' Compensation"           # heading: <5 words, unterminated
+_WC_CUE_SENTENCE = ("Contractors must maintain workers' compensation coverage "
+                    "for all employees.")                         # complete + cue
+_UNMAPPED_SHALL = "The contractor shall paint the widget green."  # general -> UNMAPPED
+
+
+def test_anchor_upgrades_heading_to_cue_sentence_and_flips_coverage():
+    """A heading-fragment anchor is replaced by the complete cue-bearing sentence
+    of the SAME kind, and the row's coverage flips NEEDS_REVIEW -> VERIFIED_MATCH
+    ONLY because the substituted excerpt genuinely carries an obligation cue."""
+    rep = _mk([_WC_HEADING_FRAGMENT + "\n" + _WC_CUE_SENTENCE])
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert wc.grounding is not None                              # grounded kind
+    assert wc.tender_excerpt == _WC_CUE_SENTENCE                 # heading was upgraded
+    assert wc.tender_excerpt != _WC_HEADING_FRAGMENT
+    assert BR.has_obligation_cue(wc.tender_excerpt)              # the flip is cue-driven
+    assert wc.coverage == BR.VERIFIED_MATCH
+
+
+def test_anchor_kept_when_only_fragment_segments_exist():
+    """A kind whose ONLY segment is a fragment keeps that fragment verbatim (never
+    invented, never borrowed), and coverage stays NEEDS_REVIEW."""
+    rep = _mk([_WC_HEADING_FRAGMENT])
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert wc.tender_excerpt == _WC_HEADING_FRAGMENT             # unchanged, verbatim
+    assert wc.coverage == BR.NEEDS_REVIEW
+
+
+def test_substituted_anchor_is_a_verbatim_extracted_segment():
+    """Anti-fabrication: the substituted excerpt is byte-equal to a segment that
+    find_requirements actually produced from the SAME document — not synthesized."""
+    ex = {"pages": [_WC_HEADING_FRAGMENT + "\n" + _WC_CUE_SENTENCE],
+          "page_count": 1, "source": "x", "has_text_layer": True}
+    segments = {req["text"] for req in find_requirements(ex)}
+    rep = BR.score_bid(ex, {}, golden=GC)
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert wc.tender_excerpt in segments                        # verbatim, from extraction
+
+
+def test_verified_match_gate_byte_identity():
+    """The VERIFIED_MATCH gate is unchanged: VERIFIED_MATCH iff grounding AND an
+    obligation cue in the excerpt; every other combination is NEEDS_REVIEW."""
+    cue, nocue = "Vendors must submit the certificate.", "Section 6.20 of the tender."
+    assert BR.has_obligation_cue(cue) and not BR.has_obligation_cue(nocue)
+    G = {"source_file": "source-x.md", "citation_quote": "q"}
+
+    def _cov(grounding, excerpt):
+        return BR.RequirementRow("k", "L", excerpt, 1, None, BR.YELLOW,
+                                 grounding, True).coverage
+    assert _cov(G, cue) == BR.VERIFIED_MATCH                     # grounded + cue
+    assert _cov(G, nocue) == BR.NEEDS_REVIEW                     # grounded, no cue
+    assert _cov(None, cue) == BR.NEEDS_REVIEW                    # cue, no grounding
+    assert _cov(None, nocue) == BR.NEEDS_REVIEW                  # neither
+
+
+def test_coverage_complete_formula_unchanged_after_substitution():
+    """Even when a substitution flips a row to VERIFIED_MATCH, coverage_complete
+    stays a pure function of the counts and remains False while any NEEDS_REVIEW
+    or UNMAPPED item is present."""
+    rep = _mk([_WC_HEADING_FRAGMENT + "\n" + _WC_CUE_SENTENCE + "\n" + _UNMAPPED_SHALL])
+    wc = [r for r in rep.rows if r.kind == "insurance_workers"][0]
+    assert wc.coverage == BR.VERIFIED_MATCH                      # the flip happened
+    c = rep.coverage_counts
+    assert c[BR.UNMAPPED] >= 1                                   # the paint sentence
+    # formula is exactly: complete iff nothing unmapped AND nothing needs review
+    assert rep.coverage_complete == (c[BR.UNMAPPED] == 0 and c[BR.NEEDS_REVIEW] == 0)
+    assert rep.coverage_complete is False
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]

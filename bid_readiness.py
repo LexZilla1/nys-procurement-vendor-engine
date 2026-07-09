@@ -798,6 +798,25 @@ class BidReadinessReport:
         }
 
 
+def _select_anchor(candidates):
+    """Best COMPLETE-SENTENCE substitute anchor among same-kind extracted segments.
+
+    Returns the FIRST cue-bearing complete sentence (in extracted order), else the
+    first complete (non-fragment) sentence, else None (keep the original fragment).
+    It NEVER synthesizes or stitches text — it only ever returns a verbatim segment
+    that find_requirements already produced for this kind. Preference order matches
+    the brief: cue-sentence > plain complete sentence > (None) keep the fragment."""
+    plain = None
+    for c in candidates:
+        if is_incomplete_fragment(c["text"]):
+            continue
+        if has_obligation_cue(c["text"]):
+            return c
+        if plain is None:
+            plain = c
+    return plain
+
+
 def score_bid(extracted, profile, golden=None):
     """Build a BidReadinessReport from an extract() result and a vendor profile."""
     golden = golden or GoldenCopy()
@@ -830,6 +849,10 @@ def score_bid(extracted, profile, golden=None):
     waivers = []
     seen_kinds = set()
     seen_other = set()
+    # Cue-bearing anchor selection (Rank 1): kind -> [{text, page}] of every
+    # same-kind extracted segment, so a heading/fragment anchor can be upgraded
+    # to a complete-sentence segment of THIS kind after scoring.
+    anchor_candidates = {}
     for req in requirements:
         # Bid-bond waiver / negation (PR-A finding 1). A "no ... bond ... required"
         # passage is NOT a vendor obligation: never a scored row (so it can never
@@ -862,6 +885,10 @@ def score_bid(extracted, profile, golden=None):
             seen_other.add(norm)
             other.append({"text": req["text"], "page": req["page"], "kind": kind})
             continue
+        # Remember every same-kind segment (verbatim text + its own page) as a
+        # possible provenance anchor, BEFORE the collapse discards the later ones.
+        anchor_candidates.setdefault(kind, []).append(
+            {"text": req["text"], "page": req["page"]})
         # Collapse multiple tender lines of the same kind to one verdict row,
         # but keep the first verbatim excerpt as the provenance anchor.
         if kind in seen_kinds:
@@ -971,6 +998,35 @@ def score_bid(extracted, profile, golden=None):
             page=req["page"], vendor_has=vendor_has, status=status,
             grounding=meta["grounding"], must=meta["must"], issue=issue,
             fix=fix, note=note, detail=detail))
+
+    # ---- Cue-bearing anchor selection (Rank 1; PR-A deferred item) ------------
+    # A mapped row whose provenance anchor is a heading / line-wrap fragment is
+    # upgraded to a COMPLETE-SENTENCE extracted segment of the SAME kind from the
+    # SAME document, preferring one that carries an obligation cue. This is a
+    # REVIEWED change to the provenance anchor, not a cosmetic tweak: a row's
+    # coverage may flip NEEDS_REVIEW -> VERIFIED_MATCH — but ONLY because the
+    # substituted excerpt genuinely carries a cue (coverage still recomputes from
+    # tender_excerpt via has_obligation_cue, which is untouched). Guardrails:
+    #   * the substitute is a VERBATIM extracted segment — never synthesized;
+    #   * preference cue-sentence > plain complete sentence > keep the fragment;
+    #   * no cross-kind borrowing; no complete-sentence segment => keep fragment;
+    #   * NO DOWNGRADE: a substitution may only hold or raise the coverage bucket,
+    #     never lower it (protects a cue-bearing fragment already VERIFIED_MATCH
+    #     from being replaced by a cue-less sentence);
+    #   * page attribution follows the substitute's own segment page.
+    for row in rows:
+        if not is_incomplete_fragment(row.tender_excerpt):
+            continue
+        sub = _select_anchor(anchor_candidates.get(row.kind, []))
+        if sub is None:
+            continue
+        # Coverage rank mirrors RequirementRow.coverage (grounding AND cue).
+        cur_rank = 1 if (row.grounding and has_obligation_cue(row.tender_excerpt)) else 0
+        sub_rank = 1 if (row.grounding and has_obligation_cue(sub["text"])) else 0
+        if sub_rank < cur_rank:
+            continue  # never downgrade the coverage bucket
+        row.tender_excerpt = sub["text"]
+        row.page = sub["page"]
 
     report = BidReadinessReport(
         vendor_name=profile.get("vendor_name", "(unnamed vendor)"),
