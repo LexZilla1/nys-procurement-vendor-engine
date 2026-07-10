@@ -188,12 +188,15 @@ class GoldenCopy:
 
     def __init__(self, sources_dir=None, freshness=None, freshness_state_path=None):
         # Golden-copy location comes from the active jurisdiction pack (defaults
-        # to ny-state, which resolves to the historical path — byte-identical).
+        # to ny-state). The pack validates at load time that golden_copy_sources
+        # exists (fail-closed), so a bad/missing manifest raises here instead of
+        # resolving to a fallback. The former /mnt/project fallback was REMOVED:
+        # it could only ever mask a misconfigured pack, and since repo_root is
+        # derived from the module's own location the pack path already resolves
+        # correctly in every deployment (including one rooted at /mnt/project).
+        # An explicitly-passed sources_dir that does not exist now fails loudly
+        # in _load() rather than being silently redirected.
         self.sources_dir = sources_dir or _jur.load_pack().golden_copy_sources
-        if not os.path.isdir(self.sources_dir):
-            alt = os.path.join("/mnt/project", "golden-copy", "sources")
-            if os.path.isdir(alt):
-                self.sources_dir = alt
         self._raw = {}     # file -> full file text
         self._body = {}    # file -> STATE TEXT body
         # Freshness overlay {source_file: (verdict, sunset_stale)} feeding the

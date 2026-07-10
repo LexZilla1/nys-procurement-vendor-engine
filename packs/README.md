@@ -41,8 +41,25 @@ gc = validator.GoldenCopy(sources_dir=pack.golden_copy_sources)
 ```
 
 `load_pack()` resolves every resource to an absolute path and validates that
-the manifest declares all required fields and resource keys — a malformed or
-partial pack fails loudly at load, never silently at first use.
+the manifest declares all required fields and resource keys **and** that the
+load-bearing resources (`golden_copy_sources`, `entities`, `ad_types`,
+`citations`) exist on disk — a malformed, partial, or dangling pack fails loudly
+at load (`UnknownJurisdiction` / `InvalidPack`), never silently at first use.
+
+## Failure semantics (three adjacent, deliberately different behaviors)
+
+The engine has three inputs that fail in three different ways. This is by
+design; do not "unify" them:
+
+| Input | On missing / malformed | Rationale |
+|---|---|---|
+| **Pack manifest** (`packs/<id>/manifest.json`) | **fail-closed — raise** (`UnknownJurisdiction` if absent; `InvalidPack` if bad JSON, a missing required key, or a load-bearing resource path that does not exist) | A jurisdiction we cannot even locate must never run silently against the wrong data. |
+| **Golden copy** (`golden_copy_sources`) | **fail-closed — raise** | Golden copy is the only source of rule truth; a missing/empty rulebook must stop the engine, never resolve to a fallback. The pack's existence check enforces this at load; the former `/mnt/project` fallback was removed so nothing can mask it. |
+| **Freshness state** (`data/config/freshness-state.json`) | **fail-open — proceed, with a visible warning** (`freshness_state_available=False`; surfaced in the render) | By the #56 design, freshness is a runtime tripwire, not a gate. A missing state file means "freshness unknown", which must not block citing verified golden copy — but the vendor is warned. |
+
+Note: freshness state is intentionally **not** routed through the pack — it is a
+per-deployment runtime artifact resolved by `engine/freshness_state.py`, not a
+jurisdiction rule input.
 
 ## Adding a jurisdiction (the runbook)
 

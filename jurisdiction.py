@@ -40,13 +40,24 @@ _REQUIRED_RESOURCES = (
 )
 _REQUIRED_FIELDS = ("id", "display_name", "jurisdiction_class")
 
+# Resources whose resolved path MUST exist on disk at load time (fail-closed). A
+# pack that points a load-bearing resource at nothing must fail loudly — never
+# resolve to a fallback. Each entry: (key, os.path predicate, human label).
+_MUST_EXIST = (
+    ("golden_copy_sources", os.path.isdir, "directory"),
+    ("entities", os.path.isfile, "file"),
+    ("ad_types", os.path.isfile, "file"),
+    ("citations", os.path.isfile, "file"),
+)
+
 
 class UnknownJurisdiction(ValueError):
     """Raised when a pack id has no manifest under packs/."""
 
 
 class InvalidPack(ValueError):
-    """Raised when a manifest is missing a required field or resource key."""
+    """Raised when a manifest is missing a required field or resource key, or a
+    load-bearing resource resolves to a path that does not exist on disk."""
 
 
 class Pack:
@@ -77,6 +88,16 @@ class Pack:
 
         # resolved resource locations (absolute)
         self._res = {k: os.path.join(repo_root, v) for k, v in res.items()}
+
+        # Fail-closed: every load-bearing resource must exist on disk now, or
+        # the pack is unusable. Raise naming the key and the resolved path so a
+        # misconfigured pack surfaces immediately instead of resolving to a
+        # fallback downstream.
+        for key, exists, kind in _MUST_EXIST:
+            path = self._res[key]
+            if not exists(path):
+                raise InvalidPack(
+                    "resource %r resolves to a missing %s: %s" % (key, kind, path))
 
     def resource(self, key):
         """Absolute path for a declared resource key (raises KeyError if absent)."""
