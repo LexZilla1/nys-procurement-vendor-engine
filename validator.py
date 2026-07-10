@@ -35,6 +35,7 @@ import sys
 
 from engine import golden_status as gs
 from engine import freshness_state as fs
+import jurisdiction as _jur
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -186,7 +187,9 @@ class GoldenCopy:
     H_AGENCY_GUIDANCE = "## AGENCY GUIDANCE"
 
     def __init__(self, sources_dir=None, freshness=None, freshness_state_path=None):
-        self.sources_dir = sources_dir or os.path.join(HERE, "golden-copy", "sources")
+        # Golden-copy location comes from the active jurisdiction pack (defaults
+        # to ny-state, which resolves to the historical path — byte-identical).
+        self.sources_dir = sources_dir or _jur.load_pack().golden_copy_sources
         if not os.path.isdir(self.sources_dir):
             alt = os.path.join("/mnt/project", "golden-copy", "sources")
             if os.path.isdir(alt):

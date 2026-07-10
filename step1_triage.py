@@ -43,6 +43,7 @@ import os
 import re
 
 from engine import state_machine as _sm
+import jurisdiction as _jur
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
@@ -96,9 +97,18 @@ def _load(name):
         return json.load(fh)
 
 
-_ENTITIES = _load(os.path.join("entities", "entities.json"))
-_AD_TYPES = _load("nyscr_ad_types.json")
-_CITATIONS = _load("citations.json")
+def _load_abs(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+# Entity roster, ad-type table, and citation map all come from the active
+# jurisdiction pack (defaults to ny-state, which resolves to the historical
+# data/ paths — byte-identical).
+_PACK = _jur.load_pack()
+_ENTITIES = _load_abs(_PACK.entities_path)
+_AD_TYPES = _load_abs(_PACK.ad_types_path)
+_CITATIONS = _load_abs(_PACK.citations_path)
 
 # --------------------------------------------------------------------------
 # Normalization + entity lookup (exact + alias ONLY — never keyword/fuzzy)
