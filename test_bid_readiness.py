@@ -1181,6 +1181,97 @@ def test_freshness_state_reader_roundtrip_and_malformed():
     assert efs.load_state("/no/such/file.json") == ({}, {}, False)
 
 
+# --------------------------------------------------------------------------
+# Vacuous-COMPLETE never-green breach (fixed): a zero-requirement, empty,
+# non-PDF, non-tender, or no-text-layer input must never render COMPLETE.
+# Each degenerate input goes through the REAL extract() -> score_bid() ->
+# render pipeline (no mocks) and must fail closed with a distinct message.
+# --------------------------------------------------------------------------
+
+_NONTENDER_PDF = b"""%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R>>endobj
+4 0 obj<</Length 70>>
+stream
+BT /F1 12 Tf 72 700 Td (Chocolate chip cookie recipe. Mix flour and sugar and bake.) Tj ET
+endstream
+endobj
+trailer<</Root 1 0 R>>
+%%EOF"""
+
+_NOTEXT_PDF = b"""%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R>>endobj
+4 0 obj<</Length 16>>
+stream
+0 0 100 100 re f
+endstream
+endobj
+trailer<</Root 1 0 R>>
+%%EOF"""
+
+
+def _degenerate_file(kind):
+    d = tempfile.mkdtemp(prefix="degen_")
+    path = os.path.join(d, kind + ".pdf")
+    if kind == "empty":
+        open(path, "wb").close()
+    elif kind == "notpdf":
+        with open(path, "wb") as fh:
+            fh.write(b"Just plain bytes, not a PDF at all.\n")
+    elif kind == "nontender":
+        with open(path, "wb") as fh:
+            fh.write(_NONTENDER_PDF)
+    elif kind == "notext":
+        with open(path, "wb") as fh:
+            fh.write(_NOTEXT_PDF)
+    return path
+
+
+def _assert_fail_closed(path):
+    ex = extract(path)                       # must not crash
+    rep = BR.score_bid(ex, {}, golden=GC)    # must not crash
+    rendered = BR.render_bid_readiness(rep)
+    rendered = "\n".join(rendered) if isinstance(rendered, list) else rendered
+    # no COMPLETE / all-clear coverage headline
+    assert "COVERAGE STATUS: COMPLETE" not in rendered
+    # distinct fail-closed message present
+    assert "NO REQUIREMENTS EXTRACTED" in rendered
+    # coverage_complete is not truthy-as-PASS, in the object and in both JSON spots
+    assert rep.coverage_complete is False
+    assert rep.analyzable is False
+    d = rep.to_dict()
+    assert d["coverage_complete"] is False
+    assert d["analyzable"] is False
+    assert d["coverage"]["coverage_complete"] is False
+    assert d["coverage"]["analyzable"] is False
+
+
+def test_vacuous_complete_empty_file():
+    _assert_fail_closed(_degenerate_file("empty"))
+
+
+def test_vacuous_complete_non_pdf_bytes_renamed_pdf():
+    _assert_fail_closed(_degenerate_file("notpdf"))
+
+
+def test_vacuous_complete_non_tender_pdf():
+    _assert_fail_closed(_degenerate_file("nontender"))
+
+
+def test_vacuous_complete_no_text_layer_pdf():
+    _assert_fail_closed(_degenerate_file("notext"))
+
+
+def test_normal_tender_stays_analyzable():
+    """Guard the fix did not over-fail-close: a real tender still analyzes and
+    can still reach coverage_complete via the normal (non-vacuous) path."""
+    rep = BR.score_bid(extract(PDF), _profile(), golden=GC)
+    assert rep.analyzable is True
+
+
 def _run():
     tests = [(n, g) for n, g in sorted(globals().items())
              if n.startswith("test_") and callable(g)]

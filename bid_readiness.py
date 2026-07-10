@@ -65,6 +65,10 @@ UNMAPPED = "UNMAPPED"
 # "NOT COMPLETE" does not contain the substring "COVERAGE STATUS: COMPLETE".)
 HEADLINE_COVERAGE_COMPLETE = "COVERAGE STATUS: COMPLETE"
 HEADLINE_COVERAGE_INCOMPLETE = "COVERAGE STATUS: NOT COMPLETE"
+# Distinct FAIL-CLOSED headline for the zero-evidence case (no text layer, or no
+# item of any kind detected). This is NOT a completeness result — a document we
+# could not analyze as a solicitation must never read as COMPLETE (vacuous PASS).
+HEADLINE_NO_REQUIREMENTS = "NO REQUIREMENTS EXTRACTED"
 
 # Candidate golden-copy grounding for each requirement kind. Verified verbatim
 # at import (see _build_rules); a quote that fails cite() is dropped to None so
@@ -567,12 +571,18 @@ class BidReadinessReport:
                  rows, other_requirements=None, possible_authorities=None,
                  waivers=None, page_numbers_approximate=False,
                  page_number_note=None, page_count_exact=True,
-                 freshness_state_available=True):
+                 freshness_state_available=True, has_text_layer=True):
         self.vendor_name = vendor_name
         self.source = source
         self.pages_read = pages_read
         self.requirements_found = requirements_found
         self.rows = rows
+        # False when the input had no readable text layer (scanned/image PDF,
+        # empty file, or non-PDF bytes). Feeds the `analyzable` fail-closed gate:
+        # a document with no text layer can never be coverage_complete. Defaults
+        # True so directly-constructed reports (tests) keep their prior behavior;
+        # score_bid always threads the real extract() value.
+        self.has_text_layer = has_text_layer
         # Unmapped "shall/must" passages with no known rule — kept OUT of the
         # per-requirement findings (they flood the output) and surfaced as a
         # clustered summary instead. These are UNMAPPED coverage items.
@@ -690,11 +700,29 @@ class BidReadinessReport:
         }
 
     @property
+    def analyzable(self):
+        """False when the input produced NOTHING to analyze as a solicitation:
+        no text layer at all, or zero detected items of any kind (no scored
+        requirement rows and no unmapped / possible-authority / waiver passages).
+        This is the zero-evidence case — empty file, non-PDF bytes, a non-tender
+        document, or a scanned/no-text-layer PDF. It sits on the FAIL-CLOSED side
+        of the #45 gate: a non-analyzable report is never coverage_complete, so
+        'nothing to cover' can never read as a vacuous 'everything covered'."""
+        if not self.has_text_layer:
+            return False
+        return bool(self.rows or self.other_requirements
+                    or self.possible_authorities or self.waivers)
+
+    @property
     def coverage_complete(self):
         """LITERAL fail-closed gate, derived from item counts every time (never a
-        separately-stored flag): coverage is complete ONLY when nothing is
-        unmapped AND nothing needs review. Any UNMAPPED or NEEDS_REVIEW item
-        forces False. This is a reliability/coverage judgment, not a legal PASS."""
+        separately-stored flag): coverage is complete ONLY when the document was
+        analyzable AND nothing is unmapped AND nothing needs review. Any
+        UNMAPPED or NEEDS_REVIEW item forces False; so does the zero-evidence
+        case (not analyzable) — strengthening #45, never weakening it. This is a
+        reliability/coverage judgment, not a legal PASS."""
+        if not self.analyzable:
+            return False
         c = self.coverage_counts
         return c[UNMAPPED] == 0 and c[NEEDS_REVIEW] == 0
 
@@ -702,7 +730,15 @@ class BidReadinessReport:
     def coverage_headline(self):
         """The one-line coverage verdict. It never reads as a final PASS/COMPLETE
         while coverage_complete is False; it distinguishes 'we verified X' from
-        'there are no other requirements'."""
+        'there are no other requirements'. The zero-evidence case gets its own
+        distinct FAIL-CLOSED headline — never a completeness claim."""
+        if not self.analyzable:
+            reason = ("no text layer detected (scanned/image, empty, or non-PDF "
+                      "input)" if not self.has_text_layer
+                      else "no requirement passages were extracted")
+            return ("{} — document could not be analyzed as a solicitation; human "
+                    "review required. Reason: {}. This is NOT a coverage or "
+                    "completeness result.".format(HEADLINE_NO_REQUIREMENTS, reason))
         c = self.coverage_counts
         if self.coverage_complete:
             return ("{} — all {} detected RFQ item(s) mapped to a verified "
@@ -768,6 +804,10 @@ class BidReadinessReport:
         verified, needs_review = self.coverage_buckets
         return {
             "coverage_complete": self.coverage_complete,
+            # Zero-evidence discriminator: False => the document could not be
+            # analyzed as a solicitation (no text layer / no items). A consumer
+            # must NOT read coverage_complete=False + analyzable=False as a pass.
+            "analyzable": self.analyzable,
             "headline": self.coverage_headline,
             "counts": self.coverage_counts,
             "verified_match": [
@@ -809,6 +849,9 @@ class BidReadinessReport:
             },
             # Top-level fail-closed gate — literal, derived from item counts.
             "coverage_complete": self.coverage_complete,
+            # False => zero-evidence: no text layer or no items detected. The
+            # zero-item case must never be read as PASS (see coverage.analyzable).
+            "analyzable": self.analyzable,
             "coverage": self._coverage_dict(),
             "bid_readiness_score": self.score,
             "status_counts": self.counts,
@@ -1080,7 +1123,8 @@ def score_bid(extracted, profile, golden=None):
         page_numbers_approximate=extracted.get("page_numbers_approximate", False),
         page_number_note=extracted.get("page_number_note"),
         page_count_exact=extracted.get("page_count_exact", True),
-        freshness_state_available=golden.freshness_state_available)
+        freshness_state_available=golden.freshness_state_available,
+        has_text_layer=extracted.get("has_text_layer", bool(extracted.get("pages"))))
     report.contract_value = contract_value
     return report
 
