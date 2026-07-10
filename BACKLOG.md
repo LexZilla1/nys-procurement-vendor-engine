@@ -124,6 +124,10 @@ proof as the monthly freshness automation).
   bid_readiness.py FIRST — shape-selection depends on how gaps are actually
   typed. Do not build shape-selection before confirming the taxonomy exists.
   Must preserve factual-only boundary + denylist test when added.
+- [ ] `parse_golden_copy.py:67,73,251` carries an independent `/mnt/project`
+  fallback (build-time reconciliation tool, NOT on the vendor runtime path).
+  Low-priority cleanup for consistency with #63, which removed the fallback from
+  the `GoldenCopy` runtime path. No behavior impact today.
 
 ## Daily-habit backend — roadmap & gates
 PR 1 (state primitives) is BUILT: engine/{citation,dated_objects,state_machine,
@@ -306,6 +310,15 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   drifted, do a Phase-3-style re-capture). Until cleared, DIVERGENT correctly
   withholds citations (rows show NEEDS_REVIEW with the withheld reason) — this is
   fail-closed and must not be bypassed by editing state without re-verification.
+- [ ] **GATE — remove the `freshness_checker.py:120` `/mnt/project` fallback as
+  part of the freshness live-fire PR** (the monthly Action running
+  `scripts/freshness_check.py --write-state`). Rationale: a `/mnt/project`
+  fallback there could make the drift checker examine a DIFFERENT golden copy
+  than the engine cites from, producing freshness verdicts about the wrong files
+  with no error. Inert today (all-OK seed, Action not live); load-bearing the
+  moment real verdicts are written. #63 removed the analogous fallback from the
+  runtime `GoldenCopy` path; this one is the freshness counterpart and MUST land
+  with live-fire.
 
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
@@ -566,6 +579,10 @@ signal; do NOT "fix everything".
      `scripts/freshness_check.py --write-state` with the existing NYSLEG_API_KEY secret and
      open a PR when a per-source verdict CHANGES. Completes the never-green story end-to-end
      (today the committed freshness-state.json is an all-OK SEED, so the tripwire is inert).
+     PRECONDITION: remove the `freshness_checker.py:120` `/mnt/project` fallback FIRST (see
+     "Freshness automation — follow-ups" GATE) — a live drift checker with that fallback
+     could read a different golden copy than the engine cites from and write verdicts about
+     the wrong files with no error.
 - DEFER (improvements gated on a real vendor's document, NOT fixes): durable excerpt-ref
   schema (the permanent replacement for #58's interim demotion — design it AFTER a real
   tender so it does not overfit one OGS diesel IFB); wrong suggested_kind root-cause;
