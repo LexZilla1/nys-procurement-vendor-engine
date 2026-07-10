@@ -1,0 +1,18 @@
+{
+  "id": "ny-state",
+  "display_name": "New York State",
+  "jurisdiction_class": "STATE",
+  "governing_law": "State Finance Law Art. 11",
+  "citation_family": "ny-consolidated-laws",
+  "freshness_adapter": "open-legislation-api",
+  "mwbe_regime": "article-15-a",
+  "entity_source": "abo-state-local-authorities",
+  "resources": {
+    "golden_copy_sources": "golden-copy/sources",
+    "entities": "data/entities/entities.json",
+    "ad_types": "data/nyscr_ad_types.json",
+    "citations": "data/citations.json",
+    "freshness_registry": "data/config/statute_capture_registry.json",
+    "forms": "data/config/forms"
+  }
+}
