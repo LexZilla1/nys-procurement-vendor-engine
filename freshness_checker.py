@@ -116,10 +116,17 @@ LABEL_RE = re.compile(r"^- \*\*(?P<label>[^:*]+):\*\*\s?(?P<value>.*)$")
 
 
 def find_golden_copy_root():
-    """Locate the dir holding sources/, the INDEX and the verification report."""
-    for base in (os.path.dirname(os.path.abspath(__file__)), "/mnt/project"):
-        if os.path.isdir(os.path.join(base, "golden-copy", "sources")):
-            return os.path.join(base, "golden-copy")
+    """Locate the dir holding sources/, the INDEX and the verification report.
+
+    Fails closed (returns None) when the golden copy is not next to this script:
+    the drift checker must NEVER examine a different golden copy than the engine
+    cites from — a fallback there could write freshness verdicts about the wrong
+    files with no error. The former /mnt/project fallback was removed for that
+    reason (#63 removed the analogous fallback from the runtime GoldenCopy path).
+    This is the freshness-live-fire GATE (PR A)."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    if os.path.isdir(os.path.join(base, "golden-copy", "sources")):
+        return os.path.join(base, "golden-copy")
     return None
 
 
