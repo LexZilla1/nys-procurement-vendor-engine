@@ -363,6 +363,18 @@ material-transition gate fires on a class change and stays silent on a clean run
 Deferred (NOT this scope): form-fixture freshness extension; the DIVERGENT-clear
 human procedure; anything touching golden-copy bodies.
 
+FRAMING CORRECTION (post-PR-A, #69): PR A gated `freshness_checker.py`'s
+`find_golden_copy_root` (a SIBLING checker entry point: `freshness_checker.main`;
+also imported by gap_analysis, which only calls read_sunset/classify_sunset).
+The live-fire runner is `scripts/freshness_check.py` (what the monthly Action
+runs), and it was ALREADY adjacent-only — `REPO_ROOT = dirname(dirname(abspath(
+__file__)))`, `SOURCES_DIR = REPO_ROOT/golden-copy/sources`, no `/mnt/project`
+fallback. So PR A is DEFENSE-IN-DEPTH on the sibling checker, NOT the sole
+wrong-file barrier — **PR B's `--write-state` wiring does not depend on PR A for
+root safety.** PR A still correct to land (removed a real dormant fallback,
+matched the plan's named gate, added fail-closed tests). Verified: caller aborts
+loudly (FATAL + status:FAIL, exit 1) on None; IFB 23447 byte-identical; suite 576.
+
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
   Primary-verified against NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314:
