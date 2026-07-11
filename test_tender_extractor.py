@@ -387,17 +387,44 @@ def test_wrap_split_bond_waiver_routes_to_waiver_not_requirement():
 
 
 def test_wrap_split_genuine_bond_requirement_is_not_suppressed():
-    """SAFETY: a genuine affirmative bond REQUIREMENT that is also wrap-split must
-    NOT be rerouted to the waiver channel — the fix keys on is_bond_waiver, so
-    only a real 'no ... required' negation reroutes, never an affirmative duty."""
-    page = ("Each bidder shall furnish a bid bond of five percent of the\n"
-            "Bid amount, which is required with the bid submission.")
+    """SAFETY (hard case): a genuine 'bond ... is required' clause that (a) wraps
+    across lines the SAME way the corpus waivers do and (b) whose bonding segment
+    carries NO signal word — so it is evaluated by the reassembly / host-matching
+    branch, not rescued by the signal path. The reconstructed sentence is NOT a
+    waiver (is_bond_waiver=False), so the segment is scored, never rerouted."""
+    page = ("A Bid bond of five percent, or other acceptable form of\n"
+            "Security for performance, is required with each sealed bid.")
+    stitched = TE._stitch_wraps(page)
+    bseg = [s for s in TE._segments(stitched) if TE._classify(s) == "bonding"]
+    # (a) the bonding segment carries NO signal word → it cannot take the signal path
+    assert bseg and not any(TE._SIGNAL_RE.search(s) for s in bseg), bseg
+    # (b) the reconstructed full sentence is NOT a waiver → reassembly cannot reroute it
+    assert not any(TE.is_bond_waiver(f) for f in TE._sentences_flat(stitched))
     reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
                                  "has_text_layer": True})
     bond = [r for r in reqs if r["kind"] == "bonding"]
     assert bond, "the genuine bond requirement must be captured"
     assert any(r.get("capture") == "signal" for r in bond), bond   # scored, not waived
     assert not any(r.get("capture") == "waiver" for r in bond), bond
+
+
+def test_waiver_does_not_swallow_adjacent_bond_requirement():
+    """A page carrying BOTH a real (wrap-split) bond WAIVER and a SEPARATE
+    no-signal bond REQUIREMENT: the waiver routes to the waiver channel AND the
+    distinct requirement is still scored. Locks that a reassembled waiver sentence
+    does not swallow an adjacent requirement sentence."""
+    page = ("The Commissioner of OGS has determined that no performance, payment or\n"
+            "Bid bond of any kind is required for this procurement.\n"
+            "Separately, a Performance bond of ten percent, or other form of\n"
+            "Security, is furnished by the successful bidder at contract execution.")
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    bond = [r for r in reqs if r["kind"] == "bonding"]
+    waived = [r for r in bond if r.get("capture") == "waiver"]
+    scored = [r for r in bond if r.get("capture") == "signal"]
+    assert waived, "the OGS bond waiver must route to the waiver channel"
+    assert scored, "the separate bond requirement must NOT be suppressed"
+    assert any("performance bond" in r["text"].lower() for r in scored), scored
 
 
 def test_find_requirements_routes_waiver_to_waiver_capture():
