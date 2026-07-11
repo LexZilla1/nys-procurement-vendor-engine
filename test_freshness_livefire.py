@@ -101,6 +101,24 @@ def test_full_match_result_round_trips_and_stays_citable(tmp_path):
     assert "source-y.md" not in _not_citable(overlay)      # citable, not blocked
 
 
+# --------------------------------------------------------------------------
+# No-key path is fail-closed AND non-destructive: without NYSLEG_API_KEY the
+# writer exits 2 BEFORE any state write, leaving the existing state file
+# byte-identical (not truncated, not emptied). Locks the structural guarantee
+# so a future refactor cannot silently reintroduce a state-blanking failure.
+# --------------------------------------------------------------------------
+
+def test_no_key_leaves_state_file_byte_untouched(tmp_path, monkeypatch):
+    p = tmp_path / "freshness-state.json"
+    original = (b'{"note": "known real state", "sources": '
+                b'{"source-a.md": {"verdict": "FULL-MATCH", "checked_date": "2026-07-01"}}}')
+    p.write_bytes(original)
+    monkeypatch.delenv("NYSLEG_API_KEY", raising=False)
+    rc = fc.main(["--write-state", str(p)])
+    assert rc == 2                                   # (a) fail-closed exit code
+    assert p.read_bytes() == original                # (b) byte-identical, untouched
+
+
 if __name__ == "__main__":
     import sys
     import pytest
