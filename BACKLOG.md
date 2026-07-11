@@ -320,6 +320,49 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
   runtime `GoldenCopy` path; this one is the freshness counterpart and MUST land
   with live-fire.
 
+### Freshness live-fire — scoped plan (approved 2026-07; CAPTURE ONLY, not yet built)
+Goal: run the drift tripwire on REAL verdicts instead of the committed all-OK
+seed, so "never cite a law that changed" holds end-to-end (not just in tests).
+Most machinery already exists: `scripts/freshness_check.py` has `--write-state` +
+`results_to_state()`; the runtime tripwire (`engine/freshness_state.py` ->
+not-citable) is wired (#56); the monthly Action already runs with NYSLEG_API_KEY.
+
+Sequencing (gate-first — nothing else lands until the gate does):
+- PR A (GATE, lands first): remove the `freshness_checker.py:120` `/mnt/project`
+  fallback; `find_golden_copy_root()` fails closed (returns None) when the golden
+  copy is not next to the script, so the drift checker can never examine a
+  different golden copy than the engine cites from. Test: returns None, not a
+  foreign path.
+- PR B (wire live-fire): the Action runs
+  `scripts/freshness_check.py --write-state data/config/freshness-state.json`
+  (keeping the report).
+
+Refinement 1 — MATERIAL-transition PR gate: open a PR ONLY on a material verdict
+TRANSITION (OK <-> DIVERGENT / STALE_SUSPECT / cleared), NOT on any byte diff in
+the fetched text. A byte-diff trigger would spawn noise PRs and erode the
+human-review habit; only a state-class change warrants human attention.
+
+Safety model: a verdict-change PR is NOT a freshness-clean auto-merge PR — a state
+change flips runtime citability, so it is HUMAN-REVIEWED, never auto-merged. When
+a source goes DIVERGENT, merging the state update makes it not-citable at runtime
+(the never-green completion), but a human confirms the drift is real first.
+Direction is fail-closed: a false-positive DIVERGENT withholds a citation (safe),
+never the reverse. (Clearing a false positive = the separate DIVERGENT-review
+item above; not in this scope.)
+
+Refinement 2 — first-run rollout: the first write-state run is manual
+`workflow_dispatch` (not the cron). Its PR (seed -> real verdicts) gets a FULL
+EVIDENCE REVIEW confirming it is a SEMANTIC NO-OP — 22/22 FULL-MATCH, with no
+source silently flipped — before it is trusted. Only after that does the monthly
+cron write state unattended.
+
+Tests: `find_golden_copy_root` fails closed; a DIVERGENT live-run result ->
+`results_to_state()` yields a not-citable entry honored by the runtime gate; the
+material-transition gate fires on a class change and stays silent on a clean run.
+
+Deferred (NOT this scope): form-fixture freshness extension; the DIVERGENT-clear
+human procedure; anything touching golden-copy bodies.
+
 ## Open verification items (golden copy)
 - [x] MWBE Exec Law §314(5)(a) sunset date 2028-07-01 — DONE 2026-07-03.
   Primary-verified against NY Exec Law §314, nysenate.gov/legislation/laws/EXC/314:
