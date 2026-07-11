@@ -368,6 +368,38 @@ def test_is_bond_waiver_ignores_comparative_deadline_idioms():
     assert not TE.is_bond_waiver("Submit no fewer than three references; a bid bond is required.")
 
 
+def test_wrap_split_bond_waiver_routes_to_waiver_not_requirement():
+    """CROSS-CORPUS REGRESSION: the OGS bond-waiver sentence, when PDF line-wrap
+    splits it across a capitalized continuation ('...of the\\nContract is
+    required'), used to lose the 'no ... required' framing on the single segment
+    and score as a RED bond REQUIREMENT (false-RED, inconsistent across tenders).
+    It must instead route to the WAIVER channel via the reconstructed sentence."""
+    page = ("The Commissioner of OGS has determined that no performance, payment\n"
+            "or Bid bond, or other form of security for the faithful performance of the\n"
+            "Contract is required at any time during the term of the resulting Contract.")
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    bond = [r for r in reqs if r["kind"] == "bonding"]
+    assert bond, "the bond passage must still be captured (never silently dropped)"
+    assert all(r.get("capture") == "waiver" for r in bond), bond
+    # no bonding passage is left as a scored requirement (signal)
+    assert not any(r["kind"] == "bonding" and r.get("capture") == "signal" for r in reqs)
+
+
+def test_wrap_split_genuine_bond_requirement_is_not_suppressed():
+    """SAFETY: a genuine affirmative bond REQUIREMENT that is also wrap-split must
+    NOT be rerouted to the waiver channel — the fix keys on is_bond_waiver, so
+    only a real 'no ... required' negation reroutes, never an affirmative duty."""
+    page = ("Each bidder shall furnish a bid bond of five percent of the\n"
+            "Bid amount, which is required with the bid submission.")
+    reqs = TE.find_requirements({"pages": [page], "page_count": 1, "source": "x",
+                                 "has_text_layer": True})
+    bond = [r for r in reqs if r["kind"] == "bonding"]
+    assert bond, "the genuine bond requirement must be captured"
+    assert any(r.get("capture") == "signal" for r in bond), bond   # scored, not waived
+    assert not any(r.get("capture") == "waiver" for r in bond), bond
+
+
 def test_find_requirements_routes_waiver_to_waiver_capture():
     ex = {"source": "fx", "page_count": 1, "pages": [_WAIVER], "has_text_layer": True}
     reqs = TE.find_requirements(ex)

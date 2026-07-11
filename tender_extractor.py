@@ -561,6 +561,18 @@ def is_bond_waiver(text):
     return bool(_BOND_WAIVER_RE.search(text))
 
 
+def _sentences_flat(text):
+    """Reconstruct `text` into sentences with wrapped line breaks flattened to
+    spaces, so a clause split across PDF-wrapped lines is testable as one
+    sentence. Used ONLY by the bond-waiver context check: a wrapped waiver
+    ('...no performance, payment or Bid bond ... is required...') otherwise
+    splits so the single segment loses the 'no ... required' framing and
+    misreads as a requirement. Splitting stays on the sentence terminator '.'
+    so distinct sentences never merge."""
+    flat = re.sub(r"\s+", " ", text).strip()
+    return [s.strip() for s in re.split(r"(?<=[.])\s+", flat) if s.strip()]
+
+
 def _segments(page_text):
     """Split a page into candidate requirement segments (lines + sentences)."""
     segs = []
@@ -590,19 +602,41 @@ def find_requirements(extracted):
     rows = []
     seen = set()
     for idx, page_text in enumerate(extracted.get("pages", []), start=1):
-        for seg in _segments(_stitch_wraps(page_text)):
+        stitched = _stitch_wraps(page_text)
+        # Bond-waiver context: PDF line-wrapping can split the OGS waiver sentence
+        # across lines (e.g. "...of the\nContract is required"), so the single
+        # segment loses the "no ... required" framing and misreads as a bond
+        # REQUIREMENT. Reconstruct the page into newline-flattened sentences and
+        # keep the ones that are genuine bond waivers, to rescue such a split clause.
+        waiver_sentences = [s for s in _sentences_flat(stitched) if is_bond_waiver(s)]
+        for seg in _segments(stitched):
             kind = _classify(seg)
             # Bid-bond waiver / negation: a "no ... bond ... required" passage is
             # NOT a vendor obligation and must not be scored as one. Capture it
             # (never silently drop it) as an unscored waiver review item; downstream
             # routes it to a waiver-specific review channel with its own wording.
-            if kind == "bonding" and is_bond_waiver(seg):
-                key = ("waiver", seg.lower())
-                if key not in seen:
-                    seen.add(key)
-                    rows.append({"text": seg, "page": idx, "kind": kind,
-                                 "capture": "waiver"})
-                continue
+            if kind == "bonding":
+                if is_bond_waiver(seg):
+                    key = ("waiver", seg.lower())
+                    if key not in seen:
+                        seen.add(key)
+                        rows.append({"text": seg, "page": idx, "kind": kind,
+                                     "capture": "waiver"})
+                    continue
+                # The clause may be wrap-split so this segment alone is not a waiver.
+                # If it belongs to a reconstructed sentence that IS a genuine waiver,
+                # route it to the waiver channel too (store the full sentence). Narrow
+                # by is_bond_waiver: only a real negation reroutes — a genuine "bond
+                # is required" is never suppressed.
+                nseg = re.sub(r"\s+", " ", seg).strip()
+                host = next((s for s in waiver_sentences if nseg and nseg in s), None)
+                if host is not None:
+                    key = ("waiver", host.lower())
+                    if key not in seen:
+                        seen.add(key)
+                        rows.append({"text": host, "page": idx, "kind": kind,
+                                     "capture": "waiver"})
+                    continue
             has_signal = bool(_SIGNAL_RE.search(seg))
             if not has_signal and kind == "general":
                 # Silent-drop fix (PR #45): rescue a WHOLE authority/form
