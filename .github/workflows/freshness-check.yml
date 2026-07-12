@@ -25,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -52,7 +52,7 @@ jobs:
       #      branch-protected and requires PRs, so we cannot push directly. ------
       - name: Open freshness-clean PR (no drift)
         if: steps.check.outputs.drift == 'false' && steps.check.outputs.state_change != 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           add-paths: docs/freshness/
           branch: freshness-clean/${{ steps.check.outputs.date }}
@@ -69,7 +69,7 @@ jobs:
       #      state-update step below, which carries this same report.) ----------
       - name: Open freshness-drift PR
         if: steps.check.outputs.drift == 'true' && steps.check.outputs.state_change != 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           add-paths: docs/freshness/
           branch: freshness-drift/${{ steps.check.outputs.date }}
@@ -90,7 +90,7 @@ jobs:
       #      (state_change=true); a byte diff with the same verdicts is a no-op. --
       - name: Open freshness state-update PR (material verdict change)
         if: steps.check.outputs.state_change == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           add-paths: |
             data/config/freshness-state.json
