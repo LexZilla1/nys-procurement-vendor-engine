@@ -318,6 +318,30 @@ def test_atomic_no_partial_capture_on_failure():
         assert before == after, "a fail-closed run wrote a partial capture"
 
 
+def test_write_guard_refuses_overwrite_of_verified_golden():
+    """Trust-guard (B): a write whose target already carries a human `Verified:`
+    stamp is REFUSED (fail-closed) and the golden is left byte-for-byte intact.
+    Exercises the exact downgrade path — a mode:new run over a verified golden.
+    Overwrite-safety is governed by the stamp, NOT by registry mode (GCN/24 is
+    mode:new in the real registry here and is still protected)."""
+    with _temp_golden_tree():
+        target = os.path.join(sc.SOURCES_DIR, "source-gcn-24-public-holidays.md")
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write("# SOURCE TEXT -- GCN 24\n\n"
+                     "- **Verified:** 2026-07-05 -- owner read against nysenate.gov.\n\n"
+                     "## STATE TEXT (verbatim)\n\n"
+                     "§ 24. Human-verified body.\n")
+        before = open(target, encoding="utf-8").read()
+        digest = hashlib.sha256(before.encode("utf-8")).hexdigest()
+        # mode:new capture (real registry: GCN/24 is mode:new) targeting that same
+        # verified file must be refused before any write touches it.
+        _expect_capture_error(lambda: sc.capture(
+            ["GCN/24"], _fetcher_from("gcn-24_new.json"), "2099-01-01", write=True))
+        after = open(target, encoding="utf-8").read()
+        assert after == before, "verified golden was overwritten despite the stamp"
+        assert hashlib.sha256(after.encode("utf-8")).hexdigest() == digest
+
+
 # --------------------------------------------------------------------------
 # PR body / report content + key protection
 # --------------------------------------------------------------------------

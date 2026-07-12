@@ -505,6 +505,23 @@ def emit_output(**kv):
 # Orchestration
 # ---------------------------------------------------------------------------
 
+# The human trust stamp: the `- **Verified:**` header line a reviewer writes ONLY
+# after a comma-by-comma read (see the human-read checklist in render_report). Its
+# presence is the SOLE authority on overwrite-safety, independent of registry mode.
+VERIFIED_STAMP_RE = re.compile(r"^-\s*\*\*Verified\b", re.M)
+
+
+def _has_verified_stamp(path):
+    """True iff an existing golden file carries a human `Verified:` stamp. A
+    missing/unreadable file is treated as unverified (False) -- the guard only
+    ever REFUSES on a positively-confirmed stamp, never on absence."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return bool(VERIFIED_STAMP_RE.search(fh.read()))
+    except OSError:
+        return False
+
+
 def capture(law_ids, fetch, capture_date, write=True):
     """Fetch + validate + build ALL requested sections before writing anything
     (atomic: a fail-closed abort leaves no partial capture). Returns the list
@@ -539,6 +556,19 @@ def capture(law_ids, fetch, capture_date, write=True):
         return sections
 
     # ---- Phase B: write (only reached if every section validated) --------
+    # TRUST GUARD (fail-closed, atomic, mode-INDEPENDENT): overwrite-safety is a
+    # TRUST question, governed ONLY by the human `Verified:` stamp -- never by
+    # registry mode. Before writing ANYTHING, refuse the whole run if any target
+    # would overwrite a human-verified golden. (mode says whether we possess the
+    # section / how to diff it; it must never authorize clobbering verified text.)
+    for s in sections:
+        if s.get("write_path") and _has_verified_stamp(s["write_path"]):
+            raise CaptureError(
+                "%s: refusing to overwrite a human-verified golden -- %s carries a "
+                "'Verified:' stamp. A capture run NEVER overwrites verified text; this "
+                "is governed by the Verified stamp, not by registry mode. Re-verify a "
+                "fresh recapture into place deliberately instead."
+                % (s["coord"], s["file"]))
     for s in sections:
         if s["mode"] == "new":
             os.makedirs(os.path.dirname(s["write_path"]), exist_ok=True)
