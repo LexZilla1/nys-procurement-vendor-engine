@@ -1,5 +1,30 @@
 # NYS Procurement Vendor Engine — Backlog & Open State
 
+## 🔴 TOP PRIORITY — §314 golden-copy drift (first real freshness catch, 2026-07-12)
+Freshness live-fire run #6 (2026-07-12) flagged `source-exec-314-mwbe-cert-validity.md`
+— **Executive Law §314 / EXC 314** (MWBE 5-year certification validity, Article
+15-A; the sunset-tracked source, recorded sunset 2028-07-01) — as **DIVERGENT**:
+live statute text differs from the stored golden STATE TEXT, API activeDate
+**2026-07-03**, a real amendment. (Identifier note: this is EXC §314, NOT State
+Finance Law.)
+
+TASK (re-capture; human + primary source):
+- Re-verify §314 against nysenate.gov / the Open Legislation API (primary source).
+- Identify exactly what the 2026-07-03 amendment changed.
+- If the golden STATE TEXT is stale, re-capture the VERBATIM section text
+  (Phase-3 methodology; never paraphrase, never auto-reconcile).
+- Update the sunset metadata (`SUNSET_EXPECT` / the source's sunset record) if
+  the amendment moved the 5-year-rule sunset.
+
+Until re-captured, §314 is CORRECTLY not-citable (fail-closed): any rule grounded
+on it degrades to NEEDS_REVIEW by design (the #56 runtime tripwire, now fed real
+data). No engine change is needed — this is a golden-copy re-capture task.
+
+Significance: the FIRST real drift the freshness system has caught in production —
+the live-fire tripwire (PR #71, pending) working as designed on its first run.
+Gated on: an environment with egress to nysenate.gov + a licensed reviewer for
+the amendment's substance (MWBE cert validity is compliance-load-bearing).
+
 ## Build state (as of this entry)
 - Step 4.5 Clarification-Question Generator: BUILT (PR #9). Reader schema
   extended with optional question_submission object; pure-Python generator in
