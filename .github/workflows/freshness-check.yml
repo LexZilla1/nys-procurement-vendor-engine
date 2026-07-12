@@ -36,12 +36,22 @@ jobs:
         id: check
         env:
           NYSLEG_API_KEY: ${{ secrets.NYSLEG_API_KEY }}
-        run: python3 scripts/freshness_check.py
+        # --write-state writes the REAL runtime freshness-state; the script also
+        # emits state_change=true ONLY on a material verdict-class transition
+        # (or the first replacement of the checked-in seed), gating the PR below.
+        run: python3 scripts/freshness_check.py --write-state data/config/freshness-state.json
 
-      # ---- No drift: open a (non-draft) PR with the report. main is branch-
-      #      protected and requires PRs, so we cannot push the report directly. -
+      # ---- PRECEDENCE — exactly ONE create-pull-request step runs per job, so
+      #      the report file the PR body-path references is never consumed by a
+      #      prior step (the bug that failed run 29173735139):
+      #        state-update (material)  >  drift report  >  clean report.
+      #      Total mapping of (drift, state_change):
+      #        (false,false)->clean   (true,false)->drift
+      #        (false,true)->state    (true,true)->state (carries report+state)
+      # ---- Clean, NON-material: open a (non-draft) PR with the report. main is
+      #      branch-protected and requires PRs, so we cannot push directly. ------
       - name: Open freshness-clean PR (no drift)
-        if: steps.check.outputs.drift == 'false'
+        if: steps.check.outputs.drift == 'false' && steps.check.outputs.state_change != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           add-paths: docs/freshness/
@@ -53,9 +63,12 @@ jobs:
           draft: false
           commit-message: "freshness: monthly report ${{ steps.check.outputs.date }} (all FULL-MATCH)"
 
-      # ---- Drift: open a labeled draft PR with the report. Never auto-merge. --
+      # ---- Drift WITHOUT a material verdict-class change (e.g. a sunset
+      #      mismatch, verdicts unchanged): labeled draft report PR. Never
+      #      auto-merge. (A drift that IS a class change is handled by the
+      #      state-update step below, which carries this same report.) ----------
       - name: Open freshness-drift PR
-        if: steps.check.outputs.drift == 'true'
+        if: steps.check.outputs.drift == 'true' && steps.check.outputs.state_change != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           add-paths: docs/freshness/
@@ -66,3 +79,26 @@ jobs:
           labels: freshness-drift
           draft: true
           commit-message: "freshness: drift report ${{ steps.check.outputs.date }}"
+
+      # ---- Material verdict change (TAKES PRECEDENCE over the two report steps
+      #      above): open a HUMAN-REVIEWED draft PR that updates the runtime
+      #      freshness-state file AND carries the report (add-paths includes both),
+      #      so the body-path report always exists — no prior step consumed it.
+      #      MERGING it is what flips runtime citability, so it is a DRAFT and is
+      #      NEVER auto-merged (the job has no merge step and create-pull-request
+      #      cannot merge). Fires ONLY when a per-source verdict CLASS changed
+      #      (state_change=true); a byte diff with the same verdicts is a no-op. --
+      - name: Open freshness state-update PR (material verdict change)
+        if: steps.check.outputs.state_change == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: |
+            data/config/freshness-state.json
+            docs/freshness/
+          branch: freshness-state-update/${{ steps.check.outputs.date }}
+          base: main
+          title: "Freshness state update — ${{ steps.check.outputs.date }} (verdict change; review before merge)"
+          body-path: ${{ steps.check.outputs.report }}
+          labels: freshness-state-update
+          draft: true
+          commit-message: "freshness: state update ${{ steps.check.outputs.date }} (material verdict change)"

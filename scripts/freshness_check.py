@@ -305,6 +305,38 @@ def results_to_state(results, date_str):
             "sources": sources}
 
 
+def _read_state_json(path):
+    """Read an existing freshness-state JSON, or {} if absent/unreadable. Used
+    only to compare the PREVIOUS committed state against a fresh run (offline)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def material_state_change(old, new):
+    """True iff `new` is a MATERIAL change vs the previously-committed `old` state:
+      * `old` is the checked-in SEED placeholder (the first real run always
+        replaces it), OR
+      * a source was added or removed, OR
+      * a source's VERDICT CLASS changed (FULL-MATCH / FRAGMENT / EMPTY-STORED /
+        UNREACHABLE / DIVERGENT).
+    A run that changes ONLY non-verdict bytes (checked_date, detail text) is NOT
+    material -> no PR, no noise. Verdict strings ARE the classes, so comparing the
+    per-source `verdict` directly is the class comparison. This decides whether the
+    Action opens a human-reviewed state-update PR; it never merges anything."""
+    if "SEED" in (old.get("note") or ""):
+        return True
+    old_s, new_s = old.get("sources", {}), new.get("sources", {})
+    if set(old_s) != set(new_s):
+        return True
+    for fn, rec in new_s.items():
+        if rec.get("verdict") != old_s.get(fn, {}).get("verdict"):
+            return True
+    return False
+
+
 def render_report(results, date_str):
     drift = has_drift(results)
     counts = {}
@@ -356,7 +388,7 @@ def render_report(results, date_str):
     return "\n".join(L) + "\n"
 
 
-def emit_output(drift, date_str, report_path):
+def emit_output(drift, date_str, report_path, state_change=False):
     """Expose results to the GitHub Actions job via $GITHUB_OUTPUT."""
     gh = os.environ.get("GITHUB_OUTPUT")
     if not gh:
@@ -365,6 +397,7 @@ def emit_output(drift, date_str, report_path):
         fh.write("drift=%s\n" % ("true" if drift else "false"))
         fh.write("date=%s\n" % date_str)
         fh.write("report=%s\n" % report_path)
+        fh.write("state_change=%s\n" % ("true" if state_change else "false"))
 
 
 # --------------------------------------------------------------------------
@@ -518,11 +551,23 @@ def main(argv=None):
     with open(os.path.join(REPO_ROOT, path), "w", encoding="utf-8") as fh:
         fh.write(report)
     drift = has_drift(results)
-    emit_output(drift, date_str, path)
-    print("freshness check %s: drift=%s report=%s" % (date_str, drift, path))
+
+    # Freshness live-fire: write the runtime state and decide whether the change
+    # is MATERIAL (a verdict-class transition / source add-remove / first seed
+    # replacement). Only a material change should open a human-reviewed
+    # state-update PR; a date/detail-only diff is a silent no-op.
+    state_change = False
     if args.write_state:
-        fs.write_state(args.write_state, results_to_state(results, date_str))
-        print("freshness-state written: %s" % args.write_state)
+        new_state = results_to_state(results, date_str)
+        old_state = _read_state_json(args.write_state)
+        state_change = material_state_change(old_state, new_state)
+        fs.write_state(args.write_state, new_state)
+        print("freshness-state written: %s (material_change=%s)"
+              % (args.write_state, state_change))
+
+    emit_output(drift, date_str, path, state_change)
+    print("freshness check %s: drift=%s state_change=%s report=%s"
+          % (date_str, drift, state_change, path))
     return 0
 
 
