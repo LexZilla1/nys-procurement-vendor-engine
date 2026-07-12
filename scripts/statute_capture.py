@@ -11,7 +11,7 @@ PR; a human reviews and merges. Nothing here marks anything verified golden.
 
 Two capture modes, driven by data/config/statute_capture_registry.json:
 
-  NEW  (e.g. GCN/24, GCN/25-A) -- no stored golden yet. Fetches the full
+  NEW  (a target with no stored golden yet) -- Fetches the full
        section, reflows it to the house one-line-per-subdivision style (words
        untouched -- same reflow the freshness checker uses), and writes a
        golden-copy CANDIDATE carrying the standard metadata header, the
@@ -21,7 +21,7 @@ Two capture modes, driven by data/config/statute_capture_registry.json:
        The candidate is freshness-registered via the registry (it joins the
        monthly check once its file exists on disk).
 
-  EXISTING (e.g. EXC/314) -- DIFF ONLY against the stored golden STATE TEXT.
+  EXISTING (e.g. GCN/24, GCN/25-A, EXC/314) -- DIFF ONLY against the stored golden STATE TEXT.
        FULL-MATCH  -> recorded in the capture report; the golden file is NOT
                       edited (repo convention: report, do not rewrite).
        DIVERGENT   -> the PR is flagged for human review with the diff shown;
@@ -505,12 +505,18 @@ def emit_output(**kv):
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def capture(law_ids, fetch, capture_date, write=True):
+def capture(law_ids, fetch, capture_date, write=True, targets=None):
     """Fetch + validate + build ALL requested sections before writing anything
     (atomic: a fail-closed abort leaves no partial capture). Returns the list
     of section results. Writes NEW candidates + the report only when write=True
-    and every section validated."""
-    targets = load_registry()
+    and every section validated.
+
+    `targets` defaults to the on-disk registry (load_registry()). It is
+    injectable ONLY so tests can exercise NEW-mode orchestration against a
+    synthetic mode:new registry now that every real target is mode:existing;
+    production callers pass nothing and behaviour is unchanged."""
+    if targets is None:
+        targets = load_registry()
     requested = []
     for coord in law_ids:
         if coord not in targets:
@@ -595,7 +601,17 @@ def _selftest():
                 "title": "Placeholder holidays", "repealed": False}
 
     date = "2099-01-01"
-    secs = capture(["GCN/24"], fake_new, date, write=False)
+    # GCN/24 & GCN/25-A are verified-golden and now registered mode:existing, so
+    # NEW-mode orchestration is exercised against a synthetic mode:new registry
+    # (the real registry no longer carries any mode:new target).
+    new_reg = {
+        "GCN/24": {"mode": "new", "file": "source-gcn-24-public-holidays.md",
+                   "min_subdivisions": 1},
+        "GCN/25-A": {"mode": "new",
+                     "file": "source-gcn-25-a-deadline-extension.md",
+                     "min_subdivisions": 1},
+    }
+    secs = capture(["GCN/24"], fake_new, date, write=False, targets=new_reg)
     s = secs[0]
     assert s["verdict"] == "NEW", s
     assert s["api_subdiv_count"] == 2, s["api_subdiv_count"]
@@ -672,14 +688,14 @@ def _selftest():
     assert parse_law_ids("GCN/24,GCN/24") == ["GCN/24"]  # dedupe
 
     # Report renders for a mixed run without error.
-    mixed = capture(["GCN/24"], fake_new, date, write=False) + \
+    mixed = capture(["GCN/24"], fake_new, date, write=False, targets=new_reg) + \
         capture(["EXC/314"], fake_existing_divergent, date, write=False)
     rep = render_report(mixed, date)
     assert "PENDING HUMAN READ" in rep and "DIVERGENT" in rep
     assert "not verified golden" in rep.lower()
 
     # Full write path into a throwaway golden tree (atomicity + real files).
-    _selftest_write(tempfile, fake_new, fake_existing_match)
+    _selftest_write(tempfile, fake_new, fake_existing_match, new_reg)
 
     print("SELF-TEST: ALL PASS")
     print("  NEW formatting, EXISTING FULL-MATCH (no write), DIVERGENT diff,")
@@ -688,9 +704,11 @@ def _selftest():
     return 0
 
 
-def _selftest_write(tempfile, fake_new, fake_existing_match):
+def _selftest_write(tempfile, fake_new, fake_existing_match, new_reg):
     """Exercise the real write phase against a temp golden tree, and prove the
-    atomic guarantee: a run that fails validation writes nothing."""
+    atomic guarantee: a run that fails validation writes nothing. NEW-mode is
+    driven by the injected synthetic mode:new registry (`new_reg`) because every
+    real registry target is now mode:existing."""
     global SOURCES_DIR, REPORT_DIR, REPO_ROOT
     orig = (SOURCES_DIR, REPORT_DIR, REPO_ROOT)
     with tempfile.TemporaryDirectory() as tmp:
@@ -699,7 +717,8 @@ def _selftest_write(tempfile, fake_new, fake_existing_match):
         REPORT_DIR = os.path.join(tmp, "docs", "statute-capture")
         os.makedirs(SOURCES_DIR)
         try:
-            capture(["GCN/24"], fake_new, "2099-01-01", write=True)
+            capture(["GCN/24"], fake_new, "2099-01-01", write=True,
+                    targets=new_reg)
             written = os.path.join(SOURCES_DIR, "source-gcn-24-public-holidays.md")
             assert os.path.exists(written), "NEW candidate was not written"
             report = os.path.join(tmp, "docs", "statute-capture", "2099-01-01.md")
@@ -713,7 +732,8 @@ def _selftest_write(tempfile, fake_new, fake_existing_match):
                     return fake_new(law, loc)
                 return {"text": ""}  # GCN/25-A empty -> fail-closed
             try:
-                capture(["GCN/25-A"], one_ok_one_bad, "2099-01-02", write=True)
+                capture(["GCN/25-A"], one_ok_one_bad, "2099-01-02", write=True,
+                        targets=new_reg)
             except CaptureError:
                 pass
             else:

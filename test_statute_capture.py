@@ -85,6 +85,15 @@ def _expect_capture_error(fn):
     raise AssertionError("expected CaptureError, none raised")
 
 
+def _new_reg():
+    """Synthetic mode:new registry for exercising NEW-mode capture() end-to-end.
+    The real registry now marks GCN/24 & GCN/25-A mode:existing (verified golden,
+    diff-only), so NEW orchestration is driven through capture()'s injectable
+    `targets` seam instead of the on-disk registry."""
+    return {"GCN/24": _spec(),
+            "GCN/25-A": _spec(file="source-gcn-25-a-deadline-extension.md")}
+
+
 # --------------------------------------------------------------------------
 # Fixtures sanity
 # --------------------------------------------------------------------------
@@ -101,7 +110,11 @@ def test_registered_targets_present():
     reg = json.load(open(sc.REGISTRY_PATH, encoding="utf-8"))["targets"]
     for coord in ("GCN/24", "GCN/25-A", "EXC/314"):
         assert coord in reg, "missing registry target %s" % coord
-    assert reg["GCN/24"]["mode"] == "new"
+    # GCN/24 & GCN/25-A were promoted to verified-golden (2026-07-05); their
+    # registry mode is now 'existing' (diff-only), which closes the path where a
+    # mode:new run could overwrite a verified golden with a PENDING candidate.
+    assert reg["GCN/24"]["mode"] == "existing"
+    assert reg["GCN/25-A"]["mode"] == "existing"
     assert reg["EXC/314"]["mode"] == "existing"
 
 
@@ -297,7 +310,7 @@ def test_unknown_target_rejected():
 def test_write_path_creates_candidate_and_report():
     with _temp_golden_tree() as tmp:
         sc.capture(["GCN/24"], _fetcher_from("gcn-24_new.json"),
-                   "2099-01-01", write=True)
+                   "2099-01-01", write=True, targets=_new_reg())
         assert os.path.exists(os.path.join(
             sc.SOURCES_DIR, "source-gcn-24-public-holidays.md"))
         assert os.path.exists(os.path.join(
@@ -313,7 +326,8 @@ def test_atomic_no_partial_capture_on_failure():
                 return _fixture("gcn-24_new.json")["result"]
             return {"text": ""}  # GCN/25-A empty -> fail-closed
         _expect_capture_error(lambda: sc.capture(
-            ["GCN/24", "GCN/25-A"], one_ok_one_bad, "2099-01-02", write=True))
+            ["GCN/24", "GCN/25-A"], one_ok_one_bad, "2099-01-02", write=True,
+            targets=_new_reg()))
         after = set(os.listdir(sc.SOURCES_DIR))
         assert before == after, "a fail-closed run wrote a partial capture"
 
