@@ -1,240 +1,125 @@
 {
-  "generated": "2026-07-09",
-  "note": "SEED — all-OK placeholder, NOT a real freshness run. Regenerate from a live audit via scripts/freshness_check.py --write-state.",
+  "generated": "2026-07-12",
+  "note": "Live freshness run via scripts/freshness_check.py --write-state.",
   "sources": {
-    "source-ac3237s-substitute-w9.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-appendix-a-june2023.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
     "source-exec-314-mwbe-cert-validity.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
+      "verdict": "DIVERGENT"
     },
     "source-gcn-24-public-holidays.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-gcn-25-a-deadline-extension.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-invoice-checklist.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-lab-220-i-public-work-registration.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-mwbe-5nycrr-pass-fail.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-sdvob.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-109-vendor-certificate.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-112.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-d-noncollusion.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-h-international-boycott.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-j.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-k.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-l-sexual-harassment.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-139-m-gender-based-violence.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-163.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-d.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-e.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-f.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-g.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-p.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-q.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-s.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-t.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-u.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-stf-179-v.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-vendrep-ac3290s-forprofit-nonconstruction.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-vendrep-ac3291s-nonprofit-nonconstruction.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-vendrep-ac3292s-forprofit-construction-cca2.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-vendrep-ac3293s-nonprofit-construction.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-vendrep-forms.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     },
     "source-wkc-57-workers-comp.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-x-3-vendor-registration.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xi-16-vendor-responsibility.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xi-18-a-mwbe.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xi-2-f-timely-submittal.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xi-4-a-nfp-prompt-contracting.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xi-4-b-grant-budget-variance.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-4-b-1-supporting-information.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-4-f-proper-invoice.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-5-b-unique-invoice-number.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-5-i-prompt-payment-interest.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-6-c-paying-prompt-contract-interest.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-7-b-voucher-denials.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
-      "verdict": "FULL-MATCH"
-    },
-    "source-xii-8-b-matching.md": {
-      "checked_date": "2026-07-09",
-      "detail": "seed",
+      "checked_date": "2026-07-12",
+      "detail": "live audit",
       "verdict": "FULL-MATCH"
     }
   }
