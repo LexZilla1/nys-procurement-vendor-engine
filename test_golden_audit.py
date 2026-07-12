@@ -255,21 +255,55 @@ def test_audit_blocking_cleared_and_end_to_end_yes():
 
 
 def test_exc314_confident_marker_does_not_bleed_to_other_sentences():
-    """Negative anchor-bleed: an EXC/314 quote OUTSIDE the § 314(5)(a) five-year
-    sentence must NOT inherit the confident marker. It stays governed by the
-    file's L_GRADE status — blocked in confident, allowed only in VERIFY/gated."""
+    """Negative anchor-bleed: the EXC/314 § 314(5)(a) confident provision marker
+    must NOT extend to any OTHER sentence.
+
+    The invariant is stated directly on the REAL citability predicate —
+    gs.is_citable(effective_status(...), OUTPUT_CONFIDENT)[0] — rather than on a
+    specific status string, because the file's whole-file status is now
+    freshness-dependent. L_GRADE_INTERPRETIVE is itself citable-with-caveat
+    (VERIFY/attorney-gated only, NEVER confident), so asserting a status set would
+    be too loose; asserting non-confident-citable directly is exact and still fails
+    if §314 ever bled to a confident output. The base is derived from
+    g.status_of() (live freshness), so this holds identically whether §314 is fresh
+    (base L_GRADE_INTERPRETIVE) or DIVERGENT — the marker's ANCHOR SCOPE is what
+    this guards, not the freshness verdict."""
     g = GoldenCopy()
     exc = "source-exec-314-mwbe-cert-validity.md"
-    other = "The director shall prepare a directory of certified businesses"  # subd. 2
-    assert other in g.body(exc)                     # verbatim, and NOT within the 5(a) anchor
     raw = g._raw[exc]
-    assert gs.effective_status(raw, other, g.status_of(exc)) == gs.L_GRADE_INTERPRETIVE
+    base = g.status_of(exc)                          # live whole-file status
+    anchor = ("all minority and women-owned business enterprise certifications "
+              "shall be valid for a period of five years")   # WITHIN the 5(a) anchor
+    other = "The director shall prepare a directory of certified businesses"  # subd. 2
+    assert anchor in g.body(exc) and other in g.body(exc)     # both verbatim
+
+    def confident_citable(quote):
+        status = gs.effective_status(raw, quote, base)
+        return status, gs.is_citable(status, gs.OUTPUT_CONFIDENT)[0]
+
+    # Positive control — the 5(a) provision marker makes its OWN sentence
+    # confident-citable (overriding even a DIVERGENT base). Without this the test
+    # could pass on a blanket file-block; with it, it is a true BLEED test.
+    anchor_status, anchor_confident = confident_citable(anchor)
+    assert anchor_status == gs.VERIFIED_GOLDEN
+    assert anchor_confident is True
+
+    # The invariant — the marker does NOT bleed: the other sentence is NEVER
+    # confident-citable, whatever the live base status is.
+    other_status, other_confident = confident_citable(other)
+    assert other_confident is False, other_status
+    # ...and the runtime guardrail agrees end-to-end: cite() blocks it in CONFIDENT,
+    # raising AT the live effective status (L_GRADE when fresh, DIVERGENT when armed).
     try:
         g.cite(exc, other, output_context=gs.OUTPUT_CONFIDENT)
         raise AssertionError("non-5(a) EXC/314 text must not be confident-eligible")
     except GoldenEligibilityError as e:
-        assert e.status == gs.L_GRADE_INTERPRETIVE
-    assert g.cite(exc, other, output_context=gs.OUTPUT_VERIFY) == other
+        assert e.status == other_status
+    # When §314 is fresh the other sentence is still citable into VERIFY/attorney-
+    # gated (never confident); when DIVERGENT the file is not citable at all —
+    # strictly more restrictive. Derive that from the live status, don't assume it.
+    if gs.is_citable(other_status, gs.OUTPUT_VERIFY)[0]:
+        assert g.cite(exc, other, output_context=gs.OUTPUT_VERIFY) == other
 
 
 def test_interim_marker_is_additive_gating_not_a_file_trust_upgrade():
@@ -507,9 +541,27 @@ def test_audit_catches_nb_flag_loss():
 
 
 def test_audit_status_tally_matches_survey():
+    # §314's derived audit status TRACKS the live freshness verdict the audit
+    # itself consumes (docs/freshness/*.md via ga.load_latest_freshness): a fresh
+    # source lands on its whole-file L_GRADE_INTERPRETIVE; a DIVERGENT verdict is
+    # the ONLY thing that legitimately moves it to DIVERGENT_FROM_API. We derive
+    # the expectation from that SAME freshness source, so the tally auto-corrects
+    # when §314 is re-captured to FULL-MATCH — no hardcoded verdict here.
+    exc = "source-exec-314-mwbe-cert-validity.md"
+    freshness, _ = ga.load_latest_freshness()
+    exc_raw = open(os.path.join("golden-copy", "sources", exc),
+                   encoding="utf-8").read()
+    v, stale = freshness.get(exc, (None, False))
+    exc_expected = gs.derive_status(exc_raw, freshness_verdict=v,
+                                    sunset_stale=stale)[0]
+    # Intent guard: §314 must land on exactly one of these two — its fresh L-grade
+    # status or the DIVERGENT tripwire. Anything else (e.g. a metadata regression
+    # to PARTIAL_CAPTURE) still fails the test.
+    assert exc_expected in (gs.L_GRADE_INTERPRETIVE, gs.DIVERGENT_FROM_API), exc_expected
+
     by = {r["file"]: r["status"] for r in ga.run()["results"]}
     assert by["source-gcn-24-public-holidays.md"] == gs.L_GRADE_INTERPRETIVE
-    assert by["source-exec-314-mwbe-cert-validity.md"] == gs.L_GRADE_INTERPRETIVE
+    assert by[exc] == exc_expected
     assert by["source-stf-109-vendor-certificate.md"] == gs.PARTIAL_CAPTURE
     assert by["source-mwbe-5nycrr-pass-fail.md"] == gs.PARTIAL_CAPTURE
     assert by["source-appendix-a-june2023.md"] == gs.SUPERSEDED_VERSION_PRESENT
