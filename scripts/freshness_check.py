@@ -75,8 +75,9 @@ STATUTE_SOURCES = {
 }
 
 # stf-109 keeps OSC guidance + form layers in STATE TEXT; compare only its
-# statute layer ("### A.") against the API. exc-314 stores the full dual-version
-# section, so a normal full-text compare is correct.
+# statute layer ("### A.") against the API. exc-314 stores the full single-version
+# section (post the 2026-07-01 subd. 5 transition), so a normal full-text compare
+# is correct.
 LAYER_A_ONLY = {"source-stf-109-vendor-certificate.md"}
 
 # Sunset records to defend (our golden dates). Mismatch => flag, never reconcile.

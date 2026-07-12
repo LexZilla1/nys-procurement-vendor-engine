@@ -1,17 +1,20 @@
 # SOURCE TEXT — NY Executive Law § 314 (Statewide certification program; MWBE certification validity, subd. 5)
 
-- **Name:** NY Executive Law § 314 — Statewide certification program (full section; includes both subd. 5 validity versions)
-- **Date:** current revision effective 2026-02-20 (NY Open Legislation)
+- **Name:** NY Executive Law § 314 — Statewide certification program (full section)
+- **Date:** current revision effective 2026-07-03 (NY Open Legislation)
 - **Issued by:** NY State Senate (Open Legislation); Exec. Law Art. 15-A
 - **Link (permanent identifier):** https://www.nysenate.gov/legislation/laws/EXC/314
-- **Copied exactly on:** 2026-07-03
-- **API activeDate:** 2026-02-20
-- **Capture method:** openleg-api-v3
-- **Covers:** full section (subdivisions 1, 2, 2-a, 2-b, 2-c, 3, 4, 5 — subd. 5 dual-versioned)
-- **Operative version (as of 2026-07-01):** subd. **5 (a)-(c)** — the amended text carrying
-  "** NB Effective July 1, 2026". The prior single-paragraph "5." ("** NB Effective until
-  July 1, 2026") is superseded as of 2026-07-01 and must not be cited as current. Both
-  versions remain captured verbatim below because the section page prints both.
+- **Copied exactly on:** 2026-07-12
+- **API activeDate:** 2026-07-03
+- **Capture method:** human-verified verbatim from the nysenate.gov section page
+  (revision of 2026-07-03), re-captured 2026-07-12. Prior capture: openleg-api-v3,
+  activeDate 2026-02-20 (dual-versioned subd. 5, now superseded — see VERSION HISTORY).
+- **Covers:** full section (subdivisions 1, 2, 2-a, 2-b, 2-c, 3, 4, 5)
+- **Operative version (as of 2026-07-03 revision):** subd. **5 (a)-(c)** is the sole
+  operative validity rule. The pre-2026-07-01 single-paragraph "5." (which had carried
+  "NB Effective until July 1, 2026") expired on 2026-07-01 and the section page no longer
+  prints it; it has therefore been removed from the STATE TEXT below to match the live
+  section verbatim. The five-year validity in 5(a) is unchanged.
 
 ---
 
@@ -35,31 +38,29 @@
 (b) Such information provided pursuant to paragraph (a) of this subdivision shall be kept confidential by the division as such information is kept by the department of taxation and finance or the department of labor and use of such information shall be limited to the certification application process, or other uses approved or consented to by the business enterprise or applicant.
 3. Following application for certification pursuant to this section, the director shall provide the applicant with written notice of the status of the application, including notice of any outstanding deficiencies, within twenty-one days. Within forty-five days of submission of a final completed application, the director shall provide the applicant with written notice of a determination by the office approving or denying such certification and, in the event of a denial a statement setting forth the reasons for such denial. Upon a determination denying or revoking certification, the business enterprise for which certification has been so denied or revoked shall, upon written request made within thirty days from receipt of notice of such determination, be entitled to a hearing before an independent hearing officer designated for such purpose by the director. In the event that a request for a hearing is not made within such thirty day period, such determination shall be deemed to be final. The independent hearing officer shall conduct a hearing and upon the conclusion of such hearing, issue a written recommendation to the director to affirm, reverse or modify such determination of the director. Such written recommendation shall be issued to the parties. The director, within thirty days, by order, must accept, reject or modify such recommendation of the hearing officer and set forth in writing the reasons therefor. The director shall serve a copy of such order and reasons therefor upon the business enterprise by personal service or by certified mail return receipt requested. The order of the director shall be subject to review pursuant to article seventy-eight of the civil practice law and rules.
 4. The director may, after performing an availability analysis and upon a finding that industry-specific factors coupled with personal net worth or small business eligibility requirements pursuant to subdivisions nineteen and twenty of section three hundred ten of this article, respectively, have led to the significant exclusion of businesses owned by minority group members or women in that industry, grant provisional MWBE certification status to applicants from that designated industry, provided, however, that all other eligibility requirements pursuant to subdivision seven or fifteen of section three hundred ten of this article, as applicable, are satisfied. Any industry-based determination made under this section by the director shall be made widely available to the public and posted on the division's website.
-** 5. With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years.
-** NB Effective until July 1, 2026
-** 5. (a) With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years.
+5. (a) With the exception of provisional MWBE certification, as provided for in subdivision twenty-three of section three hundred ten of this article, all minority and women-owned business enterprise certifications shall be valid for a period of five years.
 (b) Within eighteen months of the expiration of a minority and women-owned business enterprise certification and the submission of a new and completed application for minority and women-owned business enterprise certification, if there is no change in the ownership or capital contribution relied upon for certification of the enterprise and no material change in the nature or management of the enterprise from the time of approval of a previous minority and women-owned business enterprise certification that was approved within the previous six years and six months, if such application is compliant with 5 NYCRR 144 then there shall be a rebuttable presumption that the previous minority-owned business enterprise satisfies the requirements of paragraphs (a) and (b) of subdivision seven of section three hundred ten of this article and that the previous women-owned business enterprise satisfies the requirements of paragraphs (a) and (b) of subdivision fifteen of section three hundred ten of this article.
 (c) The division in its discretion may review applications subject to this rebuttable presumption and issue such determination pursuant to all applicable laws and regulations. Any presumption of minority and women-owned business enterprise certification shall expire upon the final determination of an application for certification.
-** NB Effective July 1, 2026
 * NB Repealed July 1, 2028
 
 ---
 
 ## ANNOTATIONS (engine commentary — not part of the rule)
 
-> DUAL-VERSION subdivision 5 — the section prints BOTH versions, and the full
-> capture above preserves both verbatim:
-> - the older "** 5." carrying "** NB Effective until July 1, 2026" (superseded), and
-> - the current "** 5. (a)/(b)/(c)" carrying "** NB Effective July 1, 2026" and
->   "* NB Repealed July 1, 2028".
-> OPERATIVE VERSION: as of the current date (post July 1, 2026), subdivision 5 (a)
-> is the operative validity rule; the older "5." is expired ("Effective until July
-> 1, 2026") and must not be cited as current. The five-year validity period is
-> unchanged between the two versions. Earlier secondary blogs reporting "2 years"
-> confused NYS with NYC and are WRONG; the statute is FIVE years.
-> Prior capture note: a previous version of this file captured ONLY the current
-> 5.(a) clause; it now carries the complete section (openleg-api-v3, activeDate
-> 2026-02-20).
+> VERSION HISTORY subdivision 5 — the July 1, 2026 transition is now COMPLETE.
+> Until 2026-07-01 the section page printed TWO versions of subd. 5: an older
+> single-paragraph "5." ("NB Effective until July 1, 2026") and the amended
+> "5. (a)/(b)/(c)" ("NB Effective July 1, 2026"). As of the 2026-07-03 revision
+> the page prints ONLY the operative "5. (a)/(b)/(c)" (carrying "NB Repealed July 1,
+> 2028"); the expired single-paragraph "5." and both "NB Effective ..." transition
+> notes are gone. The STATE TEXT above has been re-captured to match the live section
+> verbatim (single-version). The five-year validity in 5(a) is UNCHANGED across the
+> transition. Earlier secondary blogs reporting "2 years" confused NYS with NYC and
+> are WRONG; the statute is FIVE years.
+> Freshness note: the 2026-07-12 live-fire flagged this file DIVERGENT precisely
+> because the stored copy still carried the (now-removed) dual version; this
+> re-capture is the reconciliation of that event — a version cleanup, not a rule
+> change.
 
 > GRADE — subd. 5 (b)-(c) recertification presumption = **L (legal-interpretive).**
 > The presumption's conditions are attorney-judgment calls, not mechanical checks:
