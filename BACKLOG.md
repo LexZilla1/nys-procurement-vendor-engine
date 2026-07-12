@@ -344,6 +344,21 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
 - [ ] Flatten-on-export decision (lock filled draft vs keep editable).
 
 ## Freshness automation — follow-ups
+- [ ] **Node 20 runtime deprecation on the freshness workflow actions (file-and-hold;
+  bump is a SEPARATE PR).** The monthly freshness Action pins three actions still on
+  the Node 20 runtime: `actions/checkout@v4`, `actions/setup-python@v5`,
+  `peter-evans/create-pull-request@v6`. GitHub currently force-migrates them to Node 24
+  and emits a deprecation warning (seen on run 29198575621, 2026-07-12).
+  - Symptom when it bites: the freshness workflow fails to start / is hard-migrated once
+    GitHub retires Node 20 on runners.
+  - Fix: bump each action to its Node 24 major (verify the CURRENT major of each at bump
+    time — do NOT pin from memory).
+  - Severity: non-blocking today, but it **blocks the monthly freshness run** when it
+    lands — and the freshness check is load-bearing for the never-green invariant (a dead
+    run means drift goes uncaught). That's the line that makes it matter.
+  - DO NOT fold the version bumps into this note's PR. This note is docs, zero-risk.
+    The bumps touch the workflow that gates every freshness verdict, so they get their
+    OWN scoped PR where a dispatch run is watched green on the new majors before trusting.
 - [ ] Extend the monthly freshness Action to form fixtures: re-download each
   committed form PDF from its canonical OSC URL, diff the AcroForm field
   inventory against tests/fixtures/, open a freshness-drift PR on mismatch —
