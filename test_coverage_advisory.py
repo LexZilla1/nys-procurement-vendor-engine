@@ -1032,14 +1032,37 @@ def test_documented_limitation_bare_numeric_id_collides_across_law_bodies():
     VERIFIED_MATCH or coverage_complete, and the wrongly-suppressed candidate is
     PRESERVED in diagnostics (suppressed_captured). When law-body-aware matching
     lands (see BACKLOG 'Law-body-aware suppression matching'), FLIP these
-    assertions: the cross-body candidate must then be RETAINED."""
+    assertions: the cross-body candidate must then be RETAINED.
+
+    The suppression fires ONLY while the same-number counterpart is a CAPTURED
+    (citable) golden source. §314's counterpart (Exec Law § 314) is currently
+    DIVERGENT and therefore NOT captured, so the "Public Health Law § 314" pair is
+    no longer suppressed — the collision is genuinely absent, not a test we skip.
+    Each pair's expected direction is derived from the LIVE captured-id set, so the
+    §314 pair auto-restores to the suppressed (limitation) branch once §314 is
+    re-captured to FULL-MATCH — no hardcoded verdict."""
     rep = _report()
+    cap_ids = CA._captured_id_set(CA.build_payload(rep)["captured_authorities"])
+    # The three FULL-MATCH statute counterparts (SFL §163, WCL §57, SFL §112) stay
+    # captured, so the documented limitation stays TESTED even while §314 is armed —
+    # this test never degrades to a no-op.
+    for stable in ("Education Law § 163", "Insurance Law § 57", "Highway Law § 112"):
+        assert CA._authority_ids(stable) & cap_ids, ("counterpart must be captured", stable)
+
     for cross_body in ("Education Law § 163", "Insurance Law § 57",
                        "Highway Law § 112", "Public Health Law § 314"):
         diag = CA.advise_with_diagnostics(
             rep, llm=lambda payload, a=cross_body: _backlog_out(a))
+        cands = [c["suggested_authority"]
+                 for c in diag["advisory"]["coverage_backlog_candidates"]]
+        if not (CA._authority_ids(cross_body) & cap_ids):
+            # counterpart NOT captured (e.g. EXC/314 DIVERGENT) -> no collision, the
+            # cross-body candidate is RETAINED and nothing is suppressed.
+            assert cross_body in cands, cross_body
+            assert diag["suppressed_captured"] == [], cross_body
+            continue
         # CURRENT (limitation) behavior: suppressed despite the different law body...
-        assert diag["advisory"]["coverage_backlog_candidates"] == [], cross_body
+        assert cands == [], cross_body
         # ...but never lost — the suppressed candidate is kept in diagnostics.
         assert len(diag["suppressed_captured"]) == 1, cross_body
         assert diag["suppressed_captured"][0]["suggested_authority"] == cross_body
