@@ -849,3 +849,49 @@ like the rest):
   69 exact-duplicate obligations). Add a cross-document dedup at the PILOT layer,
   strictly OUTSIDE the coverage gate (it must not change any single report's
   coverage_counts / coverage_complete / scoring).
+
+---
+GOLDEN-COPY STATE MODEL — REDESIGN (deliberate refactor; not urgent; after B)
+
+Discovered via the GCN incident: the `mode` field (new/existing) conflated
+POSSESSION with TRUST, and the registry contradicted the golden copy about a
+one-answer fact (possession). Design corrections, in order of insight:
+
+1. POSSESSION is derivable from golden-copy presence — it must NOT be a stored
+   field. Storing it is what allowed the registry/golden-copy contradiction.
+2. The ONLY status worth storing is VERIFIED vs NOT-VERIFIED — human approval
+   cannot be derived from anything else.
+3. STRUCTURAL SEPARATION (enforce by location, not by a flag):
+   - Fresh captures land in a STAGING AREA named `pending-verification/`
+     (NOT "senate" — it is our least-trusted holding pen, not source material).
+   - The engine NEVER reads golden copy from staging. Not "reads then checks a
+     flag" — never looks there at all for citations.
+   - Human verification = MOVING a file from staging into the golden copy.
+   - Therefore golden-copy PRESENCE means verified, by construction. No flag for
+     code to forget to check; the file's location carries the truth.
+4. APPEND-ONLY AUDIT LOG, per law, one entry per event, three dates kept
+   DISTINCT (an auditor needs all three):
+   - statute's own effective/revision date (fact about NY, e.g. activeDate)
+   - detection date (which freshness run flagged the change)
+   - human-approval date (who verified, when)
+   plus evidence pointer (PR SHA / freshness run ID / primary-source citation).
+   History is append-only — never overwrite prior entries.
+5. INTERLOCK (never-green, expressed structurally): a freshness-detected change
+   MOVES the file back to `pending-verification/` (auto-un-trust, fail-closed,
+   not citable) until a human re-reads and re-verifies it back into golden copy.
+
+Why it matters: regulator-grade audit trail — monitoring lag (law-change →
+detection) and verification lag (detection → approval) become measurable; a
+changed law can never keep citing stale verified text; and unverified content is
+physically incapable of entering the cited read path.
+
+Adjudication condition when built: prove the engine's golden-copy loader
+PHYSICALLY CANNOT read from `pending-verification/` — a test that places a file
+there and confirms the engine does not surface it. Prove the barrier; don't
+assume it.
+
+Note: B (the Verified-stamp write-guard) is the safe down-payment on this model —
+it is the write-side half (verified files can't be overwritten). Staging is the
+read-side half (unverified content can't enter the read path). This redesign
+completes the model. Do NOT fold it into the B PR.
+---
