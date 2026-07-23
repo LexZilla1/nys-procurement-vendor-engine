@@ -78,34 +78,45 @@ Documented here so it is not rediscovered later as an oversight.
 
 ---
 
-## 3. §179-p — CORRECTION: it IS in golden copy AND already implemented (was falsely recorded as a gap)
+## 3. §179-p — CORRECTION: captured; implemented for RM-2 with legal applicability attorney-gated (was falsely recorded as a gap)
 
 > **This section was originally recorded as "§179-p is NOT in golden copy / BLOCKING." That
 > was FALSE** — a chat-session inference from GFO XII.5.I's paraphrase, never checked against
 > the filesystem. Corrected 2026-07-23 against the repo. See the "Prompt claims are unverified
 > by default" rule in CLAUDE.md and the corrected BACKLOG entry.
 
-- **Captured:** `golden-copy/sources/source-stf-179-p.md` — full-section verbatim capture,
-  copied 2026-07-01, API activeDate 2014-09-22, `openleg-api-v3`, all six inapplicability
-  clauses word-for-word.
-- **Freshness:** `data/config/freshness-state.json` records it **`FULL-MATCH`**, checked
-  **2026-07-12** (live audit). Current, not stale.
-- **Already implemented:** `validator.py` (lines ~398–444, ~1031–1112) defines all six
-  §179-p clauses and runs them as the interest-exclusion pre-screen for the attorney-gated
-  RM-2 entitlement path — a conservative "exclusion applies → not entitled" screen. It is
-  cited to `source-stf-179-p.md`, not to the paraphrase.
-- **Content (for reference):** payment types / payee categories NOT entitled to
-  prompt-payment interest — eminent domain; pass-through funds; offsets; local governments
-  receiving state aid; public authorities / federal government / state agencies; court
-  judgments (clause 6 set-off defined at §179-e(8)).
-- **NOT blocking anything on grounds of absence.** The golden text is present, verbatim,
-  freshness-clean, and in use.
-- **Remaining, if anything, is an implementation/design question, not a missing source:**
-  the exclusion screen lives in the entitlement layer (`validator.py`); `engine/invoice_clock.py`
-  does not apply §179-p exclusions (it carries only an information-only Article 11-A
-  disclaimer). Whether the invoice/payment-clock layer needs its own exclusion awareness is
-  a design decision — not the "capture §179-p" work the false entry implied.
-- **Vendor Profile / Onboarding Readiness (Layer-B) is unaffected either way.**
+**Keep three states distinct — do not conflate capture with legal applicability.**
+
+- **(1) Capture — RESOLVED.** `golden-copy/sources/source-stf-179-p.md` — full-section
+  verbatim capture, copied 2026-07-01, API activeDate 2014-09-22, `openleg-api-v3`, all six
+  inapplicability clauses word-for-word. Freshness: `FULL-MATCH`, checked 2026-07-12.
+  Implemented + tested: `validator.py` (~398–444, ~1031–1112) runs all six clauses as the
+  interest-exclusion pre-screen, cited to the source (not the paraphrase);
+  `test_validator.py` covers it — which proves the code matches its fixture, not that the
+  legal question below is answered.
+- **(2) Article 11-A → Article 11-B applicability — ATTORNEY-GATED (open).** §179-p is an
+  Article 11-A prompt-**payment** provision; RM-2 is Article 11-B prompt-**contracting**.
+  `validator.py`'s own `scope_note` (~1106) plus `attorney_review_required: True` state that
+  whether the 11-A exclusions bind an 11-B (§179-v) entitlement is a licensed-review
+  question. The engine applies them conservatively (exclusion → not entitled) but does not
+  assert the cross-article legal conclusion.
+- **(3) OSC guidance freshness (GFO XII.5.I) — UNVERIFIED (open).**
+  `source-xii-5-i-prompt-payment-interest.md` is **REV. 03/30/2026** (copied 2026-06-29).
+  OSC guidance pages are **not** in the OpenLeg monthly freshness net (statute-class only),
+  so guidance drift is not auto-caught; a newer OSC revision may exist and needs a manual
+  recheck/recapture (egress-blocked in-sandbox).
+- **Content (verbatim per §179-p — NOT paraphrased):** interest does NOT apply to payments
+  under the eminent domain procedure law; to the federal government; to any state agency or
+  its related instrumentalities; to **any duly constituted unit of local government
+  including counties, cities, towns, villages, school districts, special districts**; to any
+  public authority or public benefit corporation; to state-agency employees acting in their
+  public-employment capacity; and the clause-6 set-off (§179-e(8)). *(An earlier draft wrote
+  "local governments receiving state aid" — a paraphrase error; the statute excludes any
+  local government, with no state-aid qualifier.)*
+- **Also open (design, not a gap):** whether `engine/invoice_clock.py` needs its own
+  §179-p exclusion awareness or should delegate to the entitlement layer (`validator.py`).
+- **Not blocking on grounds of absence, and Vendor Profile / Onboarding Readiness (Layer-B)
+  is unaffected either way.**
 
 ---
 

@@ -60,18 +60,26 @@ golden copy / BLOCKING for Payment Clock." That claim was FALSE.** The verbatim 
 already exists and predates the false claim:
 - `golden-copy/sources/source-stf-179-p.md` — full-section verbatim capture, **copied
   2026-07-01**, API **activeDate 2014-09-22**, capture method **openleg-api-v3**, all
-  **six inapplicability clauses reproduced word-for-word** (eminent domain; pass-through
-  funds; offsets; local governments receiving state aid; public authorities / federal
-  government / state agencies; court judgments — per the statutory text, not the
-  paraphrase). Permanent id: https://www.nysenate.gov/legislation/laws/STF/179-P
+  **six inapplicability clauses reproduced word-for-word** (eminent domain; federal
+  government; any state agency; **any duly constituted unit of local government including
+  counties, cities, towns, villages, school districts, special districts**; any public
+  authority / public benefit corporation; state-agency employees; clause-6 set-off at
+  §179-e(8) — per the statutory text, not the paraphrase). Permanent id:
+  https://www.nysenate.gov/legislation/laws/STF/179-P
+  *(An earlier draft wrote "local governments receiving state aid" — a paraphrase error;
+  §179-p excludes any local government, no state-aid qualifier.)*
 - Freshness (reported, NOT changed here): `data/config/freshness-state.json` records
   `source-stf-179-p.md` = **`FULL-MATCH`**, `checked_date` **2026-07-12** (live audit).
   Current and healthy; the 2014-09-22 activeDate is the statute's last-amendment date
   (unchanged since 2014), not a staleness signal.
 - **§179-p does NOT block the Payment Clock on grounds of absence** — the golden text is
-  present, verbatim, and freshness-clean. Payment-Clock exclusion logic can cite it
-  directly. (Any *interpretive* weighting of a specific exclusion remains its own
-  question, but that is not the "missing golden copy" blocker the false entry asserted.)
+  present, verbatim, and freshness-clean, and `validator.py` cites it directly. **But two
+  states remain open (do not read "captured" as "resolved"):** (a) **Article 11-A → 11-B
+  applicability is ATTORNEY-GATED** — `validator.py`'s scope_note + `attorney_review_required:
+  True` leave whether the 11-A §179-p exclusions bind an 11-B (§179-v) entitlement to
+  licensed review; (b) **OSC guidance (XII.5.I) freshness is UNVERIFIED** — that capture is
+  REV. 03/30/2026 and is not in the OpenLeg freshness net, so a newer OSC revision may exist.
+  Neither is the "missing golden copy" blocker the false entry asserted.
 
 **LESSON (recorded so it is not repeated, not just fixed):** the false claim originated as
 a **chat-session inference** — Claude Chat reasoning from **GFO XII.5.I's paraphrase of
