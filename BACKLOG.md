@@ -19,15 +19,19 @@ model + Onboarding Readiness Check + fixture tests only.
 - (Step 1 Triage, previously listed here as "next build", is **already BUILT** —
   `step1_triage.py`. See the superseded note below.)
 
-## Live items — current state (each with what it is blocked on)
-Detail for each lives in its section under the historical/reference divider; this is the
-index of what is actually open.
+## Live items — prioritized current work (NOT exhaustive)
+The load-bearing open items, each with what it is blocked on. This is a **curated priority
+list, not a complete inventory** — other deferred `[ ]` items remain below under their own
+sections (connectors, coverage-advisory, extractor, form-fill, etc.) and are not repeated
+here. Detail for each item below the historical/reference divider.
 
-- **§179-p invoice-clock exclusion awareness** — *design question, not a gap.* §179-p is
-  captured (`source-stf-179-p.md`, FULL-MATCH) and already implemented as the exclusion
-  pre-screen in `validator.py`. **Blocked on:** a design decision — whether
-  `engine/invoice_clock.py` needs its own exclusion awareness or should delegate to the
-  entitlement layer. Not a capture task.
+- **§179-p — capture done; two open states.** Captured + FULL-MATCH + implemented in
+  `validator.py`. **Blocked on:** (a) **attorney review** — whether the Article 11-A §179-p
+  exclusions bind Article 11-B (§179-v) RM-2 entitlement (`validator.py` scope_note already
+  flags `attorney_review_required: True`); (b) **OSC-guidance freshness** — the XII.5.I
+  capture is REV. 03/30/2026 and is not in the OpenLeg freshness net, so a newer OSC
+  revision may exist (recheck/recapture). Plus a design question: `invoice_clock.py`
+  exclusion awareness vs delegation. NOT a capture task.
 - **5 NYCRR Part 144 (§314(5)(b) recert presumption support)** — **Blocked on:** (a) a
   verbatim capture of Part 144 (egress-blocked in-sandbox; needs a real run or human
   paste), then (b) licensed-attorney review of verbatim-display + self-attestation
@@ -115,22 +119,34 @@ correctly stopped an unaudited byte-match from flipping a load-bearing clause to
 Design decisions agreed but NOT built, verbatim §179-f findings, and research
 conclusions. Nothing here is code/schema; the detailed record is the DECISIONS doc.
 
-### §179-p — RESOLVED: captured AND implemented (was falsely recorded as a gap)
+### §179-p — capture RESOLVED; two states still open (was falsely recorded as a gap)
 **This item originally read "§179-p is NOT in golden copy / BLOCKING Payment Clock." That
 was FALSE** — a chat-session inference from GFO XII.5.I's paraphrase, never checked against
-the filesystem. Corrected 2026-07-23.
-- **Captured:** `golden-copy/sources/source-stf-179-p.md` — full-section verbatim (copied
-  2026-07-01, activeDate 2014-09-22, `openleg-api-v3`, six inapplicability clauses
-  word-for-word). Freshness `FULL-MATCH`, checked 2026-07-12.
-- **Implemented + tested:** `validator.py` (~398–444, ~1031–1112) runs all six clauses as
-  the interest-exclusion pre-screen (attorney-gated RM-2 path); `test_validator.py` covers
-  them.
-- **Not blocking anything on grounds of absence.** The one remaining question — whether
-  `engine/invoice_clock.py` needs its own exclusion awareness or delegates to the
-  entitlement layer — is a design decision, tracked in the Current-state Live-items index.
-- Content (reference): payment types / payee categories NOT entitled to prompt-payment
-  interest — eminent domain; pass-through funds; offsets; local governments receiving state
-  aid; public authorities / federal government / state agencies; court judgments.
+the filesystem. Corrected 2026-07-23. Three distinct states, do not conflate them:
+- **(1) Capture — RESOLVED.** `golden-copy/sources/source-stf-179-p.md` — full-section
+  verbatim (copied 2026-07-01, activeDate 2014-09-22, `openleg-api-v3`, six inapplicability
+  clauses word-for-word). Freshness `FULL-MATCH`, checked 2026-07-12. Implemented + tested:
+  `validator.py` (~398–444, ~1031–1112) runs all six clauses as the interest-exclusion
+  pre-screen; `test_validator.py` covers it (proves the code matches its fixture).
+- **(2) Article 11-A → 11-B applicability — ATTORNEY-GATED, open.** `validator.py`'s own
+  `scope_note` (~1106) + `attorney_review_required: True` state that whether the Article
+  11-A §179-p exclusions bind a §179-v (Article 11-B) prompt-contracting entitlement is a
+  question for licensed review. "Implemented" ≠ "legal applicability resolved."
+- **(3) OSC guidance freshness (GFO XII.5.I) — UNVERIFIED, open.**
+  `source-xii-5-i-prompt-payment-interest.md` is **REV. 03/30/2026** (copied 2026-06-29).
+  OSC guidance pages are NOT in the OpenLeg monthly freshness net (that covers statute-class
+  sources only), so guidance drift is not auto-caught. A newer OSC revision may exist;
+  needs a manual recheck/recapture. Egress-blocked in-sandbox.
+- **Also open (design, not a gap):** whether `engine/invoice_clock.py` needs its own
+  exclusion awareness or delegates to the entitlement layer.
+- Content (reference — verbatim per §179-p, NOT paraphrased): interest does NOT apply to
+  payments under the eminent domain procedure law; to the federal government; to any state
+  agency or its related instrumentalities; to **any duly constituted unit of local
+  government including counties, cities, towns, villages, school districts, special
+  districts**; to any public authority or public benefit corporation; to state-agency
+  employees acting in their public-employment capacity; and the clause-6 set-off
+  (§179-e(8)). (Earlier drafts said "local governments receiving state aid" — a paraphrase
+  error; the statute excludes any local government.)
 
 ### Vendor Profile + Onboarding Readiness — design decisions (agreed, not built)
 - **Fact model (two orthogonal axes on every vendor fact):** `provenance`
@@ -515,15 +531,14 @@ of this file).** Original note preserved: pure rules, smallest build.
   drifted, do a Phase-3-style re-capture). Until cleared, DIVERGENT correctly
   withholds citations (rows show NEEDS_REVIEW with the withheld reason) — this is
   fail-closed and must not be bypassed by editing state without re-verification.
-- [ ] **GATE — remove the `freshness_checker.py:120` `/mnt/project` fallback as
-  part of the freshness live-fire PR** (the monthly Action running
-  `scripts/freshness_check.py --write-state`). Rationale: a `/mnt/project`
-  fallback there could make the drift checker examine a DIFFERENT golden copy
-  than the engine cites from, producing freshness verdicts about the wrong files
-  with no error. Inert today (all-OK seed, Action not live); load-bearing the
-  moment real verdicts are written. #63 removed the analogous fallback from the
-  runtime `GoldenCopy` path; this one is the freshness counterpart and MUST land
-  with live-fire.
+- [x] **GATE — remove the `freshness_checker.py` `/mnt/project` fallback — DONE (PR #69).**
+  `find_golden_copy_root()` now fails closed (returns None) when the golden copy is not next
+  to the script; the code comment records "The former /mnt/project fallback was removed for
+  that [reason]." (Note: a SEPARATE, still-open `/mnt/project` fallback remains in
+  `parse_golden_copy.py` — the build-time reconciliation tool, not the runtime/freshness
+  path — tracked under "Backlog — non-blocking" above.) Original rationale preserved: a
+  `/mnt/project` fallback in the drift checker could make it examine a different golden copy
+  than the engine cites from and write verdicts about the wrong files with no error.
 
 ### Freshness live-fire — scoped plan (approved 2026-07; CAPTURE ONLY, not yet built)
 Goal: run the drift tripwire on REAL verdicts instead of the committed all-OK
@@ -557,9 +572,11 @@ item above; not in this scope.)
 
 Refinement 2 — first-run rollout: the first write-state run is manual
 `workflow_dispatch` (not the cron). Its PR (seed -> real verdicts) gets a FULL
-EVIDENCE REVIEW confirming it is a SEMANTIC NO-OP — 22/22 FULL-MATCH, with no
+EVIDENCE REVIEW confirming it is a SEMANTIC NO-OP — all-FULL-MATCH, with no
 source silently flipped — before it is trusted. Only after that does the monthly
-cron write state unattended.
+cron write state unattended. (Historical note: this plan was written when the freshness
+net was "22/22"; it now covers 24 sources = 22 base + 2 registry-added, so the no-op
+review is against the current source count, not a fixed 22.)
 
 Tests: `find_golden_copy_root` fails closed; a DIVERGENT live-run result ->
 `results_to_state()` yields a not-citable entry honored by the runtime gate; the
