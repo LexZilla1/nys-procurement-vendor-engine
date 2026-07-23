@@ -7,6 +7,17 @@ framing here.
 
 ## Operating rules (always)
 - Precision over completion. Verify before asserting.
+- ALWAYS `git fetch origin` and confirm the real remote HEAD before analyzing the
+  repo. A stale local checkout is as unreliable as a stale summary — a prior session
+  lost hours to a branch 26 commits behind `origin/main` and reached a confident,
+  completely wrong "none of this work exists" conclusion. "Verify against git" only
+  counts if git has been fetched.
+- CI: this repo has **NO CI on pull requests** — zero checks, always. "Green" is a
+  claim derived from a local / branch run, never an automated verification at merge.
+  Do NOT wait for checks to register on a PR (they never will), and do NOT schedule
+  self-checks or polling to wait for CI. The freshness workflow is the CI-equivalent
+  for the only thing that matters — golden-copy drift — and runs only monthly
+  (cron `0 6 1 * *`) or on manual `workflow_dispatch`.
 - Never trust paraphrased rules, including from other AI tools. Confirm against
   the official primary source (osc.ny.gov, ogs.ny.gov, .ny.gov agency sites,
   nysenate.gov / Open Legislation API for statutes) and cite it.

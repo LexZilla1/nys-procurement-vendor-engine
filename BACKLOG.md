@@ -50,6 +50,78 @@ Significance: the FIRST real divergence the freshness system caught in productio
 live-fire tripwire working as designed, and a human-in-the-loop reconciliation that
 correctly stopped an unaudited byte-match from flipping a load-bearing clause to green.
 
+## Session decisions — 2026-07-23 (docs-only close; full record: docs/DECISIONS-2026-07-23.md)
+Design decisions agreed but NOT built, verbatim §179-f findings, and research
+conclusions. Nothing here is code/schema; the detailed record is the DECISIONS doc.
+
+### §179-p capture — golden-copy gap (NEW backlog item, BLOCKING Payment Clock)
+- §179-p is **NOT in golden copy**. GFO XII.5.I only paraphrases it → under
+  never-trust-paraphrased-rules it **cannot be relied on**.
+- Content: payment types + entity categories NOT entitled to prompt-payment interest
+  (pass-through funds, offsets, local governments receiving state aid, public
+  authorities, federal government, state agencies, court judgments, eminent domain).
+- Capture path: nysenate.gov via the existing authenticated statute-capture workflow —
+  **same route as §314. No attorney gate; factual capture.**
+- BLOCKING for: Payment Clock, invoice-level entitlement, exclusions analysis,
+  prompt-payment interest determination.
+- NOT blocking for: Vendor Profile, business-definition snapshot, SFS onboarding
+  readiness.
+
+### Vendor Profile + Onboarding Readiness — design decisions (agreed, not built)
+- **Fact model (two orthogonal axes on every vendor fact):** `provenance`
+  (vendor | uploaded_document | agency | third_party) × `verification`
+  (verified | unverified). `attested_at` and `evidence_date` are SEPARATE fields —
+  §179-f(6) "at time of payment" operates on `evidence_date`; collapsing them makes
+  stale facts look fresh. Facts append-only (`superseded_by`). `provenance:vendor`
+  ALWAYS means `verification:unverified`; no path lets an attestation flip its own bit.
+- **Rule model (separate from facts, never merged):** `definition_status`
+  (DEFINED_IN_GOLDEN_COPY | UNDEFINED_IN_GOLDEN_COPY | INTERPRETIVE) × `evaluation_basis`
+  (OBJECTIVE_THRESHOLD | VENDOR_ATTESTATION | DOCUMENTARY_REVIEW | HUMAN_LEGAL_REVIEW).
+  Orthogonal — proof: `sb_primary_place_ny` is DEFINED_IN_GOLDEN_COPY but
+  VENDOR_ATTESTATION. **Rejected `standard_undefined:true`** (asserts about the world);
+  UNDEFINED_IN_GOLDEN_COPY asserts about our corpus — the only verifiable thing.
+- **Output ceiling: `SATISFIED_AS_ATTESTED`. There is no `PASS`.**
+- **Readiness ≠ entitlement:** never determines a specific invoice must pay in 15 days;
+  5 `scope_limits` always emitted, never suppressed.
+- **Staleness horizon (our product decision):** if none configured → result `INCOMPLETE`;
+  code must NEVER select a default. Unconfigured policy = missing human decision.
+- **Permanent non-goal: no SFS write path, ever** (State-system boundary).
+- **Known accepted limit:** `documentation_available_on_request` is an attestation; if
+  the vendor later can't produce, the attestation was false. No engine-side remedy —
+  and none should be built. Recorded so it isn't rediscovered as an oversight.
+
+### §179-f verbatim findings (read this session)
+- "at the time of payment" attaches ONLY to the ≤200-employee threshold — a payment-date
+  test, not onboarding-date.
+- §179-f(2) requires the vendor to identify itself as seeking expedited SB payment; the
+  statute does NOT say HOW. OSC (GFO XII.5.I) maps that to SFS portal self-cert —
+  **that mapping is OSC's, not the statute's** (interpretive bridge; cite separately).
+- "significant business presence" and "not dominant in its field" have no definition /
+  numeric test in §179-f → UNDEFINED_IN_GOLDEN_COPY.
+
+### Sourcing — CONCLUSION (closes the question)
+No automated channel for NYS bid opportunities (no NYSCR API/RSS/feed/bulk/dev interface;
+no data.ny.gov open-solicitation dataset; no commercial licensing; no third-party
+data-sharing; no agency open-solicitation portal). NYSCR under ESD; FOIL reaches static
+records, not prospective feeds. **Operating model: the vendor brings the documents**
+(plain deep-link, own account/credentials, they upload to us) — we never scrape, proxy,
+iframe, handle credentials, or re-host. Rejected: scraper (CFAA/click-wrap), client
+credentials (account sharing), iframe (framing/affiliation), doc repository (re-hosting).
+Market fact: ads already republished free (LightRFP, GovDash) — the list has no
+commercial value; the JUDGMENT on it does. Discovery-directory build STILL gated on
+IP-attorney opinion — do not build.
+
+### Payment-delay findings (why an interest calculator is not a product; median ~$61)
+Five structural filters suppress interest: (1) $10 de-minimis (96.6% of SFY2020-21
+payments <$500); (2) clock runs from MIR date, not vendor submission (rej code 14); (3)
+improper invoice never starts the clock; (4) invisible suppression flags (Prompt Payment
+Interest Eligibility Indicator + voucher Late Charge Option); (5) §179-p exclusions.
+Value is (a) onboarding (SFS self-cert + eInvoicing + ePayment or lose the 15-day lane),
+(b) proper-invoice pre-flight (6 mandatory fields, GFO XII.4.F), (c) knowing which
+questions to ask when payment stalls (MIR date, voucher status/rejection code). SFS
+Vendor Self-Service Portal shows status + interest paid but NOT MIR date, rejection
+codes, or the eligibility indicator.
+
 ## Build state (as of this entry)
 - Step 4.5 Clarification-Question Generator: BUILT (PR #9). Reader schema
   extended with optional question_submission object; pure-Python generator in
