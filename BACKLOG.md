@@ -500,6 +500,15 @@ of this file).** Original note preserved: pure rules, smallest build.
 - [ ] Flatten-on-export decision (lock filled draft vs keep editable).
 
 ## Freshness automation — follow-ups
+- [ ] **`render_report()` hard-codes "22 statute-class sources" while covering 24 (CODE fix,
+  SEPARATE PR).** `scripts/freshness_check.py:350` emits "Automated monthly check of the 22
+  statute-class sources" even though `all_sources()` = 22 base + registry-added = 24; the
+  dated report `docs/freshness/2026-07-12.md` therefore shows header "22" over a table of
+  `FULL-MATCH | 24`. Fix: make `render_report()` use the actual result count (or "base +
+  registry" wording) and add a regression test asserting the rendered count matches the
+  number of results. Docs PR #87 fixed only the README/prose descriptors; this is the code
+  half and is out of that PR's docs-only scope. (Historical dated reports keep their
+  as-written numbers; append a correction rather than rewriting.)
 - [ ] **Node 20 runtime deprecation on the freshness workflow actions (file-and-hold;
   bump is a SEPARATE PR).** The monthly freshness Action pins three actions still on
   the Node 20 runtime: `actions/checkout@v4`, `actions/setup-python@v5`,
