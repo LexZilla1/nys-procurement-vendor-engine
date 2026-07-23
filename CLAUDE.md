@@ -71,10 +71,15 @@ commit/push/PR) or a pilot-run's constraints. Those win; apply prompt review
 within them, not against them.
 
 ## Prompt claims are unverified by default
-Prompts arrive from chat sessions (Claude Chat, ChatGPT) that have NO repo access.
-Any factual claim in a prompt about repo contents is therefore a hypothesis, not a fact:
-whether a file exists, what a file contains, what a test asserts, what is or isn't in
-golden copy, what a prior PR did, what the current state of anything is.
+Prompts arrive from chat sessions (Claude Chat, ChatGPT) whose repo access may be absent,
+partial, stale, or read-only. Any factual claim in a prompt about repo contents is
+therefore a hypothesis, not a fact — whether a file exists, what a file contains, what a
+test asserts, what is or isn't in golden copy, what a prior PR did, what the current state
+of anything is — until it is reverified against freshly fetched state.
+
+Read access is not verification. A session with repo access may still be looking at a
+stale checkout, a partial view, or reasoning wrongly from what it correctly sees. Access
+level does not change the obligation to reverify against freshly fetched state.
 
 Before acting on such a claim, verify it against the repo.
 
@@ -94,9 +99,9 @@ claim originated as a chat-session inference from XII.5.I paraphrasing §179-p, 
 checked against the filesystem, and was written to BACKLOG as fact.
 
 ## Disagreement is expected, not insubordination
-Prompts are written by chat sessions that cannot see the codebase. They may be
-architecturally wrong, more complex than necessary, or in conflict with something
-already built.
+Prompts are written by chat sessions that may not see the codebase, or may see only a
+partial or stale slice of it. They may be architecturally wrong, more complex than
+necessary, or in conflict with something already built.
 
 If you believe the instruction is wrong — not just factually inaccurate, but a worse
 approach than an available alternative — say so BEFORE implementing. State the
