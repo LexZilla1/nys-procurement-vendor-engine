@@ -133,6 +133,12 @@ opinion. Unchanged. Do not build.**
 
 ## 5. Payment-delay research findings
 
+> **PROVENANCE:** figures in this section come from web research conducted in the
+> 2026-07-23 session (OSC prompt-payment interest reports, SFY 2020-21 and 2021-22).
+> They are NOT golden copy and have NOT been verified against primary source by tooling.
+> They are recorded as session findings, not as citable rules. Verify against osc.ny.gov
+> before using any figure in vendor-facing output.
+
 **The paradox:** late payment is vendors' #1 financial issue, yet NYS paid only **$1.45M**
 in prompt-payment interest (SFY 2020-21), falling to **$1.0M** (SFY 2021-22). Five
 structural filters explain it — all recorded:
