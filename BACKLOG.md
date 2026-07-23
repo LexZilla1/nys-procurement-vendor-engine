@@ -390,6 +390,18 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
 - Step 1 Triage: classify NYSCR ad from metadata (open IFB / sole-source /
   award-notice / RFI); flag the ~8% non-biddable. Pure rules, smallest build.
 
+## Vendor Profile + Onboarding Readiness — schema CONTRACT ready to build
+The completed schema is persisted as **`docs/VENDOR-PROFILE-SCHEMA.md`** (agreed
+2026-07-23): two-model design (fact envelope × criterion rule, never merged), the
+§179-f(6)/(2) field inventory, and the per-field **PERSIST / DO_NOT_PERSIST**
+classification with **SHIELD (GBL §899-aa/-bb)** reasoning. Persist policy is **binary**
+(no tokenized/last-4 tier); `tin_ein` is **DO_NOT_PERSIST** (fail-closed: the engine can't
+tell a corp EIN from a sole-prop SSN at input) and is **not** added in this build,
+preserving the existing "no tier-3 fields anywhere" invariant. Output ceiling
+`SATISFIED_AS_ATTESTED` (no PASS); unconfigured staleness horizon ⇒ `INCOMPLETE`; 5
+`scope_limits` always emitted; no SFS write path ever. Build scope: model + Onboarding
+Readiness Check + fixture tests only. §179-p does NOT block this.
+
 ## Step 1 Triage — follow-ups
 - [ ] Consider adding `citations_to_ad_text` to the LLM fallback (Step 4) output
   for auditability. Requires a deliberate prompt revision + test update. Not
