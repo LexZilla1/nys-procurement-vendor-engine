@@ -100,13 +100,13 @@ OSC's, not the statute's** — cite the two sources separately; never collapse i
 | --- | --- | --- |
 | `legal_name` | ✅ PERSIST | A name **alone** is "personal information," not "private information" under §899-aa (which requires a paired data element) |
 | `nys_vendor_id` | ✅ PERSIST | State-assigned, procurement-public identifier; not a personal identifier |
-| `entity_type` (corp / LLC / sole-prop / nonprofit) | ✅ PERSIST | Non-sensitive — **and** the discriminator that determines whether a future TIN is an EIN or an SSN |
+| `entity_type` (corp / LLC / sole-prop / nonprofit) | ✅ PERSIST | Non-sensitive. It *signals* whether a future TIN is more likely an EIN or an SSN, but does **not** reliably determine it (a sole-prop may hold an EIN; a single-member LLC is ambiguous; the field itself is vendor-asserted) — which is exactly why `tin_ein` is treated fail-closed below rather than branched on this value |
 
 ### D. FORWARD RULE — sets the pattern now, before form-fill brings sensitive data (NOT a current field)
 
 | Fact | persist | SHIELD reasoning |
 | --- | --- | --- |
-| `tin_ein` | ❌ **DO_NOT_PERSIST** | An EIN of a corp/LLC is not §899-aa data — **but** a sole-proprietor / single-member TIN is frequently the owner's **SSN**, which **is** §899-aa "private information," and the engine cannot reliably distinguish the two at input. **Fail-closed applied to data classification:** treat the whole field as SSN-bearing → tier-3 → never at rest. Form-fill consumes it transiently into the vendor-downloaded PDF, then discards. Non-retention keeps us out of §899-bb safeguard obligations. Consistent with the existing invariant "no tier-3 (TIN/SSN/DOB) fields anywhere" (`data/schemas/README.md`, `engine/citation.py`). **Do NOT add this field in the Vendor Profile build.** |
+| `tin_ein` | ❌ **DO_NOT_PERSIST** | An EIN of a corp/LLC is not §899-aa data — **but** a sole-proprietor / single-member TIN is frequently the owner's **SSN**, which **is** §899-aa "private information," and the engine cannot reliably distinguish the two at input. **Fail-closed applied to data classification:** treat the whole field as SSN-bearing → tier-3 → never at rest. Form-fill consumes it transiently into the vendor-downloaded PDF, then discards. Non-retention **reduces sensitive-data exposure**; it does **not** establish that §899-bb is inapplicable to transient processing (the statute contemplates collection, transport, and destruction/disposal — legal applicability is attorney-gated). Consistent with the existing invariant "no tier-3 (TIN/SSN/DOB) fields anywhere" (`data/schemas/README.md`, `engine/citation.py`). **Do NOT add this field in the Vendor Profile build.** |
 | any SSN / DOB / driver's-license / financial-account number | ❌ **DO_NOT_PERSIST** | §899-aa "private information" → do not model, do not persist |
 
 ---
@@ -118,10 +118,11 @@ Two values only:
 - **DO_NOT_PERSIST** — never at rest; consumed transiently (form-fill only), then
   discarded.
 
-**No tokenized / last-4 display tier.** Storing a derivative of a sensitive value still
-pulls us into §899-bb safeguard obligations, for a display convenience nobody has asked
-for. Non-retention is simpler and matches the existing "no tier-3 fields anywhere"
-invariant. Revisit only with a stated reason.
+**No tokenized / last-4 display tier.** Storing a derivative of a sensitive value keeps
+sensitive data at rest and increases exposure, for a display convenience nobody has asked
+for; it does not let us assume §899-bb is inapplicable (that is attorney-gated). Non-
+retention is simpler, reduces exposure, and matches the existing "no tier-3 fields
+anywhere" invariant. Revisit only with a stated reason.
 
 ### SHIELD caveats (both retained)
 1. The SHIELD reasoning here is a **classification rationale** (an engineering/architecture
