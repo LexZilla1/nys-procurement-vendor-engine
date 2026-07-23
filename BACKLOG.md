@@ -1,6 +1,67 @@
 # NYS Procurement Vendor Engine — Backlog & Open State
 
-## 🔴 TOP PRIORITY — §314 golden-copy drift (first real freshness catch, 2026-07-12)
+> **How to read this file.** The **Current state** block below is the single canonical
+> view of what is live now. Everything under the `═══ HISTORICAL / REFERENCE ═══` divider
+> is append-only history, design decisions, and reference material — completed items are
+> marked **RESOLVED / SUPERSEDED** in place, never deleted. If the two ever disagree, the
+> Current-state block and the repo (freshly fetched) win, not the historical narrative.
+> Last reconciled: 2026-07-23.
+
+---
+
+# ═══ CURRENT STATE (canonical) ═══
+
+## Current next build
+**Vendor Profile + Onboarding Readiness Check.** Schema/contract is agreed and persisted
+(`docs/VENDOR-PROFILE-SCHEMA.md`; design in `docs/DECISIONS-2026-07-23.md` §1). Scope:
+model + Onboarding Readiness Check + fixture tests only.
+- **Blocked on:** nothing — ready to build.
+- (Step 1 Triage, previously listed here as "next build", is **already BUILT** —
+  `step1_triage.py`. See the superseded note below.)
+
+## Live items — current state (each with what it is blocked on)
+Detail for each lives in its section under the historical/reference divider; this is the
+index of what is actually open.
+
+- **§179-p invoice-clock exclusion awareness** — *design question, not a gap.* §179-p is
+  captured (`source-stf-179-p.md`, FULL-MATCH) and already implemented as the exclusion
+  pre-screen in `validator.py`. **Blocked on:** a design decision — whether
+  `engine/invoice_clock.py` needs its own exclusion awareness or should delegate to the
+  entitlement layer. Not a capture task.
+- **5 NYCRR Part 144 (§314(5)(b) recert presumption support)** — **Blocked on:** (a) a
+  verbatim capture of Part 144 (egress-blocked in-sandbox; needs a real run or human
+  paste), then (b) licensed-attorney review of verbatim-display + self-attestation
+  handling. Engine stays fail-closed (`RECERT_PRESUMPTION_PENDING`) until then.
+- **EXC §314(5)(b)-(c) recertification presumption (L-grade)** — **Blocked on:** attorney
+  sign-off. Surfaces only `RECERT_PRESUMPTION_PENDING`, never a determination.
+- **GCN §24 ↔ GFO XII.5.I "legal holidays" mapping (L-grade)** — **Blocked on:** attorney
+  sign-off; flip `HOLIDAY_MAPPING_ATTORNEY_APPROVED` in `engine/payment_clock.py` (the
+  confident path is built + tested behind the flag). Holiday-dependent deadlines return
+  VERIFY until then.
+- **Guardrail enforcement migration** (output_context at the 3 runtime `cite()` sites +
+  ban-bare-cite scan) — **Blocked on:** nothing (unblocked by Micro-PR A); build work.
+- **stf-109 clean §109 recapture** — **Blocked on:** a sanctioned statute-capture workflow
+  run (interim INTERIM_VERIFY gate applied meanwhile).
+- **Freshness live-fire PR B** (wire the monthly Action to `--write-state`) — **Blocked
+  on:** nothing (gate PR A landed); scoped plan approved.
+- **Node 20 → 24 bump on the freshness workflow actions** — **Blocked on:** nothing; its
+  own scoped PR, dispatch-run watched green. Will block the monthly freshness run when
+  GitHub retires Node 20.
+- **PR 3 — morning-brief generator** — **Blocked on:** nothing; next in the daily-habit roadmap.
+- **Pilot vendor / attorney hour** — **Blocked on:** external (a real vendor document; a
+  booked attorney hour).
+- **Discovery-directory / source-resolver (NYSCR)** — **GATED / Blocked on:** an IP-attorney
+  opinion. Do not build.
+
+---
+
+# ═══ HISTORICAL / REFERENCE (append-only; completed items marked in place) ═══
+
+## §314 golden-copy drift — RESOLVED (first real freshness catch, 2026-07-12)
+**STATUS 2026-07-23: text divergence RESOLVED — `source-exec-314-mwbe-cert-validity.md` is
+`FULL-MATCH` in `data/config/freshness-state.json` as of the 2026-07-12 live audit. No rule
+change occurred. The one still-live descendant is the 5 NYCRR Part 144 attorney item, now
+tracked in the Current-state Live-items index above.** Narrative preserved below.
 Freshness live-fire run #6 (2026-07-12) flagged `source-exec-314-mwbe-cert-validity.md`
 — **Executive Law §314 / EXC 314** (MWBE 5-year certification validity, Article
 15-A; sunset 2028-07-01) — as **DIVERGENT** (live text ≠ stored STATE TEXT, API
@@ -54,18 +115,22 @@ correctly stopped an unaudited byte-match from flipping a load-bearing clause to
 Design decisions agreed but NOT built, verbatim §179-f findings, and research
 conclusions. Nothing here is code/schema; the detailed record is the DECISIONS doc.
 
-### §179-p capture — golden-copy gap (NEW backlog item, BLOCKING Payment Clock)
-- §179-p is **NOT in golden copy**. GFO XII.5.I only paraphrases it → under
-  never-trust-paraphrased-rules it **cannot be relied on**.
-- Content: payment types + entity categories NOT entitled to prompt-payment interest
-  (pass-through funds, offsets, local governments receiving state aid, public
-  authorities, federal government, state agencies, court judgments, eminent domain).
-- Capture path: nysenate.gov via the existing authenticated statute-capture workflow —
-  **same route as §314. No attorney gate; factual capture.**
-- BLOCKING for: Payment Clock, invoice-level entitlement, exclusions analysis,
-  prompt-payment interest determination.
-- NOT blocking for: Vendor Profile, business-definition snapshot, SFS onboarding
-  readiness.
+### §179-p — RESOLVED: captured AND implemented (was falsely recorded as a gap)
+**This item originally read "§179-p is NOT in golden copy / BLOCKING Payment Clock." That
+was FALSE** — a chat-session inference from GFO XII.5.I's paraphrase, never checked against
+the filesystem. Corrected 2026-07-23.
+- **Captured:** `golden-copy/sources/source-stf-179-p.md` — full-section verbatim (copied
+  2026-07-01, activeDate 2014-09-22, `openleg-api-v3`, six inapplicability clauses
+  word-for-word). Freshness `FULL-MATCH`, checked 2026-07-12.
+- **Implemented + tested:** `validator.py` (~398–444, ~1031–1112) runs all six clauses as
+  the interest-exclusion pre-screen (attorney-gated RM-2 path); `test_validator.py` covers
+  them.
+- **Not blocking anything on grounds of absence.** The one remaining question — whether
+  `engine/invoice_clock.py` needs its own exclusion awareness or delegates to the
+  entitlement layer — is a design decision, tracked in the Current-state Live-items index.
+- Content (reference): payment types / payee categories NOT entitled to prompt-payment
+  interest — eminent domain; pass-through funds; offsets; local governments receiving state
+  aid; public authorities / federal government / state agencies; court judgments.
 
 ### Vendor Profile + Onboarding Readiness — design decisions (agreed, not built)
 - **Fact model (two orthogonal axes on every vendor fact):** `provenance`
@@ -386,9 +451,12 @@ verify-first, golden-cited, no tier-3 data — all test-enforced.
     permitted own-use; confirm with counsel before productionizing retention.
   - 12 ad-type labels + list metadata: NOT protected (facts) — safe to use.
 
-## Next build
-- Step 1 Triage: classify NYSCR ad from metadata (open IFB / sole-source /
-  award-notice / RFI); flag the ~8% non-biddable. Pure rules, smallest build.
+## Step 1 Triage — BUILT (superseded as "next build")
+**SUPERSEDED 2026-07-23: this section previously read "Next build: Step 1 Triage." Step 1
+is already BUILT (`step1_triage.py`) — classify NYSCR ad from metadata (open IFB /
+sole-source / award-notice / RFI); flag the ~8% non-biddable. The canonical current next
+build is now Vendor Profile + Onboarding Readiness (see the Current-state block at the top
+of this file).** Original note preserved: pure rules, smallest build.
 
 ## Step 1 Triage — follow-ups
 - [ ] Consider adding `citations_to_ad_text` to the LLM fallback (Step 4) output
