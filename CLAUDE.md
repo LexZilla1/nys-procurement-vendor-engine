@@ -7,6 +7,11 @@ framing here.
 
 ## Operating rules (always)
 - Precision over completion. Verify before asserting.
+- ALWAYS `git fetch origin` and confirm the real remote HEAD before analyzing the
+  repo. A stale local checkout is as unreliable as a stale summary — a prior session
+  lost hours to a branch 26 commits behind `origin/main` and reached a confident,
+  completely wrong "none of this work exists" conclusion. "Verify against git" only
+  counts if git has been fetched.
 - Never trust paraphrased rules, including from other AI tools. Confirm against
   the official primary source (osc.ny.gov, ogs.ny.gov, .ny.gov agency sites,
   nysenate.gov / Open Legislation API for statutes) and cite it.
