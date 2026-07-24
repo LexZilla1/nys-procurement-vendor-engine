@@ -100,11 +100,25 @@ Documented here so it is not rediscovered later as an oversight.
   whether the 11-A exclusions bind an 11-B (§179-v) entitlement is a licensed-review
   question. The engine applies them conservatively (exclusion → not entitled) but does not
   assert the cross-article legal conclusion.
-- **(3) OSC guidance freshness (GFO XII.5.I) — UNVERIFIED (open).**
-  `source-xii-5-i-prompt-payment-interest.md` is **REV. 03/30/2026** (copied 2026-06-29).
-  OSC guidance pages are **not** in the OpenLeg monthly freshness net (statute-class only),
-  so guidance drift is not auto-caught; a newer OSC revision may exist and needs a manual
-  recheck/recapture (egress-blocked in-sandbox).
+- **(3) OSC guidance freshness (GFO XII.5.I) — DRIFTED (confirmed from provided
+  official-source evidence; NOT independently verified by this session).**
+  - **Repository evidence:** `source-xii-5-i-prompt-payment-interest.md` is **REV. 03/30/2026**
+    (copied 2026-06-29). OSC guidance pages are **not** in the OpenLeg monthly freshness net
+    (statute-class only), so guidance drift is not auto-caught.
+  - **This session's fetch:** HTTP 403 (egress-blocked). **NOT independently verified by this
+    session** — the live page was not read here.
+  - **Provided official-source evidence** (independent reviewer's browser, 2026-07-24, at
+    https://www.osc.ny.gov/state-agencies/gfo/chapter-xii/xii5i-prompt-payment-interest):
+    the live page shows **REV. 06/30/2026** with two textual differences vs the repo capture —
+    (a) the repo's sentence that payments to local governments for goods/services are
+    *included* is **absent** from the live page; (b) the repo's local-government exclusion is
+    qualified by "when receiving payment for state aid," whereas the live exclusion lists local
+    governments **without** that qualifier (aligning the guidance with §179-p, which excludes
+    any local government).
+  - **Revision-date drift: confirmed** (from provided evidence). **Text/content drift:
+    confirmed** (from provided evidence). **Legal effect of the change: NOT DETERMINED.**
+  - Golden recapture of the XII.5.I guidance is **separately authorized work** — not done
+    here; **no golden-source body modified in this PR.**
 - **Content (category summary — NOT verbatim; cite the golden source for exact wording):**
   §179-p enumerates **six** numbered categories of payments to which Article 11-A
   prompt-payment interest does not apply — (1) eminent domain; (2) court-judgment interest
@@ -233,8 +247,9 @@ git has been fetched.
 - **Base:** `origin/main` = `b5dddc050fa2031b896d940acd914c2ad3af2688` (verified this
   session).
 - §314 closed end-to-end; write-guard #82 merged; state-model redesign recorded (#83).
-- **Next build:** Vendor Profile + Onboarding Readiness Check (schema agreed above, not
-  built).
+- **Next build:** Vendor Profile + Onboarding Readiness Check (design direction recorded;
+  schema unresolved and not built — NOT an implementable or approved contract; see the
+  planned #86 split into fact-model / layers-and-results / legal-annex units).
 - **Open:** 5 NYCRR 144 (human paste + attorney); pilot vendor; attorney hour. (§179-p
   capture was falsely listed here — it is already captured, freshness-clean, and
   implemented in `validator.py`; see corrected §3.)
