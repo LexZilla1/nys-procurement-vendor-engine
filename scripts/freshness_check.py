@@ -347,8 +347,8 @@ def render_report(results, date_str):
     L = []
     L.append("# Golden-Copy Freshness Check — %s" % date_str)
     L.append("")
-    L.append("Automated monthly check of the 22 statute-class sources against the "
-             "NY Senate Open Legislation API v3.")
+    L.append("Automated monthly check of the %d statute-class sources against the "
+             "NY Senate Open Legislation API v3." % len(results))
     L.append("")
     L.append("**Result: %s**" % ("⚠️ DRIFT DETECTED" if drift else "✅ all FULL-MATCH, no drift"))
     L.append("")
@@ -468,8 +468,11 @@ def _selftest():
     # (c) a completely empty response {} (every field absent) must not crash:
     empty = run(lambda law, loc: {}, sources={"source-stf-179-g.md": ("STF", "179-G")})
     assert empty[0]["verdict"] in ("DIVERGENT", "EMPTY-STORED")
-    # and rendering a report over the sparse rows must not crash either:
-    render_report(sparse + ss + empty, "2026-07-04")
+    # and rendering a report over the sparse rows must not crash either — and the
+    # intro line's source count must TRACK the result set, not a constant
+    # (regression: it was hard-coded "22" while runs covered 24):
+    three = render_report(sparse + ss + empty, "2026-07-04")
+    assert "check of the 3 statute-class sources" in three, three
 
     # RAW-FORMAT FIXTURE (regression for the 22/22 false-DIVERGENT bug):
     # a captured-shape API response whose JSON `text` carries LITERAL escaped
@@ -491,6 +494,7 @@ def _selftest():
 
     rep = render_report(results, "2026-07-04")
     assert "DRIFT DETECTED" in rep and "DIVERGENT" in rep
+    assert "check of the %d statute-class sources" % len(results) in rep, rep
 
     # REGISTRY MERGE (existence guard): only registered targets whose golden
     # file exists are added; pending captures are skipped, and the merge never
