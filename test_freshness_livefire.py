@@ -123,3 +123,36 @@ if __name__ == "__main__":
     import sys
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# --------------------------------------------------------------------------
+# render_report source count must track the ACTUAL result set, not a constant.
+# Regression: the intro line hard-coded "22 statute-class sources" while real
+# runs cover 24 (22 base + 2 registry-added), so dated reports showed "22" over
+# a table of 24 rows. The count must be derived from len(results).
+# --------------------------------------------------------------------------
+
+def _row(fn, verdict="FULL-MATCH"):
+    return {"file": fn, "law": "STF", "loc": "1", "verdict": verdict,
+            "activeDate": "2020-01-01", "repealed": None, "repealedDate": None,
+            "sunset_flags": []}
+
+
+def _header_source_count(report):
+    import re
+    m = re.search(r"check of the (\d+) statute-class sources", report)
+    assert m, "report intro line not found:\n" + report
+    return int(m.group(1))
+
+
+def test_report_source_count_tracks_result_set():
+    # N deliberately != 22 (old constant) and != 24 (current live count): the
+    # rendered count can only be right if it is derived from the supplied rows,
+    # not swapped for another constant.
+    for n in (3, 5, 17):
+        rows = [_row("source-x%02d.md" % i) for i in range(n)]
+        rep = fc.render_report(rows, "2026-07-04")
+        assert _header_source_count(rep) == n, \
+            "header says %d, expected %d\n%s" % (_header_source_count(rep), n, rep)
+        # the verdict-count table must agree with the same result set:
+        assert "| FULL-MATCH | %d |" % n in rep, rep
