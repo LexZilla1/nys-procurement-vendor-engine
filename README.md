@@ -7,16 +7,21 @@ result), and rule freshness is tracked separately from rule text.
 
 ## Golden copy
 
-`golden-copy/sources/` holds 45 verbatim source records (22 statute-class
-sections captured from NY Open Legislation, plus OSC/OGS guidance, forms, and a
-regulation). Integrity is enforced by `parse_golden_copy.py`, which reconciles
-the source-file count against `golden-copy-INDEX.md` and `VERIFICATION-REPORT.md`
-(the 45/45/45 check) and requires every file to declare a `Covers:` field.
+`golden-copy/sources/` holds the project's verbatim source records — **currently 47**.
+Of these, the statute-class sections captured from NY Open Legislation (**22 base**
+coordinates in `scripts/freshness_check.py` plus registry-added captures — **currently 24**
+in total) are re-checked monthly; the remainder are OSC/OGS guidance, forms, and a
+regulation. Integrity is enforced by `parse_golden_copy.py`, which reconciles the
+source-file count against `golden-copy-INDEX.md` and `VERIFICATION-REPORT.md` (a three-way
+count match, currently 47/47/47) and requires every file to declare a `Covers:` field.
+The figures quoted here are snapshots; the reconciliation and freshness tooling are the
+source of truth, not these numbers.
 
 ## Automated monthly freshness check
 
-`scripts/freshness_check.py` re-fetches the 22 statute-class sources from the NY
-Senate Open Legislation API v3, diffs each against the current golden-copy
+`scripts/freshness_check.py` re-fetches the statute-class sources — 22 base coordinates
+plus any registry-added captures (currently 24 in total) — from the NY Senate Open
+Legislation API v3, diffs each against the current golden-copy
 `STATE TEXT`, and classifies **FULL-MATCH / FRAGMENT / DIVERGENT**. It also
 re-checks the four sunset statutes' repeal metadata (API `repealed`/
 `repealedDate` and the in-text `* NB Repealed` date) against our recorded sunset
