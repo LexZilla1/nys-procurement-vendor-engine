@@ -59,15 +59,17 @@ conclusions. Nothing here is code/schema; the detailed record is the DECISIONS d
 golden copy / BLOCKING for Payment Clock." That claim was FALSE.** The verbatim capture
 already exists and predates the false claim:
 - `golden-copy/sources/source-stf-179-p.md` — full-section verbatim capture, **copied
-  2026-07-01**, API **activeDate 2014-09-22**, capture method **openleg-api-v3**, all
-  **six inapplicability clauses reproduced word-for-word** (eminent domain; federal
-  government; any state agency; **any duly constituted unit of local government including
-  counties, cities, towns, villages, school districts, special districts**; any public
-  authority / public benefit corporation; state-agency employees; clause-6 set-off at
-  §179-e(8) — per the statutory text, not the paraphrase). Permanent id:
+  2026-07-01**, API **activeDate 2014-09-22**, capture method **openleg-api-v3**, holding all
+  **six inapplicability clauses word-for-word** in the golden source. Categories (summary
+  only — NOT verbatim; cite the source for exact wording): (1) eminent domain; (2)
+  court-judgment interest; (3) federal/state/local-government & public-authority payees; (4)
+  third-party payment-agreement contractors; (5) non-state-agency intermediary/pass-through
+  recipients; (6) comptroller set-offs. Permanent id:
   https://www.nysenate.gov/legislation/laws/STF/179-P
-  *(An earlier draft wrote "local governments receiving state aid" — a paraphrase error;
-  §179-p excludes any local government, no state-aid qualifier.)*
+  *(Two earlier drafts mis-stated this: first the "local governments receiving state aid"
+  paraphrase; then a partial list labeled "verbatim" that dropped clauses 2/4/5. Fixed by
+  citing the source instead of restating; §179-p excludes any local government, no state-aid
+  qualifier.)*
 - Freshness (reported, NOT changed here): `data/config/freshness-state.json` records
   `source-stf-179-p.md` = **`FULL-MATCH`**, `checked_date` **2026-07-12** (live audit).
   Current and healthy; the 2014-09-22 activeDate is the statute's last-amendment date

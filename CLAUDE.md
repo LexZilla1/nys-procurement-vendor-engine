@@ -127,9 +127,10 @@ Never merge a PR without explicit approval in this session, given AFTER the
 PR is opened. For every PR, post: the PR link, a plain-English summary of
 what changed and why (≤8 lines), what could break, and test results. Then
 STOP and wait for Randi's "merge" (or requested changes).
-Exception — auto-merge allowed ONLY for: freshness-clean automation PRs,
-and typo/doc-comment-only changes touching no code, no golden copy, no
-config. Everything else waits.
+**No auto-merge exceptions — every PR waits.** This includes freshness-clean
+automation PRs and typo/doc-comment-only changes; the prior exception for those
+is REMOVED. Approval must be given at the PR's CURRENT final head SHA — a new push
+moves the head, and approval does not carry to the new SHA (re-approve after any push).
 Note: PRs #29–#34 were merged under prompts that pre-authorized squash-merge;
 this policy applies from this PR forward.
 

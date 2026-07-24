@@ -105,14 +105,18 @@ Documented here so it is not rediscovered later as an oversight.
   OSC guidance pages are **not** in the OpenLeg monthly freshness net (statute-class only),
   so guidance drift is not auto-caught; a newer OSC revision may exist and needs a manual
   recheck/recapture (egress-blocked in-sandbox).
-- **Content (verbatim per §179-p — NOT paraphrased):** interest does NOT apply to payments
-  under the eminent domain procedure law; to the federal government; to any state agency or
-  its related instrumentalities; to **any duly constituted unit of local government
-  including counties, cities, towns, villages, school districts, special districts**; to any
-  public authority or public benefit corporation; to state-agency employees acting in their
-  public-employment capacity; and the clause-6 set-off (§179-e(8)). *(An earlier draft wrote
-  "local governments receiving state aid" — a paraphrase error; the statute excludes any
-  local government, with no state-aid qualifier.)*
+- **Content (category summary — NOT verbatim; cite the golden source for exact wording):**
+  §179-p enumerates **six** numbered categories of payments to which Article 11-A
+  prompt-payment interest does not apply — (1) eminent domain; (2) court-judgment interest
+  under other law; (3) federal government / state agencies / any unit of local government /
+  public authorities / state-agency employees; (4) third-party payment-agreement contractors
+  (e.g. §367-b social-services fiscal agents); (5) entities receiving state funds through a
+  non-state-agency intermediary (pass-through); (6) comptroller-authorized set-offs. **The
+  exact six clauses live verbatim in `golden-copy/sources/source-stf-179-p.md` — cite that
+  source; this doc does not restate statutory text.** *(Two earlier drafts mis-stated this:
+  first the "local governments receiving state aid" paraphrase; then a partial list labeled
+  "verbatim" that dropped clauses 2/4/5. Both are corrected by citing the source rather than
+  restating — do not call a partial summary "verbatim.")*
 - **Also open (design, not a gap):** whether `engine/invoice_clock.py` needs its own
   §179-p exclusion awareness or should delegate to the entitlement layer (`validator.py`).
 - **Not blocking on grounds of absence, and Vendor Profile / Onboarding Readiness (Layer-B)
