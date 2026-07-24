@@ -62,8 +62,11 @@ Documented here so it is not rediscovered later as an oversight.
 ## 2. §179-f — verbatim findings (read from golden copy this session)
 
 - **"at the time of payment" attaches ONLY to the ≤200-employee threshold**, not to the
-  other five criteria. The employee test is a **payment-date** test, not an
-  onboarding-date test.
+  other **four** criteria. (§179-f(6) names five criteria total — primary place in NY,
+  significant business presence, independently owned and operated, not dominant in its
+  field, ≤200 employees — so four criteria besides the employee test. An earlier draft of
+  this section said "five"; corrected.) The employee test is a **payment-date** test, not
+  an onboarding-date test.
 - **§179-f(2)** requires the vendor to identify that it is seeking expedited payment as a
   small business. **The statute does not say HOW.**
 - **OSC (GFO XII.5.I)** maps that identification to **SFS portal self-certification**.
@@ -75,20 +78,63 @@ Documented here so it is not rediscovered later as an oversight.
 
 ---
 
-## 3. Golden-copy gap — §179-p (NEW backlog item)
+## 3. §179-p — CORRECTION: captured; implemented for RM-2 with legal applicability attorney-gated (was falsely recorded as a gap)
 
-**§179-p is NOT in golden copy.** GFO XII.5.I paraphrases it. Under the
-never-trust-paraphrased-rules discipline it **cannot be relied on**.
+> **This section was originally recorded as "§179-p is NOT in golden copy / BLOCKING." That
+> was FALSE** — a chat-session inference from GFO XII.5.I's paraphrase, never checked against
+> the filesystem. Corrected 2026-07-23 against the repo. See the "Prompt claims are unverified
+> by default" rule in CLAUDE.md and the corrected BACKLOG entry.
 
-- **Content:** payment types and entity categories **NOT entitled** to prompt-payment
-  interest — pass-through funds, offsets, local governments receiving state aid, public
-  authorities, federal government, state agencies, court judgments, eminent domain.
-- **Capture path:** nysenate.gov via the existing authenticated statute-capture workflow
-  — same route as §314. **No attorney gate; this is a factual capture.**
-- **BLOCKING for:** Payment Clock, invoice-level entitlement, exclusions analysis,
-  prompt-payment interest determination.
-- **NOT blocking for:** Vendor Profile, business-definition snapshot, SFS onboarding
-  readiness.
+**Keep three states distinct — do not conflate capture with legal applicability.**
+
+- **(1) Capture — RESOLVED.** `golden-copy/sources/source-stf-179-p.md` — full-section
+  verbatim capture, copied 2026-07-01, API activeDate 2014-09-22, `openleg-api-v3`, all six
+  inapplicability clauses word-for-word. Freshness: `FULL-MATCH`, checked 2026-07-12.
+  Implemented + tested: `validator.py` (~398–444, ~1031–1112) runs all six clauses as the
+  interest-exclusion pre-screen, cited to the source (not the paraphrase);
+  `test_validator.py` covers it — which proves the code matches its fixture, not that the
+  legal question below is answered.
+- **(2) Article 11-A → Article 11-B applicability — ATTORNEY-GATED (open).** §179-p is an
+  Article 11-A prompt-**payment** provision; RM-2 is Article 11-B prompt-**contracting**.
+  `validator.py`'s own `scope_note` (~1106) plus `attorney_review_required: True` state that
+  whether the 11-A exclusions bind an 11-B (§179-v) entitlement is a licensed-review
+  question. The engine applies them conservatively (exclusion → not entitled) but does not
+  assert the cross-article legal conclusion.
+- **(3) OSC guidance freshness (GFO XII.5.I) — DRIFTED (confirmed from provided
+  official-source evidence; NOT independently verified by this session).**
+  - **Repository evidence:** `source-xii-5-i-prompt-payment-interest.md` is **REV. 03/30/2026**
+    (copied 2026-06-29). OSC guidance pages are **not** in the OpenLeg monthly freshness net
+    (statute-class only), so guidance drift is not auto-caught.
+  - **This session's fetch:** HTTP 403 (egress-blocked). **NOT independently verified by this
+    session** — the live page was not read here.
+  - **Provided official-source evidence** (independent reviewer's browser, 2026-07-24, at
+    https://www.osc.ny.gov/state-agencies/gfo/chapter-xii/xii5i-prompt-payment-interest):
+    the live page shows **REV. 06/30/2026** with two textual differences vs the repo capture —
+    (a) the repo's sentence that payments to local governments for goods/services are
+    *included* is **absent** from the live page; (b) the repo's local-government exclusion is
+    qualified by "when receiving payment for state aid," whereas the live exclusion lists local
+    governments **without** that qualifier (aligning the guidance with §179-p, which excludes
+    any local government).
+  - **Revision-date drift: confirmed** (from provided evidence). **Text/content drift:
+    confirmed** (from provided evidence). **Legal effect of the change: NOT DETERMINED.**
+  - Golden recapture of the XII.5.I guidance is **separately authorized work** — not done
+    here; **no golden-source body modified in this PR.**
+- **Content (category summary — NOT verbatim; cite the golden source for exact wording):**
+  §179-p enumerates **six** numbered categories of payments to which Article 11-A
+  prompt-payment interest does not apply — (1) eminent domain; (2) court-judgment interest
+  under other law; (3) federal government / state agencies / any unit of local government /
+  public authorities / state-agency employees; (4) third-party payment-agreement contractors
+  (e.g. §367-b social-services fiscal agents); (5) entities receiving state funds through a
+  non-state-agency intermediary (pass-through); (6) comptroller-authorized set-offs. **The
+  exact six clauses live verbatim in `golden-copy/sources/source-stf-179-p.md` — cite that
+  source; this doc does not restate statutory text.** *(Two earlier drafts mis-stated this:
+  first the "local governments receiving state aid" paraphrase; then a partial list labeled
+  "verbatim" that dropped clauses 2/4/5. Both are corrected by citing the source rather than
+  restating — do not call a partial summary "verbatim.")*
+- **Also open (design, not a gap):** whether `engine/invoice_clock.py` needs its own
+  §179-p exclusion awareness or should delegate to the entitlement layer (`validator.py`).
+- **Not blocking on grounds of absence, and Vendor Profile / Onboarding Readiness (Layer-B)
+  is unaffected either way.**
 
 ---
 
@@ -154,7 +200,7 @@ structural filters explain it — all recorded:
 4. **Suppression flags the vendor cannot see.** The Prompt Payment Interest Eligibility
    Indicator in the Statewide Vendor File, and the Late Charge Option on the voucher, can
    suppress interest regardless of delay. The vendor cannot see either.
-5. **§179-p category exclusions** (see gap in §3 above).
+5. **§179-p category exclusions** (captured and implemented — see corrected §3 above; not a gap).
 
 **OSC-stated causes of delay (SFY 2020-21):** Agency Backlog/Processing Delay $558,314
 (302 payments); Delay in Encumbrance Processing $163,556 (119); System Processing $503
@@ -201,8 +247,10 @@ git has been fetched.
 - **Base:** `origin/main` = `b5dddc050fa2031b896d940acd914c2ad3af2688` (verified this
   session).
 - §314 closed end-to-end; write-guard #82 merged; state-model redesign recorded (#83).
-- **Next build:** Vendor Profile + Onboarding Readiness Check (schema agreed above, not
-  built).
-- **Open:** §179-p capture; 5 NYCRR 144 (human paste + attorney); pilot vendor; attorney
-  hour.
+- **Next build:** Vendor Profile + Onboarding Readiness Check (design direction recorded;
+  schema unresolved and not built — NOT an implementable or approved contract; see the
+  planned #86 split into fact-model / layers-and-results / legal-annex units).
+- **Open:** 5 NYCRR 144 (human paste + attorney); pilot vendor; attorney hour. (§179-p
+  capture was falsely listed here — it is already captured, freshness-clean, and
+  implemented in `validator.py`; see corrected §3.)
 - **Gated:** NYSCR discovery-directory (IP-attorney opinion).

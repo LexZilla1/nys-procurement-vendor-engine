@@ -54,18 +54,44 @@ correctly stopped an unaudited byte-match from flipping a load-bearing clause to
 Design decisions agreed but NOT built, verbatim §179-f findings, and research
 conclusions. Nothing here is code/schema; the detailed record is the DECISIONS doc.
 
-### §179-p capture — golden-copy gap (NEW backlog item, BLOCKING Payment Clock)
-- §179-p is **NOT in golden copy**. GFO XII.5.I only paraphrases it → under
-  never-trust-paraphrased-rules it **cannot be relied on**.
-- Content: payment types + entity categories NOT entitled to prompt-payment interest
-  (pass-through funds, offsets, local governments receiving state aid, public
-  authorities, federal government, state agencies, court judgments, eminent domain).
-- Capture path: nysenate.gov via the existing authenticated statute-capture workflow —
-  **same route as §314. No attorney gate; factual capture.**
-- BLOCKING for: Payment Clock, invoice-level entitlement, exclusions analysis,
-  prompt-payment interest determination.
-- NOT blocking for: Vendor Profile, business-definition snapshot, SFS onboarding
-  readiness.
+### §179-p — CORRECTION (2026-07-23): it IS in golden copy; NOT a gap, NOT blocking
+**A prior entry in this file (merged in PR #84, 2026-07-23) claimed "§179-p is NOT in
+golden copy / BLOCKING for Payment Clock." That claim was FALSE.** The verbatim capture
+already exists and predates the false claim:
+- `golden-copy/sources/source-stf-179-p.md` — full-section verbatim capture, **copied
+  2026-07-01**, API **activeDate 2014-09-22**, capture method **openleg-api-v3**, holding all
+  **six inapplicability clauses word-for-word** in the golden source. Categories (summary
+  only — NOT verbatim; cite the source for exact wording): (1) eminent domain; (2)
+  court-judgment interest; (3) federal/state/local-government & public-authority payees; (4)
+  third-party payment-agreement contractors; (5) non-state-agency intermediary/pass-through
+  recipients; (6) comptroller set-offs. Permanent id:
+  https://www.nysenate.gov/legislation/laws/STF/179-P
+  *(Two earlier drafts mis-stated this: first the "local governments receiving state aid"
+  paraphrase; then a partial list labeled "verbatim" that dropped clauses 2/4/5. Fixed by
+  citing the source instead of restating; §179-p excludes any local government, no state-aid
+  qualifier.)*
+- Freshness (reported, NOT changed here): `data/config/freshness-state.json` records
+  `source-stf-179-p.md` = **`FULL-MATCH`**, `checked_date` **2026-07-12** (live audit).
+  Current and healthy; the 2014-09-22 activeDate is the statute's last-amendment date
+  (unchanged since 2014), not a staleness signal.
+- **§179-p does NOT block the Payment Clock on grounds of absence** — the golden text is
+  present, verbatim, and freshness-clean, and `validator.py` cites it directly. **But two
+  states remain open (do not read "captured" as "resolved"):** (a) **Article 11-A → 11-B
+  applicability is ATTORNEY-GATED** — `validator.py`'s scope_note + `attorney_review_required:
+  True` leave whether the 11-A §179-p exclusions bind an 11-B (§179-v) entitlement to
+  licensed review; (b) **OSC guidance (XII.5.I) freshness is UNVERIFIED** — that capture is
+  REV. 03/30/2026 and is not in the OpenLeg freshness net, so a newer OSC revision may exist.
+  Neither is the "missing golden copy" blocker the false entry asserted.
+
+**LESSON (recorded so it is not repeated, not just fixed):** the false claim originated as
+a **chat-session inference** — Claude Chat reasoning from **GFO XII.5.I's paraphrase of
+§179-p**, with no repo access — and was **never checked against the filesystem** before
+being **written to BACKLOG as fact**. It was recorded **one day after CLAUDE.md was
+updated with the `git fetch origin` / verify-against-git discipline** warning against
+exactly this failure mode. A `ls golden-copy/sources/ | grep 179-p` would have caught it.
+A false claim in BACKLOG/docs is worse than a code bug: nothing fails, it survives, and it
+misdirects future sessions (this one nearly built a redundant "capture §179-p" task on it).
+See the "PROMPT CLAIMS ARE UNVERIFIED BY DEFAULT" rule now in CLAUDE.md.
 
 ### Vendor Profile + Onboarding Readiness — design decisions (agreed, not built)
 - **Fact model (two orthogonal axes on every vendor fact):** `provenance`

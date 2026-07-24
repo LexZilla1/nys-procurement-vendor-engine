@@ -70,14 +70,67 @@ priority — e.g. a read-only / investigation session (report findings only; no
 commit/push/PR) or a pilot-run's constraints. Those win; apply prompt review
 within them, not against them.
 
+## Prompt claims are unverified by default
+Prompts arrive from chat sessions (Claude Chat, ChatGPT) whose repo access may be absent,
+partial, stale, or read-only. Any factual claim in a prompt about repo contents is
+therefore a hypothesis, not a fact — whether a file exists, what a file contains, what a
+test asserts, what is or isn't in golden copy, what a prior PR did, what the current state
+of anything is — until it is reverified against freshly fetched state.
+
+Read access is not verification. A session with repo access may still be looking at a
+stale checkout, a partial view, or reasoning wrongly from what it correctly sees. Access
+level does not change the obligation to reverify against freshly fetched state.
+
+Before acting on such a claim, verify it against the repo.
+
+If a claim is wrong:
+- STOP. Report the discrepancy before proceeding.
+- Do NOT write the claim into any file.
+- Do NOT silently correct it and continue — the human needs to know the brief was wrong,
+  because the same wrong claim is probably still live in the chat session that produced it.
+
+This applies to documentation tasks as much as to code. A false claim recorded in
+BACKLOG.md or docs/ is worse than a bug: nothing fails, it survives, and it misdirects
+future sessions.
+
+Precedent: PR #84 (2026-07-23) recorded "§179-p is NOT in golden copy / BLOCKING for
+Payment Clock." The file golden-copy/sources/source-stf-179-p.md already existed. The
+claim originated as a chat-session inference from XII.5.I paraphrasing §179-p, was never
+checked against the filesystem, and was written to BACKLOG as fact.
+
+## Disagreement is expected, not insubordination
+Prompts are written by chat sessions that may not see the codebase, or may see only a
+partial or stale slice of it. They may be architecturally wrong, more complex than
+necessary, or in conflict with something already built.
+
+If you believe the instruction is wrong — not just factually inaccurate, but a worse
+approach than an available alternative — say so BEFORE implementing. State the
+disagreement, the reason, and the alternative. Then wait.
+
+Do not:
+- comply silently while believing the approach is wrong
+- implement it and note the concern afterwards
+- widen scope to "fix" it on your own initiative
+
+Counter-proposing is part of the job. The chat session has design context you lack;
+you have codebase reality it lacks. Neither is automatically right. Surface the
+conflict and let the human adjudicate.
+
+Precedent (2026-07-23): the registry-mode fix was specified as a two-field change.
+Code found the test suite pins that field and reported that a green fix requires three
+files — correctly stopping rather than either pushing red or silently widening scope.
+Separately, a hook suggested rewriting authorship of four already-merged main commits;
+Code refused and explained why. Both were right to push back.
+
 ## Merge policy
 Never merge a PR without explicit approval in this session, given AFTER the
 PR is opened. For every PR, post: the PR link, a plain-English summary of
 what changed and why (≤8 lines), what could break, and test results. Then
 STOP and wait for Randi's "merge" (or requested changes).
-Exception — auto-merge allowed ONLY for: freshness-clean automation PRs,
-and typo/doc-comment-only changes touching no code, no golden copy, no
-config. Everything else waits.
+**No auto-merge exceptions — every PR waits.** This includes freshness-clean
+automation PRs and typo/doc-comment-only changes; the prior exception for those
+is REMOVED. Approval must be given at the PR's CURRENT final head SHA — a new push
+moves the head, and approval does not carry to the new SHA (re-approve after any push).
 Note: PRs #29–#34 were merged under prompts that pre-authorized squash-merge;
 this policy applies from this PR forward.
 
